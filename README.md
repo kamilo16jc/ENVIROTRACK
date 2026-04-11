@@ -89,11 +89,7 @@ python3 -m http.server 8080
 
 > **Note:** Some browsers block local file access for multi-file projects. Using a local server avoids this.
 
-### Default PINs
 
-| User | PIN | Role |
-|------|-----|------|
-| Admin | 0000 | Administrator |
 
 Additional users can be created from **Settings → Users** (Admin only).
 
