@@ -229,6 +229,8 @@ function loadRetests() {
             <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap">
               <button class="btn btn-primary btn-sm" onclick="exportRetestPDF(${rt.id})" style="font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
               ${!isDone?`<button class="btn btn-sm" onclick="openFailModal(${rt.id})" style="background:var(--navy);color:white;font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Lab</button>`:''}
+              <button class="btn btn-outline btn-sm" onclick="submitRetestLabForm(${rt.id},false)" style="font-size:10px;padding:4px 7px" title="Fill lab form"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg>Form</button>
+              ${canSendToLab(CU&&CU.email)?`<button class="btn btn-success btn-sm" onclick="submitRetestLabForm(${rt.id},true)" style="font-size:10px;padding:4px 7px" title="Send to lab"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send</button>`:''}
             </div>
           </td>
         </tr>`);

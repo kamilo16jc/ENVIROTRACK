@@ -10,8 +10,11 @@ async function generateTests() {
   if(SYNC_ENABLED) {
     try {
       toast('Syncing with SharePoint…','info');
-      await syncPullRecords();
-      await syncPullMasterPoints();
+      // Records is required (anti-repetition). The catalog rarely changes and
+      // is already pulled at login, so only refetch it if the cache is empty.
+      const jobs = [syncPullRecords()];
+      if(!getMasterPoints().length) jobs.push(syncPullMasterPoints());
+      await Promise.all(jobs);
     } catch(e) {
       console.warn('[sync] pull before generate failed:', e);
       toast('Could not reach SharePoint — using local data','error');
@@ -155,6 +158,8 @@ async function generateTests() {
   document.getElementById('retestSection').style.display='none';
   document.getElementById('btnPDF').disabled=false;
   document.getElementById('btnSave').disabled=false;
+  document.getElementById('btnLabFill').disabled=false;
+  document.getElementById('btnLabSend').disabled=false;
 
   const lbl = {'1945':'1945','1935':'1935','1931E':'1931 East','1931W':'1931 West'}[planta]||planta;
   document.getElementById('genTableTitle').textContent = 'Generated Tests — Plant '+lbl+

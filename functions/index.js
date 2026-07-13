@@ -136,6 +136,8 @@ const FLOW_ENV = {
   masterPointsRead:   "FLOW_MASTERPOINTS_READ",
   masterPointsWrite:  "FLOW_MASTERPOINTS_WRITE",
   masterPointsUpdate: "FLOW_MASTERPOINTS_UPDATE",
+  labform:            "FLOW_LABFORM",
+  savepdf:            "FLOW_SAVEPDF",
 };
 
 exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {

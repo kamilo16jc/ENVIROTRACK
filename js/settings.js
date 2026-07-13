@@ -236,6 +236,9 @@ function doLogin_dynamic() {
       // Show the Settings/Users panel only to admins
       const sg = document.getElementById('nav-settings-group');
       if(sg) sg.classList.toggle('visible', isAdmin(user.email, role));
+      // "Send to Lab" only for the configured sender (email tied to their account)
+      const bls = document.getElementById('btnLabSend');
+      if(bls) bls.style.display = canSendToLab(user.email) ? '' : 'none';
 
       document.getElementById('loginScreen').classList.remove('active');
       document.getElementById('appScreen').classList.add('active');
