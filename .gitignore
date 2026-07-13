@@ -7,3 +7,7 @@ _migrate_master.js
 
 # Local tooling
 .claude/
+
+# Firebase Functions secrets (flow URLs) — NEVER commit
+functions/.env
+.env

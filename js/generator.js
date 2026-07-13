@@ -7,7 +7,7 @@ async function generateTests() {
 
   // Pull the latest Records from SharePoint FIRST, so the 4-week
   // anti-repetition sees every user's data — not just this device's cache.
-  if(SYNC_URLS.recordsRead) {
+  if(SYNC_ENABLED) {
     try {
       toast('Syncing with SharePoint…','info');
       await syncPullRecords();

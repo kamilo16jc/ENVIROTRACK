@@ -1,40 +1,21 @@
 // ═══════════════════════════════════════════════════════════════
-// SYNC — SharePoint bridge (via Power Automate HTTP flows)
+// SYNC — SharePoint bridge (via the Firebase Cloud Function `spProxy`)
 // SharePoint is the source of truth; localStorage is a local cache.
 //   · Before generating tests → PULL Records (fresh anti-repetition data)
 //   · On save / result / retests / master → PUSH to SharePoint
-// The flow URLs below are SECRET. They stay LOCAL for now; before pushing
-// to GitHub they must be hidden behind the Firebase Cloud Function.
+// The secret Power Automate flow URLs live SERVER-SIDE (functions/.env);
+// this client only calls `spProxy` — NO flow URL is exposed here.
 // ═══════════════════════════════════════════════════════════════
 
-// ── Flow URLs — PASTE YOUR 7 URLs HERE (local only, do NOT commit) ──
-const SYNC_URLS = {
-  recordsWrite:  'https://REMOVED',
-  recordsRead:   'https://REMOVED',
-  recordsUpdate: 'https://REMOVED',
-  resolvedWrite: 'https://REMOVED',
-  resolvedRead:  'https://REMOVED',
-  masterWrite:   'https://REMOVED',
-  masterRead:    'https://REMOVED',
-  masterPointsRead:   'https://REMOVED',   // EnviroTrack_MasterPoints_Read
-  masterPointsWrite:  'https://REMOVED',
-  masterPointsUpdate: 'https://REMOVED',
-};
+const SYNC_ENABLED = true;
 
-// Master switch — if any URL is missing, sync is skipped and the app
-// works purely on localStorage (offline-friendly, no errors thrown).
-const SYNC_ON = () => Object.values(SYNC_URLS).every(Boolean);
-
-// ── Low-level POST helper ──────────────────────────────────────
-async function _spPost(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body || {})
-  });
-  if (!res.ok) throw new Error('Flow HTTP ' + res.status);
-  const txt = await res.text();
-  return txt ? JSON.parse(txt) : null;
+// ── Low-level call → Cloud Function proxy ──────────────────────
+// Sends { op, body } to spProxy, which resolves the secret flow URL,
+// POSTs to SharePoint, and returns the flow's JSON response.
+async function _spPost(op, body) {
+  const call = fbFunctions.httpsCallable('spProxy');
+  const res = await call({ op, body: body || {} });
+  return res.data;
 }
 
 // ── Value helpers (SharePoint quirks) ──────────────────────────
@@ -122,26 +103,14 @@ function resolvedToSP(r) {
   };
 }
 
-// master change → SharePoint payload
-function masterChangeToSP(action, p) {
-  return {
-    action, department: p.plant || p.planta, sample: p.sample,
-    zone: p.zone || 0, area: p.area || '', line: p.line || '',
-    location: p.location || '', custom: !!p.custom,
-    enteredByEmail: (CU && CU.email) || '',
-    enteredByName:  (CU && CU.displayName) || '',
-    enteredAt: new Date().toISOString()
-  };
-}
-
 // ═══════════════════════════════════════════════════════════════
 // PULL — bring SharePoint into the local cache
 // ═══════════════════════════════════════════════════════════════
 
 // Pull all Records → overwrite local cap_h. Returns true on success.
 async function syncPullRecords() {
-  if (!SYNC_URLS.recordsRead) return false;
-  const data = await _spPost(SYNC_URLS.recordsRead, {});
+  if (!SYNC_ENABLED) return false;
+  const data = await _spPost('recordsRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
   const recs = rows.map(spToRecord).filter(r => r.id);
   SH(recs);
@@ -153,30 +122,23 @@ async function syncPullRecords() {
 // ═══════════════════════════════════════════════════════════════
 
 async function syncPushRecords(recs) {
-  if (!SYNC_URLS.recordsWrite || !recs || !recs.length) return;
-  await _spPost(SYNC_URLS.recordsWrite, {
+  if (!SYNC_ENABLED || !recs || !recs.length) return;
+  await _spPost('recordsWrite', {
     list: 'Records', action: 'create', items: recs.map(recordToSP)
   });
 }
 
 async function syncUpdateRecord(rec) {
-  if (!SYNC_URLS.recordsUpdate || !rec) return;
-  await _spPost(SYNC_URLS.recordsUpdate, {
+  if (!SYNC_ENABLED || !rec) return;
+  await _spPost('recordsUpdate', {
     list: 'Records', action: 'update', items: [recordUpdateToSP(rec)]
   });
 }
 
 async function syncPushResolved(resolvedItems) {
-  if (!SYNC_URLS.resolvedWrite || !resolvedItems || !resolvedItems.length) return;
-  await _spPost(SYNC_URLS.resolvedWrite, {
+  if (!SYNC_ENABLED || !resolvedItems || !resolvedItems.length) return;
+  await _spPost('resolvedWrite', {
     list: 'ResolvedRetests', action: 'create', items: resolvedItems.map(resolvedToSP)
-  });
-}
-
-async function syncPushMaster(action, point) {
-  if (!SYNC_URLS.masterWrite || !point) return;
-  await _spPost(SYNC_URLS.masterWrite, {
-    list: 'MasterChanges', action: 'create', items: [masterChangeToSP(action, point)]
   });
 }
 
@@ -214,8 +176,8 @@ function pointToSP(p, isCreate) {
 
 // Pull the whole catalog → local cache (cap_masterpoints).
 async function syncPullMasterPoints() {
-  if (!SYNC_URLS.masterPointsRead) return false;
-  const data = await _spPost(SYNC_URLS.masterPointsRead, {});
+  if (!SYNC_ENABLED) return false;
+  const data = await _spPost('masterPointsRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
   const pts = rows.map(spToPoint).filter(p => p.sample);
   localStorage.setItem('cap_masterpoints', JSON.stringify(pts));
@@ -225,15 +187,15 @@ async function syncPullMasterPoints() {
 const getMasterPoints = () => JSON.parse(localStorage.getItem('cap_masterpoints') || '[]');
 
 async function syncPushPoint(point) {      // create a new point
-  if (!SYNC_URLS.masterPointsWrite || !point) return;
-  await _spPost(SYNC_URLS.masterPointsWrite, {
+  if (!SYNC_ENABLED || !point) return;
+  await _spPost('masterPointsWrite', {
     list: 'MasterPoints', action: 'create', items: [pointToSP(point, true)]
   });
 }
 
 async function syncUpdatePoint(point) {    // update by department + sample (edit / activate / deactivate)
-  if (!SYNC_URLS.masterPointsUpdate || !point) return;
-  await _spPost(SYNC_URLS.masterPointsUpdate, {
+  if (!SYNC_ENABLED || !point) return;
+  await _spPost('masterPointsUpdate', {
     list: 'MasterPoints', action: 'update', items: [pointToSP(point, false)]
   });
 }

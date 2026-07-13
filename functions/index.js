@@ -121,3 +121,49 @@ exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request)
   await admin.auth().deleteUser(uid);
   return { ok: true };
 });
+
+// ── SharePoint proxy ───────────────────────────────────────────────
+// Hides the Power Automate flow URLs (kept in functions/.env, never in the
+// public client JS) and only lets SIGNED-IN users trigger them.
+const FLOW_ENV = {
+  recordsWrite:       "FLOW_RECORDS_WRITE",
+  recordsRead:        "FLOW_RECORDS_READ",
+  recordsUpdate:      "FLOW_RECORDS_UPDATE",
+  resolvedWrite:      "FLOW_RESOLVED_WRITE",
+  resolvedRead:       "FLOW_RESOLVED_READ",
+  masterWrite:        "FLOW_MASTER_WRITE",
+  masterRead:         "FLOW_MASTER_READ",
+  masterPointsRead:   "FLOW_MASTERPOINTS_READ",
+  masterPointsWrite:  "FLOW_MASTERPOINTS_WRITE",
+  masterPointsUpdate: "FLOW_MASTERPOINTS_UPDATE",
+};
+
+exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must sign in.");
+  }
+  const { op, body } = request.data || {};
+  const envKey = FLOW_ENV[op];
+  if (!envKey) {
+    throw new HttpsError("invalid-argument", "Unknown operation: " + op);
+  }
+  const url = process.env[envKey];
+  if (!url) {
+    throw new HttpsError("failed-precondition", "Flow URL not configured for " + op);
+  }
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+  } catch (e) {
+    throw new HttpsError("unavailable", "Could not reach the SharePoint flow.");
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    throw new HttpsError("internal", "Flow returned HTTP " + res.status);
+  }
+  return text ? JSON.parse(text) : null;
+});
