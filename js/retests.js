@@ -157,16 +157,40 @@ function loadRetests() {
   const hist     = GH();
   const resolved = GRV();
   const rids     = new Set(resolved.map(r => r.originalId));
+  // Roots that already spawned retests (derived straight from Records). Used as
+  // a safety net so a positive whose resolved anchor is missing does NOT
+  // resurface as "Generate retests" and let the user create duplicate rounds.
+  const rootsWithRetests = new Set(
+    hist.filter(h => h.retestNum && h.originalId).map(h => h.originalId)
+  );
 
   // Original positives without retests generated yet
   const pos = hist.filter(h =>
-    h.resultado === 'Positive' && !h.retestNum && !rids.has(h.id)
+    h.resultado === 'Positive' && !h.retestNum &&
+    !rids.has(h.id) && !rootsWithRetests.has(h.id)
   );
 
   // A round (retests sharing a root) is ACTIVE while it still has PENDING
   // retests AND none of its retests failed. A failed retest escalates to a
   // brand-new round, so its old round is no longer active.
-  const closedGroups = resolved.filter(r => r.closedOnGenerate);
+  // Anchor list = the resolved "closedOnGenerate" entries, PLUS synthetic
+  // anchors rebuilt from Records for any root that has retest children but lost
+  // its resolved entry (e.g. a sync push that never landed). This keeps the
+  // pending retests — and their Lab/Send buttons — visible from Records alone.
+  const resolvedRootIds = new Set(resolved.map(r => r.originalId));
+  const syntheticGroups = [...rootsWithRetests]
+    .filter(id => !resolvedRootIds.has(id))
+    .map(id => {
+      const o = hist.find(h => h.id === id) || {};
+      return {
+        originalId: id, sample: o.sample, planta: o.planta,
+        area: o.area || '', location: o.location || '',
+        originalDate: o.fecha || '',
+        notes: o.failedPathogensLabel ? 'Positive: ' + o.failedPathogensLabel : '',
+        closedOnGenerate: true
+      };
+    });
+  const closedGroups = [...resolved.filter(r => r.closedOnGenerate), ...syntheticGroups];
   const activeGroups = closedGroups.filter(r => {
     const myRetests = hist.filter(h => h.originalId === r.originalId && h.retestNum);
     const hasPending   = myRetests.some(h => h.resultado === 'Pending');

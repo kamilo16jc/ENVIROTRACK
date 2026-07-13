@@ -243,9 +243,13 @@ function doLogin_dynamic() {
       document.getElementById('loginScreen').classList.remove('active');
       document.getElementById('appScreen').classList.add('active');
       refreshDashboard(); searchHistory();
-      // Load the catalog + latest records from SharePoint on entry.
+      // Load the catalog + latest records + resolved rounds from SharePoint on
+      // entry. Resolved MUST be pulled too: it anchors the active-retest groups
+      // and marks which positives are already closed. Pull records and resolved
+      // together, then refresh the views that depend on both.
       syncSafe(() => syncPullMasterPoints(), 'pull points');
-      syncSafe(() => syncPullRecords().then(() => { refreshDashboard(); searchHistory(); }), 'pull records');
+      syncSafe(() => Promise.all([syncPullRecords(), syncPullResolved()])
+        .then(() => { refreshDashboard(); searchHistory(); loadRetests(); }), 'pull records');
       resetSessionTimer();
     })
     .catch(e => { err.textContent = fbAuthError(e); });
