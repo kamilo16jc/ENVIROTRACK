@@ -43,7 +43,7 @@ function pdfFooter(doc,W,margin) {
 }
 
 function exportPDF() {
-  if(!TESTS.length) { toast('Genera tests primero','error'); return; }
+  if(!TESTS.length) { toast('Generate tests first','error'); return; }
   const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value;
   const by     = document.getElementById('genCollectedBy').value;
@@ -66,7 +66,9 @@ function exportPDF() {
   doc.text('  '+by+' / '+dateStr, margin+2+doc.getTextWidth('Samples Collected By/Date:'),fy);
   pdfDocControl(doc,fy+6,margin);
   pdfFooter(doc,W,margin);
-  doc.save('ENV_MONITORING_'+planta+'_'+(fecha||'').replace(/-/g,'')+'.pdf');
+  const pdfName = namePdfGenerator(planta, fecha);
+  doc.save(pdfName + '.pdf');
+  syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save generator pdf');
   toast('✅ PDF exported','success');
 }
 
@@ -136,19 +138,14 @@ function exportRetestPDF(id) {
     h.ecoli?'X':'', h.listeria?'X':'', h.salmonella?'X':'', h.saureus?'X':'']];
   pdfMainTable(doc, rows, 57, W, M);
 
-  // ── Failed pathogen alert box ─────────────────────────────────────────
-  const tableEnd = doc.lastAutoTable.finalY + 4;
-  doc.setFillColor(253,235,235);
-  doc.setDrawColor(192,57,43); doc.setLineWidth(0.4);
-  doc.roundedRect(M, tableEnd, W-M*2, 10, 1.5, 1.5, 'FD');
-  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(192,57,43);
-  doc.text('⚠  This retest is required because Sample #'+h.sample+' tested POSITIVE for: '+failedBact+' on '+origDate, M+5, tableEnd+6.5);
-
   // ── Doc control + footer ──────────────────────────────────────────────
-  pdfDocControl(doc, tableEnd+14, M);
+  const tableEnd = doc.lastAutoTable.finalY + 4;
+  pdfDocControl(doc, tableEnd+4, M);
   pdfFooter(doc, W, M);
 
-  doc.save('Caputo_RETEST'+rn+'_'+h.planta+'_S'+h.sample+'_'+h.fecha+'.pdf');
+  const pdfName = namePdfRetest(h.planta, h.fecha);
+  doc.save(pdfName + '.pdf');
+  syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
   toast('✅ Retest #'+rn+' PDF exported for Sample #'+h.sample,'success');
 }
 
