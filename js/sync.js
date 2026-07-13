@@ -142,6 +142,35 @@ async function syncPushResolved(resolvedItems) {
   });
 }
 
+// SharePoint ResolvedRetests item → app resolved entry (READ).
+function spToResolved(it) {
+  return {
+    originalId:       Number(_pick(it, 'originalId', 'OriginalId')) || 0,
+    sample:           Number(_pick(it, 'sample', 'Sample')) || 0,
+    planta:           _val(_pick(it, 'Departament', 'department', 'planta')) || '',
+    area:             _pick(it, 'Area', 'area') || '',
+    location:         _pick(it, 'Location', 'location') || '',
+    originalDate:     _pick(it, 'originalDate', 'OriginalDate') || '',
+    resolvedDate:     _pick(it, 'resolvedDate', 'ResolvedDate') || '',
+    retestNum:        _pick(it, 'retestNum', 'RetestNum') || '',
+    notes:            _pick(it, 'notes', 'Notes') || '',
+    closedOnGenerate: !!_pick(it, 'closedOnGenerate', 'ClosedOnGenerate')
+  };
+}
+
+// Pull all ResolvedRetests → overwrite local cap_rv. Returns true on success.
+// Without this, resolved/closed rounds live only in the session that created
+// them: on the next login the anchoring entries vanish, closed positives
+// resurface as "Generate retests", and their retests become orphaned.
+async function syncPullResolved() {
+  if (!SYNC_ENABLED) return false;
+  const data = await _spPost('resolvedRead', {});
+  const rows = Array.isArray(data) ? data : (data && data.value) || [];
+  const recs = rows.map(spToResolved).filter(r => r.originalId);
+  SRV(recs);
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MASTER POINTS — the full sampling catalog lives in SharePoint
 // ═══════════════════════════════════════════════════════════════
