@@ -12,10 +12,10 @@ function openFailModal(id) {
 
   document.getElementById('failInfo').innerHTML =
     '<strong>Sample #'+h.sample+'</strong> — '+esc(h.planta)+
-    '<br><strong>Área:</strong> '+esc(h.area)+' &nbsp;·&nbsp; <strong>Zona:</strong> '+h.zone+
-    '<br><strong>Ubicación:</strong> '+esc(h.location)+
-    '<br><strong>Patógenos testeados:</strong> <span style="font-weight:700;color:var(--navy)">'+esc(patsLabel)+'</span>'+
-    ' &nbsp;·&nbsp; <strong>Fecha:</strong> '+h.fecha;
+    '<br><strong>Area:</strong> '+esc(h.area)+' &nbsp;·&nbsp; <strong>Zone:</strong> '+h.zone+
+    '<br><strong>Location:</strong> '+esc(h.location)+
+    '<br><strong>Pathogens tested:</strong> <span style="font-weight:700;color:var(--navy)">'+esc(patsLabel)+'</span>'+
+    ' &nbsp;·&nbsp; <strong>Date:</strong> '+h.fecha;
 
   // Build per-pathogen checkboxes
   document.getElementById('pathoCheckboxes').innerHTML = testedPats.map(([key,name]) =>
@@ -24,7 +24,7 @@ function openFailModal(id) {
     '<input type="checkbox" id="chk-'+key+'" onchange="onPathoCheck()" '+
     'style="width:16px;height:16px;accent-color:var(--red);cursor:pointer">'+
     '<span style="font-size:13px;font-weight:600">'+name+'</span>'+
-    '<span style="font-size:11px;color:var(--gray-400);margin-left:auto">positivo</span></label>'
+    '<span style="font-size:11px;color:var(--gray-400);margin-left:auto">positive</span></label>'
   ).join('');
 
   document.getElementById('pathoResultSection').style.display = 'none';
@@ -51,7 +51,7 @@ function setResult(r) {
   const pathoSection = document.getElementById('pathoResultSection');
   const b = document.getElementById('resultBadge');
 
-  if(r === 'Positivo') {
+  if(r === 'Positive') {
     pathoSection.style.display = 'block';
     b.style.display = 'none';
     document.getElementById('btnConfirmFail').disabled = true;
@@ -64,11 +64,11 @@ function setResult(r) {
     });
     b.style.display = 'block';
     b.style.background = '#d1fae5'; b.style.color = '#059669';
-    b.textContent = '✅ NEGATIVO — Sin contaminación detectada';
+    b.textContent = 'NEGATIVE — No contamination detected';
     document.getElementById('btnConfirmFail').disabled = false;
   }
-  document.getElementById('btnNeg').style.opacity = r==='Negativo' ? '1' : '0.4';
-  document.getElementById('btnPos').style.opacity = r==='Positivo' ? '1' : '0.4';
+  document.getElementById('btnNeg').style.opacity = r==='Negative' ? '1' : '0.4';
+  document.getElementById('btnPos').style.opacity = r==='Positive' ? '1' : '0.4';
 }
 
 
@@ -84,7 +84,7 @@ function onPathoCheck() {
     const nameList = checked.map(k=>names[k]).join(', ');
     b.style.display='block';
     b.style.background='#fee2e2'; b.style.color='#dc2626';
-    b.textContent='❌ POSITIVO: '+nameList+' — Se generará retest';
+    b.textContent='POSITIVE: '+nameList+' — A retest will be generated';
   } else {
     b.style.display='none';
   }
@@ -101,7 +101,7 @@ function confirmResult() {
   hist[idx].labNotes  = document.getElementById('failNotes').value.trim();
   hist[idx].resultDate = new Date().toISOString().split('T')[0];
 
-  if(FAILRES==='Positivo') {
+  if(FAILRES==='Positive') {
     // Collect which specific pathogens failed
     const patKeys = ['ecoli','listeria','salmonella','saureus'];
     const failedPats = patKeys.filter(k => {
@@ -113,37 +113,41 @@ function confirmResult() {
       ({ecoli:'E.Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S.Aureus'})[k]
     ).join(', ');
 
-    const ex=hist.filter(h=>h.sample==hist[idx].sample&&h.planta===hist[idx].planta&&h.retestNum).length;
-    if(ex===0) {
+    // A positive test — original OR a retest — escalates: it spawns its own
+    // fresh round of 3 retests, unless it already spawned one.
+    const alreadySpawned = hist.some(h => h.originalId === hist[idx].id && h.retestNum);
+    if(!alreadySpawned) {
       SH(hist);
+      syncSafe(() => syncUpdateRecord(hist[idx]), 'update result');
       closeFailModal();
-      searchHistory(); refreshDashboard();
-      toast('❌ Sample #'+hist[idx].sample+' POSITIVO ('+hist[idx].failedPathogensLabel+') — Programa el retest', 'error');
+      searchHistory(); loadRetests(); refreshDashboard();
+      toast('Sample #'+hist[idx].sample+' POSITIVE ('+hist[idx].failedPathogensLabel+') — Schedule the 3 retests', 'error');
       openRetestDateModal(hist[idx].id);
       return;
     }
   }
 
   SH(hist);
+  syncSafe(() => syncUpdateRecord(hist[idx]), 'update result');
   closeFailModal();
 
-  // Si es un retest que salió Negativo, verificar si los 3 terminaron
-  if (FAILRES === 'Negativo' && hist[idx].retestNum && hist[idx].originalId) {
+  // If this is a retest that came back Negative, check whether all 3 are done
+  if (FAILRES === 'Negative' && hist[idx].retestNum && hist[idx].originalId) {
     const origId     = hist[idx].originalId;
     const allRetests = GH().filter(r => r.originalId === origId && r.retestNum);
-    const allDone    = allRetests.length === 3 && allRetests.every(r => r.resultado === 'Negativo');
+    const allDone    = allRetests.length === 3 && allRetests.every(r => r.resultado === 'Negative');
     if (allDone) {
       searchHistory(); loadRetests(); refreshDashboard();
-      toast('✅ Sample #'+hist[idx].sample+' — Los 3 retests negativos. Caso completamente cerrado.', 'success');
+      toast('✅ Sample #'+hist[idx].sample+' — All 3 retests negative. Case fully closed.', 'success');
       return;
     }
   }
 
   searchHistory(); loadRetests(); refreshDashboard();
-  const msg = FAILRES==='Positivo'
-    ? '❌ Sample #'+hist[idx].sample+' POSITIVO: '+hist[idx].failedPathogensLabel
-    : '✅ Resultado Negativo registrado';
-  toast(msg, FAILRES==='Positivo'?'error':'success');
+  const msg = FAILRES==='Positive'
+    ? '❌ Sample #'+hist[idx].sample+' POSITIVE: '+hist[idx].failedPathogensLabel
+    : '✅ Negative result recorded';
+  toast(msg, FAILRES==='Positive'?'error':'success');
 }
 
 // ═══════════════════════════════════════════════
@@ -154,16 +158,20 @@ function loadRetests() {
   const resolved = GRV();
   const rids     = new Set(resolved.map(r => r.originalId));
 
-  // Positivos originales sin retests generados aún
+  // Original positives without retests generated yet
   const pos = hist.filter(h =>
-    h.resultado === 'Positivo' && !h.retestNum && !rids.has(h.id)
+    h.resultado === 'Positive' && !h.retestNum && !rids.has(h.id)
   );
 
-  // Originales cerrados al generar retests, cuyos retests aún no están todos Negativos
+  // A round (retests sharing a root) is ACTIVE while it still has PENDING
+  // retests AND none of its retests failed. A failed retest escalates to a
+  // brand-new round, so its old round is no longer active.
   const closedGroups = resolved.filter(r => r.closedOnGenerate);
   const activeGroups = closedGroups.filter(r => {
     const myRetests = hist.filter(h => h.originalId === r.originalId && h.retestNum);
-    return myRetests.length > 0 && myRetests.some(h => h.resultado !== 'Negativo');
+    const hasPending   = myRetests.some(h => h.resultado === 'Pending');
+    const hasEscalated = myRetests.some(h => h.resultado === 'Positive');
+    return myRetests.length > 0 && hasPending && !hasEscalated;
   });
 
   const totalActive = pos.length + activeGroups.length;
@@ -171,11 +179,11 @@ function loadRetests() {
 
   const tbody = document.getElementById('retestsList');
   if (totalActive === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-500);padding:40px">✅ Sin retests activos</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-500);padding:40px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>No active retests</td></tr>';
   } else {
     const rows = [];
 
-    // Grupo A: positivos sin retests generados
+    // Group A: positives without retests generated
     pos.forEach(orig => {
       const pats = [orig.ecoli?'E.Coli':'',orig.listeria?'Listeria':'',orig.salmonella?'Salmonella':'',orig.saureus?'S.Aureus':''].filter(Boolean).join(', ');
       rows.push(`<tr style="background:#fff5f5;border-top:2px solid var(--red)">
@@ -184,14 +192,14 @@ function loadRetests() {
         <td style="font-size:12px;font-weight:600">${orig.fecha}</td>
         <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(orig.area)}</td>
         <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(orig.location)}">${esc(orig.location)}</td>
-        <td style="color:var(--red);font-weight:600;font-size:12px">${pats}${orig.failedPathogensLabel?'<br><span style="font-size:10px;background:var(--red-light);padding:2px 6px;border-radius:4px">Falló: '+esc(orig.failedPathogensLabel)+'</span>':''}</td>
-        <td style="text-align:center"><span class="badge badge-red">❌ Positivo</span></td>
+        <td style="color:var(--red);font-weight:600;font-size:12px">${pats}${orig.failedPathogensLabel?'<br><span style="font-size:10px;background:var(--red-light);padding:2px 6px;border-radius:4px">Failed: '+esc(orig.failedPathogensLabel)+'</span>':''}</td>
+        <td style="text-align:center"><span class="badge badge-red">Positive</span></td>
         <td style="font-size:11px;color:var(--gray-500)">${orig.labNotes||'—'}</td>
-        <td style="text-align:center"><span style="font-size:11px;color:var(--yellow);font-weight:600">⚠️ Generar retests</span></td>
+        <td style="text-align:center"><span style="font-size:11px;color:var(--yellow);font-weight:600">Generate retests</span></td>
       </tr>`);
     });
 
-    // Grupo B: retests activos (original ya cerrado)
+    // Group B: active retests (original already closed)
     activeGroups.forEach(resolvedOrig => {
       const retests = hist.filter(h => h.originalId === resolvedOrig.originalId && h.retestNum)
                           .sort((a,b) => a.retestNum.localeCompare(b.retestNum));
@@ -199,17 +207,17 @@ function loadRetests() {
       rows.push(`<tr style="background:#fff0f0;border-top:2px solid var(--red)">
         <td style="font-weight:700;font-size:14px;color:var(--red)" rowspan="${retests.length+1}">${resolvedOrig.sample}</td>
         <td><span class="badge badge-gray">${resolvedOrig.planta}</span></td>
-        <td style="font-size:12px;color:var(--gray-500)">${resolvedOrig.originalFecha}</td>
+        <td style="font-size:12px;color:var(--gray-500)">${resolvedOrig.originalDate}</td>
         <td colspan="3" style="font-size:12px;color:var(--gray-500)">${esc(resolvedOrig.area)}</td>
-        <td style="text-align:center"><span class="badge badge-red">❌ Falló</span></td>
+        <td style="text-align:center"><span class="badge badge-red">Failed</span></td>
         <td colspan="2" style="font-size:11px;color:var(--gray-400);font-style:italic;text-align:center">${resolvedOrig.notes||''}</td>
       </tr>`);
       retests.forEach((rt, i) => {
-        const isDone    = rt.resultado === 'Negativo';
-        const isPending = rt.resultado === 'Pendiente';
-        const isPos     = rt.resultado === 'Positivo';
+        const isDone    = rt.resultado === 'Negative';
+        const isPending = rt.resultado === 'Pending';
+        const isPos     = rt.resultado === 'Positive';
         const statusColor = isDone?'var(--green)':isPos?'var(--red)':'var(--yellow)';
-        const statusText  = isDone?'✅ Negativo':isPos?'❌ Positivo':'⏳ Pendiente';
+        const statusText  = isDone?'Negative':isPos?'Positive':'Pending';
         rows.push(`<tr style="background:${isDone?'#f0fdf4':isPending?'#fffbeb':'#fff5f5'}">
           <td><span class="badge badge-gray">${resolvedOrig.planta}</span></td>
           <td style="font-size:12px">${rt.fecha}</td>
@@ -219,8 +227,8 @@ function loadRetests() {
           <td style="font-size:11px;color:var(--gray-500)">${rt.labNotes||'—'}</td>
           <td style="text-align:center">
             <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap">
-              <button class="btn btn-primary btn-sm" onclick="exportRetestPDF(${rt.id})" style="font-size:10px;padding:4px 7px">📄 PDF</button>
-              ${!isDone?`<button class="btn btn-sm" onclick="openFailModal(${rt.id})" style="background:var(--navy);color:white;font-size:10px;padding:4px 7px">📋 Lab</button>`:''}
+              <button class="btn btn-primary btn-sm" onclick="exportRetestPDF(${rt.id})" style="font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
+              ${!isDone?`<button class="btn btn-sm" onclick="openFailModal(${rt.id})" style="background:var(--navy);color:white;font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Lab</button>`:''}
             </div>
           </td>
         </tr>`);
@@ -229,25 +237,36 @@ function loadRetests() {
     tbody.innerHTML = rows.join('');
   }
 
-  // Resueltos — excluir closedOnGenerate con retests aún pendientes
-  const resolvedToShow = resolved.filter(r => {
-    if (!r.closedOnGenerate) return true;
-    const myRetests = hist.filter(h => h.originalId === r.originalId && h.retestNum);
-    return myRetests.every(h => h.resultado === 'Negativo');
-  });
+  // Resolved / closed rounds: show any closed round that is no longer active,
+  // labeling the outcome — all-negative (success) or escalated (a retest
+  // failed, so a fresh round was generated from it).
+  const roundState = r => {
+    if (!r.closedOnGenerate) return { show:true, escalated:false };
+    const my = hist.filter(h => h.originalId === r.originalId && h.retestNum);
+    const hasPending   = my.some(h => h.resultado === 'Pending');
+    const hasEscalated = my.some(h => h.resultado === 'Positive');
+    return { show: !(hasPending && !hasEscalated), escalated: hasEscalated };
+  };
+  const resolvedToShow = resolved.filter(r => roundState(r).show);
   const rTbody = document.getElementById('retestResolved');
   rTbody.innerHTML = resolvedToShow.length === 0
-    ? '<tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:32px">Sin retests resueltos</td></tr>'
-    : [...resolvedToShow].reverse().map(r => `<tr style="background:#f0fdf4">
+    ? '<tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:32px">No resolved retests</td></tr>'
+    : [...resolvedToShow].reverse().map(r => {
+        const esc_ = roundState(r).escalated;
+        const outcome = esc_
+          ? '<span style="color:var(--red);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Failed — new round generated</span>'
+          : '<span style="color:var(--green);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'+(r.closedOnGenerate?'Retests all negative':'Negative / OK')+'</span>';
+        return `<tr style="background:${esc_?'#fff5f5':'#f0fdf4'}">
         <td style="font-weight:700">${r.sample}</td>
         <td><span class="badge badge-gray">${r.planta}</span></td>
         <td>${r.area}</td>
-        <td style="font-size:12px">${r.originalFecha}</td>
+        <td style="font-size:12px">${r.originalDate}</td>
         <td style="font-size:12px">${r.resolvedDate}</td>
-        <td style="text-align:center"><span class="badge badge-green">${r.retestNum||'—'}</span></td>
-        <td><span style="color:var(--green);font-weight:600">✅ ${r.closedOnGenerate?'Positivo — Retests OK':'Negativo / OK'}</span></td>
+        <td style="text-align:center"><span class="badge ${esc_?'badge-red':'badge-green'}">${r.retestNum||'—'}</span></td>
+        <td>${outcome}</td>
         <td style="font-size:12px;color:var(--gray-500)">${r.notes||'—'}</td>
-      </tr>`).join('');
+      </tr>`;
+      }).join('');
 }
 
 function openRetestOkModal(id) {
@@ -256,7 +275,7 @@ function openRetestOkModal(id) {
   OKID=id;
   const retests=hist.filter(r=>r.sample==h.sample&&r.planta===h.planta&&r.retestNum);
   const last=retests[retests.length-1];
-  document.getElementById('retestOkInfo').innerHTML='<strong>Sample #'+h.sample+'</strong> — '+esc(h.planta)+'<br><strong>Área:</strong> '+esc(h.area)+'<br><strong>Fecha del positivo:</strong> '+h.fecha+'<br><strong>Último retest:</strong> '+(last?last.retestNum+' ('+last.fecha+')':'—');
+  document.getElementById('retestOkInfo').innerHTML='<strong>Sample #'+h.sample+'</strong> — '+esc(h.planta)+'<br><strong>Area:</strong> '+esc(h.area)+'<br><strong>Positive date:</strong> '+h.fecha+'<br><strong>Last retest:</strong> '+(last?last.retestNum+' ('+last.fecha+')':'—');
   document.getElementById('retestOkNotes').value='';
   document.getElementById('retestOkModal').classList.add('open');
 }
@@ -271,11 +290,13 @@ function confirmRetestOk() {
   const resolved=GRV();
   const retests=hist.filter(r=>r.sample==h.sample&&r.planta===h.planta&&r.retestNum);
   const last=retests[retests.length-1];
-  resolved.push({originalId:h.id,sample:h.sample,planta:h.planta,area:h.area,location:h.location,originalFecha:h.fecha,resolvedDate:new Date().toISOString().split('T')[0],retestNum:last?last.retestNum:'—',notes});
+  const resolvedEntry={originalId:h.id,sample:h.sample,planta:h.planta,area:h.area,location:h.location,originalDate:h.fecha,resolvedDate:new Date().toISOString().split('T')[0],retestNum:last?last.retestNum:'—',notes};
+  resolved.push(resolvedEntry);
   SRV(resolved);
+  syncSafe(() => syncPushResolved([resolvedEntry]), 'push resolved ok');
   closeRetestOkModal();
   loadRetests(); refreshDashboard();
-  toast('✅ Sample #'+h.sample+' resuelto','success');
+  toast('Sample #'+h.sample+' resolved','success');
 }
 
 // ═══════════════════════════════════════════════
@@ -313,8 +334,8 @@ function openRetestDateModal(origId) {
 
   document.getElementById('retestDateInfo').innerHTML =
     '<strong>Sample #'+h.sample+'</strong> — '+h.planta+
-    '<br><strong>Área:</strong> '+esc(h.area)+
-    '<br><strong>Resultado positivo:</strong> '+h.fecha;
+    '<br><strong>Area:</strong> '+esc(h.area)+
+    '<br><strong>Positive result:</strong> '+h.fecha;
 
   // Default start date: next weekday from today
   const defaultStart = getNextWeekday(new Date());
@@ -345,7 +366,7 @@ function updateRetestPreview() {
   const day = start.getDay();
   let warning = '';
   if(day === 0 || day === 6) {
-    warning = '⚠️ La fecha seleccionada es fin de semana. Se moverá automáticamente al lunes.';
+    warning = 'The selected date is a weekend. It will move automatically to Monday.';
   }
   const d1 = getNextWeekday(start);
   const d2 = addWorkday(d1, 1);
@@ -353,9 +374,9 @@ function updateRetestPreview() {
   const fmt = d => d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
   document.getElementById('retestPreview').innerHTML =
     (warning ? '<p style="color:var(--yellow);font-weight:600;margin-bottom:6px">'+warning+'</p>' : '') +
-    '📅 <strong>Retest #1:</strong> '+fmt(d1)+'<br>' +
-    '📅 <strong>Retest #2:</strong> '+fmt(d2)+'<br>' +
-    '📅 <strong>Retest #3:</strong> '+fmt(d3);
+    '<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><strong>Retest #1:</strong> '+fmt(d1)+'<br>' +
+    '<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><strong>Retest #2:</strong> '+fmt(d2)+'<br>' +
+    '<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><strong>Retest #3:</strong> '+fmt(d3);
 }
 
 function closeRetestDateModal() {
@@ -367,7 +388,7 @@ function closeRetestDateModal() {
 
 function confirmRetestDates() {
   const val = document.getElementById('retestStartDate').value;
-  if(!val) { toast('Selecciona una fecha de inicio', 'error'); return; }
+  if(!val) { toast('Select a start date', 'error'); return; }
 
   const hist = GH();
   const origIdx = hist.findIndex(r => r.id === RDID);
@@ -381,42 +402,60 @@ function confirmRetestDates() {
   const d3 = addWorkday(d2, 1);
   const dates = [d1, d2, d3];
 
+  // Retest ONLY the pathogen(s) that actually failed — not every pathogen
+  // that was originally tested. Falls back to the original flags if no
+  // specific failure was recorded (legacy data).
+  const failed = Array.isArray(orig.failedPathogens) ? orig.failedPathogens : [];
+  const onlyFailed = failed.length ? {
+    ecoli:      failed.includes('ecoli')      ? 1 : 0,
+    listeria:   failed.includes('listeria')   ? 1 : 0,
+    salmonella: failed.includes('salmonella') ? 1 : 0,
+    saureus:    failed.includes('saureus')    ? 1 : 0
+  } : {};
+
   let nextId = Math.max(...hist.map(h => h.id)) + 1;
-  dates.forEach((d, i) => {
-    hist.push({
+  const newRetests = dates.map((d, i) => ({
       ...orig,
+      ...onlyFailed,
       id: nextId++,
       fecha: d.toISOString().split('T')[0],
-      resultado: 'Pendiente',
+      resultado: 'Pending',
       retestNum: 'Retest #'+(i+1),
       location: orig.location,
       labNotes: '',
       isRetest: true,
       originalId: orig.id,
-      scheduled: true
-    });
-  });
+      scheduled: true,
+      // fresh pending tests — clear any failure data inherited from the parent
+      failedPathogens: undefined,
+      failedPathogensLabel: undefined,
+      resultDate: undefined
+  }));
+  hist.push(...newRetests);
   SH(hist);
+  syncSafe(() => syncPushRecords(newRetests), 'push retests');
 
-  // Cerrar el original INMEDIATAMENTE — los retests son casos independientes
+  // Close the original IMMEDIATELY — retests are independent cases
   const resolved = GRV();
   if (!resolved.some(r => r.originalId === orig.id)) {
-    resolved.push({
+    const resolvedEntry = {
       originalId:       orig.id,
       sample:           orig.sample,
       planta:           orig.planta,
       area:             orig.area,
       location:         orig.location,
-      originalFecha:    orig.fecha,
+      originalDate:    orig.fecha,
       resolvedDate:     new Date().toISOString().split('T')[0],
       retestNum:        '—',
-      notes:            'Positivo: '+(orig.failedPathogensLabel||'—')+'. 3 retests programados.',
+      notes:            'Positive: '+(orig.failedPathogensLabel||'—')+'. 3 retests scheduled.',
       closedOnGenerate: true
-    });
+    };
+    resolved.push(resolvedEntry);
     SRV(resolved);
+    syncSafe(() => syncPushResolved([resolvedEntry]), 'push resolved');
   }
 
   closeRetestDateModal();
   loadRetests(); searchHistory(); refreshDashboard();
-  toast('✅ 3 retests programados para Sample #'+orig.sample+' — Caso original cerrado.', 'success');
+  toast('✅ 3 retests scheduled for Sample #'+orig.sample+' — Original case closed.', 'success');
 }

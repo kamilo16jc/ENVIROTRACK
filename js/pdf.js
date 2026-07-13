@@ -44,7 +44,7 @@ function pdfFooter(doc,W,margin) {
 
 function exportPDF() {
   if(!TESTS.length) { toast('Genera tests primero','error'); return; }
-  const planta = document.getElementById('genPlanta').value;
+  const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value;
   const by     = document.getElementById('genCollectedBy').value;
   const sqf    = SQF_NUMS[planta]||'2.4.H';
@@ -67,7 +67,7 @@ function exportPDF() {
   pdfDocControl(doc,fy+6,margin);
   pdfFooter(doc,W,margin);
   doc.save('ENV_MONITORING_'+planta+'_'+(fecha||'').replace(/-/g,'')+'.pdf');
-  toast('✅ PDF exportado','success');
+  toast('✅ PDF exported','success');
 }
 
 // ═══════════════════════════════════════════════
@@ -158,23 +158,23 @@ function exportRetestPDF(id) {
 function exportHistoryPDF() {
   let hist = GH();
   hist = hist.filter(h => {
-    const p=document.getElementById('fPlanta').value, s=document.getElementById('fSample').value.trim(),
-          d=document.getElementById('fDesde').value,  u=document.getElementById('fHasta').value,
+    const p=document.getElementById('fPlant').value, s=document.getElementById('fSample').value.trim(),
+          d=document.getElementById('fFrom').value,  u=document.getElementById('fTo').value,
           r=document.getElementById('fResult').value;
     return (!p||h.planta===p) && (!s||String(h.sample).includes(s)) &&
            (!d||h.fecha>=d) && (!u||h.fecha<=u) && (!r||h.resultado===r);
   });
   hist.sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if(!hist.length) { toast('No hay datos para exportar','error'); return; }
+  if(!hist.length) { toast('No data to export','error'); return; }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'landscape',unit:'mm',format:'letter'});
   const W=279.4;
   doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
-  doc.text('CAPUTO FOODS — Historial de Tests Ambientales',W/2,13,{align:'center'});
+  doc.text('CAPUTO FOODS — Environmental Test History',W/2,13,{align:'center'});
   doc.setFont('helvetica','normal'); doc.setFontSize(8);
-  doc.text('Generado: '+new Date().toLocaleDateString('en-US'),W/2,19,{align:'center'});
+  doc.text('Generated: '+new Date().toLocaleDateString('en-US'),W/2,19,{align:'center'});
   doc.autoTable({
-    head:[['Fecha','Edificio','Sample#','Zona','Área','Ubicación','E.C','List','Salm','S.A','Resultado','Retest']],
+    head:[['Date','Building','Sample#','Zone','Area','Location','E.C','List','Salm','S.A','Result','Retest']],
     body:hist.map(h=>[h.fecha,h.planta,h.sample,h.zone,h.area.substring(0,25),h.location.substring(0,35),h.ecoli?'X':'',h.listeria?'X':'',h.salmonella?'X':'',h.saureus?'X':'',h.resultado,h.retestNum||'']),
     startY:23, margin:{left:8,right:8},
     styles:{fontSize:7,cellPadding:2,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.15},
@@ -182,5 +182,5 @@ function exportHistoryPDF() {
     columnStyles:{0:{cellWidth:20},1:{cellWidth:17},2:{cellWidth:15,halign:'center'},3:{cellWidth:10,halign:'center'},4:{cellWidth:38},5:{cellWidth:55},6:{cellWidth:9,halign:'center'},7:{cellWidth:9,halign:'center'},8:{cellWidth:10,halign:'center'},9:{cellWidth:9,halign:'center'},10:{cellWidth:22},11:{cellWidth:18}}
   });
   doc.save('Caputo_Historial_'+new Date().toISOString().split('T')[0]+'.pdf');
-  toast('✅ PDF exportado','success');
+  toast('✅ PDF exported','success');
 }

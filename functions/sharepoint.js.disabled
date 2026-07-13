@@ -1,0 +1,51 @@
+// ═══════════════════════════════════════════════════════════════
+// EnviroTrack — Secure proxy to SharePoint (via Power Automate)
+// ───────────────────────────────────────────────────────────────
+// NOT DEPLOYED YET. This file is kept for the SharePoint sync phase.
+// To enable it later:
+//   1. Enable the Secret Manager API in Google Cloud.
+//   2. Set the flow URL:  firebase functions:secrets:set FLOW_URL
+//   3. Move this code into index.js (or require it from index.js)
+//      and deploy:  firebase deploy --only functions:writeToSharePoint
+//
+// It: (1) only responds to signed-in users, (2) hides the secret flow
+// URL on the server, (3) forces `inspector` to the real signed-in user.
+// ═══════════════════════════════════════════════════════════════
+
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
+
+const FLOW_URL = defineSecret("FLOW_URL");
+
+exports.writeToSharePoint = onCall(
+  { secrets: [FLOW_URL], region: "us-central1", cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "You must sign in to save data.");
+    }
+    const record = request.data;
+    if (!record || typeof record !== "object") {
+      throw new HttpsError("invalid-argument", "Invalid data.");
+    }
+    const inspector =
+      request.auth.token.email ||
+      request.auth.token.name ||
+      request.auth.uid;
+    const payload = { ...record, inspector };
+
+    let resp;
+    try {
+      resp = await fetch(FLOW_URL.value(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      throw new HttpsError("unavailable", "Could not reach SharePoint. Please try again.");
+    }
+    if (!resp.ok && resp.status !== 202) {
+      throw new HttpsError("internal", "SharePoint rejected the record (HTTP " + resp.status + ").");
+    }
+    return { ok: true, status: resp.status, inspector };
+  }
+);

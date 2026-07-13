@@ -1,24 +1,27 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v1';
+const CACHE_NAME = 'envirotrack-v2';
 
+// Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
-  '/caputo-env-monitoring/',
-  '/caputo-env-monitoring/index.html',
-  '/caputo-env-monitoring/css/styles.css',
-  '/caputo-env-monitoring/js/data.js',
-  '/caputo-env-monitoring/js/storage.js',
-  '/caputo-env-monitoring/js/auth.js',
-  '/caputo-env-monitoring/js/navigation.js',
-  '/caputo-env-monitoring/js/generator.js',
-  '/caputo-env-monitoring/js/pdf.js',
-  '/caputo-env-monitoring/js/history.js',
-  '/caputo-env-monitoring/js/retests.js',
-  '/caputo-env-monitoring/js/dashboard.js',
-  '/caputo-env-monitoring/js/reports.js',
-  '/caputo-env-monitoring/js/settings.js',
-  '/caputo-env-monitoring/js/init.js',
+  './',
+  './index.html',
+  './css/styles.css',
+  './js/firebase-init.js',
+  './js/data.js',
+  './js/storage.js',
+  './js/sync.js',
+  './js/auth.js',
+  './js/navigation.js',
+  './js/generator.js',
+  './js/pdf.js',
+  './js/history.js',
+  './js/retests.js',
+  './js/dashboard.js',
+  './js/reports.js',
+  './js/settings.js',
+  './js/init.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
@@ -59,7 +62,7 @@ self.addEventListener('fetch', evt => {
       }).catch(() => {
         // Offline fallback
         if (evt.request.destination === 'document') {
-          return caches.match('/caputo-env-monitoring/index.html');
+          return caches.match('./index.html');
         }
       });
     })

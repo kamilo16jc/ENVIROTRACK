@@ -46,7 +46,7 @@ function hideSessionWarning() {
 
 function extendSession() {
   resetSessionTimer();
-  toast('✅ Sesión extendida 5 minutos más', 'success');
+  toast('✅ Session extended 5 more minutes', 'success');
 }
 
 function forceLogout() {
@@ -58,7 +58,7 @@ function forceLogout() {
   // Show message on login screen
   setTimeout(() => {
     document.getElementById('loginError').textContent =
-      '⏱ Sesión cerrada por inactividad. Vuelve a ingresar.';
+      'Session closed due to inactivity. Please sign in again.';
     document.getElementById('loginError').style.color = 'var(--yellow)';
   }, 100);
 }
