@@ -9,8 +9,15 @@ function destroyCharts() {
 }
 
 function getFilteredHistory() {
-  const days = parseInt(document.getElementById('reportPeriod').value);
   let hist = GH();
+  const from = (document.getElementById('repFrom')||{}).value;
+  const to   = (document.getElementById('repTo')||{}).value;
+  if(from || to) {                       // explicit date range overrides the period
+    if(from) hist = hist.filter(h => h.fecha >= from);
+    if(to)   hist = hist.filter(h => h.fecha <= to);
+    return hist;
+  }
+  const days = parseInt(document.getElementById('reportPeriod').value);
   if(!isNaN(days)) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
@@ -20,8 +27,15 @@ function getFilteredHistory() {
   return hist;
 }
 
+function clearRepDates() {
+  const f = document.getElementById('repFrom'), t = document.getElementById('repTo');
+  if(f) f.value = ''; if(t) t.value = '';
+  buildReports();
+}
+
 function buildReports() {
   destroyCharts();
+  if(window.Chart) Chart.defaults.animation = false; // render instantly → clean PDF capture
   const hist = getFilteredHistory();
   const plants = ['1945','1935','1931E','1931W'];
   const COLORS = { '1945':'#C0392B','1935':'#1A5276','1931E':'#0E6655','1931W':'#6C3483' };
@@ -291,189 +305,198 @@ function exportReportPDF() {
   if(!hist.length) { toast('No data to export','error'); return; }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
-  const W=215.9, margin=14, today=new Date().toLocaleDateString('en-US');
-  const period = document.getElementById('reportPeriod');
-  const periodLabel = period.options[period.selectedIndex].text;
+  const W=215.9, H=279.4, M=14, today=new Date().toLocaleDateString('en-US');
   const plants = ['1945','1935','1931E','1931W'];
-  const COL_W = (W - margin*2) / 7; // uniform column width
+  const patKeys=['ecoli','listeria','salmonella','saureus'];
+  const patNames={ecoli:'E. Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S. Aureus'};
 
-  // ── Logo + Header ───────────────────────────────────────────────────────
-  try { doc.addImage(LOGO,'JPEG',margin,8,28,14); } catch(e){}
-
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(0,0,0);
-  doc.text('Environmental Monitoring Report',W/2,13,{align:'center'});
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(192,57,43);
-  doc.text('CAPUTO FOODS',W/2,19,{align:'center'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
-  doc.text('Period: '+periodLabel+'   |   Generated: '+today,W/2,24,{align:'center'});
-
-  // Version info top right
-  doc.setFontSize(7.5); doc.setTextColor(100,100,100);
-  doc.text('Version: 6 | Revision: 08/30/24',W-margin,10,{align:'right'});
-
-  doc.setDrawColor(192,57,43); doc.setLineWidth(0.5);
-  doc.line(margin,27,W-margin,27);
-  doc.setDrawColor(0,0,0); doc.setLineWidth(0.2);
-
-  // ── KPI Summary ─────────────────────────────────────────────────────────
-  const total=hist.length, pos=hist.filter(h=>h.resultado==='Positive').length,
+  // ── Metrics & insights ──────────────────────────────────────────────
+  const dates=hist.map(h=>h.fecha).filter(Boolean).sort();
+  const from=dates[0]||'', to=dates[dates.length-1]||'';
+  const fmt=d=> d? new Date(d+'T12:00:00').toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'—';
+  const total=hist.length,
+        pos=hist.filter(h=>h.resultado==='Positive').length,
         neg=hist.filter(h=>h.resultado==='Negative').length,
         pend=hist.filter(h=>h.resultado==='Pending').length,
         retests=hist.filter(h=>h.retestNum).length,
-        resolved=GRV().length;
+        posRate= total>0? +(pos/total*100).toFixed(1):0,
+        openPos=hist.filter(h=>h.resultado==='Positive'&&!h.retestNum).length;
 
-  const kpiColW = (W-margin*2)/6;
-  const kpis = [
-    {label:'Total Tests',     value:String(total)},
-    {label:'Negatives',       value:String(neg)},
-    {label:'Positives',       value:String(pos)},
-    {label:'Pending',      value:String(pend)},
-    {label:'Positive Rate',  value:total>0?(pos/total*100).toFixed(1)+'%':'0%'},
-    {label:'Retests',         value:String(retests)},
-  ];
-  let kx = margin;
-  const ky = 30;
-  kpis.forEach((k,i) => {
-    const isRed = k.label==='Positives'||k.label==='Positive Rate';
-    const isGreen = k.label==='Negatives';
-    doc.setDrawColor(180,180,180); doc.setLineWidth(0.2);
-    doc.rect(kx, ky, kpiColW-1, 18);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(120,120,120);
-    doc.text(k.label, kx+kpiColW/2-0.5, ky+5.5, {align:'center'});
-    doc.setFont('helvetica','bold'); doc.setFontSize(14);
-    doc.setTextColor(isRed?192:isGreen?5:26, isRed?57:isGreen?150:35, isRed?43:isGreen?105:50);
-    doc.text(k.value, kx+kpiColW/2-0.5, ky+14, {align:'center'});
-    kx += kpiColW;
-  });
-
-  // ── Section title helper ──────────────────────────────────────────────
-  const sectionTitle = (title, y) => {
-    doc.setFillColor(26,35,50); doc.rect(margin, y, W-margin*2, 7, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,255,255);
-    doc.text(title, margin+3, y+5);
-    return y+7;
-  };
-
-  // ── Tests by Building ────────────────────────────────────────────────
-  const fullW = W-margin*2;
-  const bCols = [30,25,25,25,25,25,25]; // 7 cols, total=180 = fullW
-  let y = 53;
-  y = sectionTitle('Tests by Building', y);
-  doc.autoTable({
-    head:[['Building','Total','Positives','Negatives','Pending','Retests','Fail Rate']],
-    body:[...plants.map(p=>{
-      const ph=hist.filter(h=>h.planta===p);
-      const pp=ph.filter(h=>h.resultado==='Positive').length;
-      return [p,ph.length,pp,ph.filter(h=>h.resultado==='Negative').length,
-              ph.filter(h=>h.resultado==='Pending').length,
-              ph.filter(h=>h.retestNum).length,
-              ph.length>0?(pp/ph.length*100).toFixed(1)+'%':'0%'];
-    }),
-    ['TOTAL',total,pos,neg,pend,retests,total>0?(pos/total*100).toFixed(1)+'%':'0%']],
-    startY:y, margin:{left:margin,right:margin},
-    styles:{fontSize:9,cellPadding:3,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.2,halign:'center'},
-    headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',fontSize:9,lineColor:[0,0,0],lineWidth:0.2},
-    columnStyles:{
-      0:{cellWidth:bCols[0],halign:'left',fontStyle:'bold'},
-      1:{cellWidth:bCols[1]},2:{cellWidth:bCols[2]},3:{cellWidth:bCols[3]},
-      4:{cellWidth:bCols[4]},5:{cellWidth:bCols[5]},6:{cellWidth:bCols[6]}
-    },
-    didParseCell: d=>{
-      if(d.row.raw && d.row.raw[0]==='TOTAL'){
-        d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[245,245,245];
-      }
-      if(d.column.index===2 && parseFloat(d.cell.raw)>0 && d.row.index>=0){
-        d.cell.styles.textColor=[192,57,43]; d.cell.styles.fontStyle='bold';
-      }
-      if(d.column.index===6 && parseFloat(d.cell.raw)>5 && d.row.index>=0){
-        d.cell.styles.textColor=[192,57,43];
-      }
-    }
-  });
-
-  // ── Retests by Building ────────────────────────────────────────────
-  y = doc.lastAutoTable.finalY+8;
-  y = sectionTitle('Retests by Building and Pathogen', y);
-  const patKeys=['ecoli','listeria','salmonella','saureus'];
-  const patNames=['E.Coli','Listeria','Salmonella','S.Aureus'];
-  const rCols=[30,28,28,28,28,28,30]; // 7 cols
-  doc.autoTable({
-    head:[['Building','E.Coli +','Listeria +','Salmonella +','S.Aureus +','Total Pos.','Fail Rate']],
-    body:plants.map(p=>{
-      const ph=hist.filter(h=>h.planta===p);
-      const pos_p=ph.filter(h=>h.resultado==='Positive');
-      const t=ph.length;
-      const pp=pos_p.length;
-      return [p,...patKeys.map(k=>pos_p.filter(h=>h[k]).length),pp,
-              t>0?(pp/t*100).toFixed(1)+'%':'0%'];
-    }),
-    startY:y, margin:{left:margin,right:margin},
-    styles:{fontSize:9,cellPadding:3,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.2,halign:'center'},
-    headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',fontSize:9,lineColor:[0,0,0],lineWidth:0.2},
-    columnStyles:{
-      0:{cellWidth:rCols[0],halign:'left',fontStyle:'bold'},
-      1:{cellWidth:rCols[1]},2:{cellWidth:rCols[2]},3:{cellWidth:rCols[3]},
-      4:{cellWidth:rCols[4]},5:{cellWidth:rCols[5]},6:{cellWidth:rCols[6]}
-    },
-    didParseCell: d=>{
-      if(d.column.index>0 && d.column.index<6 && parseFloat(d.cell.raw)>0 && d.row.index>=0){
-        d.cell.styles.textColor=[192,57,43]; d.cell.styles.fontStyle='bold';
-      }
-    }
-  });
-
-  // ── Top 10 failing samples ───────────────────────────────────────────
-  y = doc.lastAutoTable.finalY+8;
-  y = sectionTitle('Top 10 — Points with Most Positives', y);
+  const bStats=plants.map(p=>{const ph=hist.filter(h=>h.planta===p);const pp=ph.filter(h=>h.resultado==='Positive').length;return {p,total:ph.length,pos:pp,rate:ph.length>0?pp/ph.length*100:0};});
+  const worstB=bStats.filter(b=>b.total>0).sort((a,b)=>b.rate-a.rate)[0];
+  const patStat=patKeys.map(k=>({k,n:hist.filter(h=>h[k]&&h.resultado==='Positive').length})).sort((a,b)=>b.n-a.n);
+  const worstPat=patStat[0];
+  const zStat=[2,3,4].map(z=>{const zh=hist.filter(h=>h.zone==z);const zp=zh.filter(h=>h.resultado==='Positive').length;return {z,total:zh.length,pos:zp,rate:zh.length>0?zp/zh.length*100:0};});
+  const worstZone=zStat.filter(z=>z.total>0).sort((a,b)=>b.rate-a.rate)[0];
   const smap={};
-  hist.filter(h=>!h.retestNum).forEach(h=>{
-    const k=h.planta+'|'+h.sample;
-    if(!smap[k]) smap[k]={sample:h.sample,planta:h.planta,zone:h.zone,area:h.area,location:h.location,total:0,pos:0};
-    smap[k].total++; if(h.resultado==='Positive') smap[k].pos++;
+  hist.filter(h=>!h.retestNum).forEach(h=>{const k=h.planta+'|'+h.sample;if(!smap[k])smap[k]={sample:h.sample,planta:h.planta,zone:h.zone,area:h.area,location:h.location,total:0,pos:0};smap[k].total++;if(h.resultado==='Positive')smap[k].pos++;});
+  const topPts=Object.values(smap).filter(s=>s.pos>0).sort((a,b)=>b.pos-a.pos||(b.pos/b.total)-(a.pos/a.total));
+  const topPt=topPts[0];
+  let trend='stable';
+  if(dates.length>6){
+    const mid=dates[Math.floor(dates.length/2)];
+    const fh=hist.filter(h=>h.fecha<mid), sh=hist.filter(h=>h.fecha>=mid);
+    const r1=fh.length?fh.filter(h=>h.resultado==='Positive').length/fh.length*100:0;
+    const r2=sh.length?sh.filter(h=>h.resultado==='Positive').length/sh.length*100:0;
+    if(r2<r1-1)trend='improving'; else if(r2>r1+1)trend='worsening';
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  let y=0;
+  const ensure=(h)=>{ if(y+h > H-16){ doc.addPage(); y=16; } };
+  const secTitle=(t)=>{ ensure(12); doc.setFillColor(26,35,50); doc.rect(M,y,W-M*2,7,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(255,255,255); doc.text(t,M+3,y+4.8); y+=10; };
+  const chartImg=(id)=>{ const c=document.getElementById(id); try{ return c&&c.width? {img:c.toDataURL('image/png',1.0), ar:c.width/c.height}:null; }catch(e){ return null; } };
+  const bullet=(txt)=>{ const lines=doc.splitTextToSize(txt,W-M*2-8); ensure(lines.length*4.2+2); doc.setFillColor(192,57,43); doc.circle(M+2,y-0.8,0.8,'F'); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,45,55); doc.text(lines,M+5,y); y+=lines.length*4.2+1.5; };
+
+  // ── Header band ──────────────────────────────────────────────────────
+  doc.setFillColor(26,35,50); doc.rect(0,0,W,30,'F');
+  try{ doc.addImage(LOGO,'JPEG',M,7.5,25,13); }catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(255,255,255);
+  doc.text('Environmental Monitoring Report',W/2,13,{align:'center'});
+  doc.setFontSize(11); doc.setTextColor(232,120,110);
+  doc.text('CAPUTO FOODS',W/2,20,{align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(200,206,216);
+  doc.text('Period:  '+fmt(from)+'   to   '+fmt(to)+'          Generated: '+today,W/2,26,{align:'center'});
+  y=37;
+
+  // ── Executive summary ────────────────────────────────────────────────
+  secTitle('Executive Summary');
+  const assess = posRate<5?'WELL-CONTROLLED':posRate<12?'MODERATE CONCERN':'HIGH CONCERN';
+  const trendTxt = trend==='improving'?'The positive rate is trending down versus the earlier part of the period, a good sign.':trend==='worsening'?'The positive rate is trending up versus the earlier part of the period; corrective action is recommended.':'The positive rate has held stable across the period.';
+  const summary =
+    total+' environmental samples were collected across the four buildings during this period. '+
+    pos+' tested positive ('+posRate+'%), '+neg+' were negative, and '+pend+' are pending results. '+
+    (openPos>0? openPos+' positive case(s) currently remain OPEN and require retest follow-up. ':'All positive cases have been managed through their retest cycle. ')+
+    (worstB&&worstB.pos>0? 'Building '+worstB.p+' carries the highest positive rate ('+worstB.rate.toFixed(1)+'%). ':'')+
+    (worstPat&&worstPat.n>0? patNames[worstPat.k]+' is the most frequently detected organism, with '+worstPat.n+' positive result(s). ':'')+
+    'Overall program status is assessed as '+assess+'. '+trendTxt;
+  const sumLines=doc.splitTextToSize(summary, W-M*2-6);
+  const sumH=sumLines.length*4.2+6;
+  doc.setFillColor(245,247,249); doc.setDrawColor(220,224,230); doc.setLineWidth(0.2);
+  doc.roundedRect(M,y,W-M*2,sumH,2,2,'FD');
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,45,55);
+  doc.text(sumLines,M+3,y+5);
+  y+=sumH+6;
+
+  // ── KPI boxes ────────────────────────────────────────────────────────
+  secTitle('Key Indicators');
+  const kpis=[
+    {l:'Total Tests',v:String(total),c:[26,35,50]},
+    {l:'Negatives',v:String(neg),c:[5,150,105]},
+    {l:'Positives',v:String(pos),c:[192,57,43]},
+    {l:'Positive Rate',v:posRate+'%',c:[192,57,43]},
+    {l:'Retests',v:String(retests),c:[217,119,6]},
+    {l:'Open Cases',v:String(openPos),c:openPos>0?[192,57,43]:[5,150,105]},
+  ];
+  const kw=(W-M*2-5*4)/6, kh=18;
+  kpis.forEach((k,i)=>{
+    const x=M+i*(kw+4);
+    doc.setFillColor(k.c[0],k.c[1],k.c[2]); doc.roundedRect(x,y,kw,kh,1.5,1.5,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+    doc.text(k.v,x+kw/2,y+9,{align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(255,255,255);
+    doc.text(k.l.toUpperCase(),x+kw/2,y+14.5,{align:'center'});
   });
-  const top10=Object.values(smap).filter(s=>s.pos>0).sort((a,b)=>b.pos-a.pos).slice(0,10);
-  const tCols=[8,14,18,10,38,52,15,15,12]; // 9 cols, total=182
-  doc.autoTable({
-    head:[['#','Sample','Plant','Zone','Area','Location','Tests','Positives','Rate']],
-    body:top10.length>0
-      ? top10.map((s,i)=>[i+1,s.sample,s.planta,s.zone,
-          s.area.length>18?s.area.substring(0,18)+'...':s.area,
-          s.location.length>28?s.location.substring(0,28)+'...':s.location,
-          s.total,s.pos,s.total>0?(s.pos/s.total*100).toFixed(0)+'%':'0%'])
-      : [['—','—','—','—','No positives recorded','—','—','—','—']],
-    startY:y, margin:{left:margin,right:margin},
-    styles:{fontSize:8,cellPadding:2.8,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.2},
-    headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',fontSize:8,lineColor:[0,0,0],lineWidth:0.2},
-    columnStyles:{
-      0:{cellWidth:tCols[0],halign:'center'},
-      1:{cellWidth:tCols[1],halign:'center'},
-      2:{cellWidth:tCols[2],halign:'center'},
-      3:{cellWidth:tCols[3],halign:'center'},
-      4:{cellWidth:tCols[4],halign:'left'},
-      5:{cellWidth:tCols[5],halign:'left'},
-      6:{cellWidth:tCols[6],halign:'center'},
-      7:{cellWidth:tCols[7],halign:'center',fontStyle:'bold'},
-      8:{cellWidth:tCols[8],halign:'center'},
-    },
-    didParseCell: d=>{
-      if(d.column.index===7 && parseFloat(d.cell.raw)>0 && d.row.index>=0){
-        d.cell.styles.textColor=[192,57,43];
-      }
-      if(d.column.index===8 && parseFloat(d.cell.raw)>=50 && d.row.index>=0){
-        d.cell.styles.textColor=[192,57,43]; d.cell.styles.fontStyle='bold';
-      }
+  y+=kh+8;
+
+  // ── Charts ───────────────────────────────────────────────────────────
+  secTitle('Visual Analysis');
+  const charts=[
+    ['chartPlant','Tests & Positives by Building'],
+    ['chartResult','Result Distribution'],
+    ['chartZone','Positive Rate by Zone'],
+    ['chartPat','Pathogen Detection'],
+    ['chartTrend','Weekly Trend'],
+    ['chartRetest','Retests by Building'],
+  ];
+  const cw=(W-M*2-6)/2;
+  for(let i=0;i<charts.length;i+=2){
+    let rowH=0; const cells=[];
+    for(let j=0;j<2 && i+j<charts.length;j++){
+      const ci=chartImg(charts[i+j][0]);
+      const ih=ci? Math.min(cw/ci.ar,52):40;
+      cells.push({ci,ih,title:charts[i+j][1]}); rowH=Math.max(rowH,ih);
     }
+    ensure(rowH+9);
+    cells.forEach((cell,j)=>{
+      const x=M+j*(cw+6);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(70,70,70);
+      doc.text(cell.title,x,y+1);
+      if(cell.ci){ try{ doc.addImage(cell.ci.img,'PNG',x,y+3,cw,cell.ih); }catch(e){} }
+    });
+    y+=rowH+10;
+  }
+
+  // ── Key findings ─────────────────────────────────────────────────────
+  secTitle('Key Findings');
+  bullet('Positive rate for the period: '+posRate+'% ('+pos+' of '+total+' tests). Assessed as '+assess.toLowerCase()+'.');
+  if(worstB&&worstB.pos>0) bullet('Most affected building: '+worstB.p+' with '+worstB.pos+' positive(s), a '+worstB.rate.toFixed(1)+'% positive rate.');
+  if(worstPat&&worstPat.n>0) bullet('Most frequent organism: '+patNames[worstPat.k]+' with '+worstPat.n+' positive detection(s).');
+  if(worstZone&&worstZone.pos>0) bullet('Highest-risk zone: Zone '+worstZone.z+' at '+worstZone.rate.toFixed(1)+'% positive.');
+  if(topPt) bullet('Top recurring point: Sample #'+topPt.sample+' ('+topPt.planta+' — '+topPt.area+') with '+topPt.pos+' positive(s) out of '+topPt.total+' tests.');
+  bullet('Retest activity: '+retests+' retest(s) generated; '+openPos+' positive case(s) still open.');
+
+  // ── Recommendations ──────────────────────────────────────────────────
+  secTitle('Recommendations — Where to Improve');
+  const recs=[];
+  if(openPos>0) recs.push('Prioritize closing the '+openPos+' open positive case(s): schedule and complete their retest cycles promptly.');
+  if(topPt&&topPt.pos>=2) recs.push('Root-cause Sample #'+topPt.sample+' at '+topPt.planta+' ('+topPt.area+' / '+topPt.location+') — a recurring positive that warrants a deep clean and equipment review.');
+  if(worstB&&worstB.rate>=8) recs.push('Reinforce sanitation and verification frequency in Building '+worstB.p+', which shows the highest positive rate.');
+  if(worstPat&&worstPat.n>=2) recs.push('Target '+patNames[worstPat.k]+' controls (the leading organism): review harborage points, drains and cleaning chemistry.');
+  if(worstZone&&worstZone.rate>=8) recs.push('Focus corrective cleaning on Zone '+worstZone.z+' surfaces, currently the highest-risk zone.');
+  if(trend==='worsening') recs.push('The positive trend is rising — investigate what changed (equipment, staffing, cleaning schedule) and act before it escalates.');
+  if(recs.length===0) recs.push('No critical issues detected this period. Maintain current sanitation and verification practices and keep monitoring.');
+  recs.forEach(bullet);
+
+  // ── Detail tables ────────────────────────────────────────────────────
+  const tblHead={fillColor:[26,35,50],textColor:[255,255,255],fontStyle:'bold',fontSize:8.5,lineColor:[200,200,200],lineWidth:0.1};
+  const tblStyle={fontSize:8.5,cellPadding:2.6,textColor:[30,30,30],lineColor:[210,210,210],lineWidth:0.1,halign:'center'};
+
+  y+=2; secTitle('Detail — Tests by Building');
+  doc.autoTable({
+    head:[['Building','Total','Positives','Negatives','Pending','Retests','Positive Rate']],
+    body:[...bStats.map(b=>[b.p,b.total,b.pos,hist.filter(h=>h.planta===b.p&&h.resultado==='Negative').length,hist.filter(h=>h.planta===b.p&&h.resultado==='Pending').length,hist.filter(h=>h.planta===b.p&&h.retestNum).length,b.total>0?b.rate.toFixed(1)+'%':'0%']),
+      ['TOTAL',total,pos,neg,pend,retests,total>0?posRate+'%':'0%']],
+    startY:y, margin:{left:M,right:M}, styles:tblStyle, headStyles:tblHead,
+    columnStyles:{0:{halign:'left',fontStyle:'bold'}},
+    didParseCell:d=>{ if(d.row.raw&&d.row.raw[0]==='TOTAL'){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[240,242,245];}
+      if((d.column.index===2||d.column.index===6)&&parseFloat(d.cell.raw)>0)d.cell.styles.textColor=[192,57,43]; }
+  });
+  y=doc.lastAutoTable.finalY+7;
+
+  secTitle('Detail — Positives by Building & Pathogen');
+  doc.autoTable({
+    head:[['Building','E. Coli +','Listeria +','Salmonella +','S. Aureus +','Total Pos.','Positive Rate']],
+    body:bStats.map(b=>{const ph=hist.filter(h=>h.planta===b.p&&h.resultado==='Positive');return [b.p,...patKeys.map(k=>ph.filter(h=>h[k]).length),b.pos,b.total>0?b.rate.toFixed(1)+'%':'0%'];}),
+    startY:y, margin:{left:M,right:M}, styles:tblStyle, headStyles:tblHead,
+    columnStyles:{0:{halign:'left',fontStyle:'bold'}},
+    didParseCell:d=>{ if(d.column.index>0&&d.column.index<6&&parseFloat(d.cell.raw)>0){d.cell.styles.textColor=[192,57,43];d.cell.styles.fontStyle='bold';} }
+  });
+  y=doc.lastAutoTable.finalY+7;
+
+  secTitle('Detail — Top Points with Most Positives');
+  doc.autoTable({
+    head:[['#','Sample','Bldg','Zone','Area','Location','Tests','Pos.','Rate']],
+    body: topPts.length>0? topPts.slice(0,12).map((s,i)=>[i+1,s.sample,s.planta,s.zone,(s.area||'').length>20?(s.area).slice(0,20)+'…':s.area,(s.location||'').length>28?(s.location).slice(0,28)+'…':s.location,s.total,s.pos,s.total>0?(s.pos/s.total*100).toFixed(0)+'%':'0%'])
+      : [['—','—','—','—','No positives recorded','—','—','—','—']],
+    startY:y, margin:{left:M,right:M}, styles:{...tblStyle,fontSize:8}, headStyles:{...tblHead,fontSize:8},
+    columnStyles:{0:{cellWidth:8},1:{cellWidth:16},2:{cellWidth:16},3:{cellWidth:11},4:{halign:'left'},5:{halign:'left'},6:{cellWidth:13},7:{cellWidth:13,fontStyle:'bold'},8:{cellWidth:13}},
+    didParseCell:d=>{ if(d.column.index===7&&parseFloat(d.cell.raw)>0)d.cell.styles.textColor=[192,57,43];
+      if(d.column.index===8&&parseFloat(d.cell.raw)>=50){d.cell.styles.textColor=[192,57,43];d.cell.styles.fontStyle='bold';} }
   });
 
-  // ── Footer ────────────────────────────────────────────────────────────
-  const footY = doc.lastAutoTable.finalY+10;
-  doc.setDrawColor(192,57,43); doc.setLineWidth(0.4);
-  doc.line(margin, footY, W-margin, footY);
-  doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
-  doc.text('Caputo Foods — Environmental Monitoring Program | SQF 2.4.H | Confidential',W/2,footY+5,{align:'center'});
+  // ── Footer + page numbers on every page ──────────────────────────────
+  const pages=doc.getNumberOfPages();
+  for(let p=1;p<=pages;p++){
+    doc.setPage(p);
+    doc.setDrawColor(192,57,43); doc.setLineWidth(0.4); doc.line(M,H-11,W-M,H-11);
+    doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
+    doc.text('Caputo Foods — Environmental Monitoring Program   |   Confidential',M,H-7);
+    doc.text('Page '+p+' of '+pages,W-M,H-7,{align:'right'});
+  }
 
-  doc.save('Caputo_Reporte_'+new Date().toISOString().split('T')[0]+'.pdf');
-  toast('✅ PDF Report exported','success');
+  doc.save('Caputo_Environmental_Report_'+new Date().toISOString().split('T')[0]+'.pdf');
+  toast('✅ Professional report exported','success');
 }
 
 // ═══════════════════════════════════════════════
