@@ -172,6 +172,39 @@ async function syncPullResolved() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SUBMISSIONS — audit log of lab forms filled / sent (source of truth
+// = SharePoint `Submissions`; the labform flow writes the row).
+// ═══════════════════════════════════════════════════════════════
+
+// SharePoint Submissions item → app submission. Text columns → simple reads.
+function spToSubmission(it) {
+  return {
+    building:        _val(_pick(it, 'building', 'Building', 'Departament', 'department')) || '',
+    sample:          _pick(it, 'sample', 'Sample') || '',
+    type:            _pick(it, 'type', 'Type', 'TypeForm') || 'Generator',
+    retestNum:       _pick(it, 'retestNum', 'RetestNum') || '',
+    status:          _val(_pick(it, 'status', 'Status')) || 'Generated',
+    fileName:        _pick(it, 'fileName', 'FileName') || '',
+    collectionDate:  _pick(it, 'collectionDate', 'CollectionDate') || '',
+    submittedByEmail:_pick(it, 'submittedByEmail', 'SubmittedByEmail') || '',
+    submittedByName: _pick(it, 'submittedByName', 'SubmittedByName') || '',
+    submittedAt:     _pick(it, 'submittedAt', 'SubmittedAt') || ''
+  };
+}
+
+// Pull all Submissions → local cache (cap_submissions). Returns true on success.
+async function syncPullSubmissions() {
+  if (!SYNC_ENABLED) return false;
+  const data = await _spPost('submissionsRead', {});
+  const rows = Array.isArray(data) ? data : (data && data.value) || [];
+  const recs = rows.map(spToSubmission).filter(r => r.fileName || r.sample);
+  localStorage.setItem('cap_submissions', JSON.stringify(recs));
+  return true;
+}
+
+const getSubmissions = () => JSON.parse(localStorage.getItem('cap_submissions') || '[]');
+
+// ═══════════════════════════════════════════════════════════════
 // MASTER POINTS — the full sampling catalog lives in SharePoint
 // ═══════════════════════════════════════════════════════════════
 

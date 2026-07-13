@@ -85,10 +85,11 @@ async function submitLabForm(sendToLab) {
   if (!p.rows.length) { toast('The tests have no pathogens selected', 'error'); return; }
   if (sendToLab && !confirm('Send the lab form for ' + p.building + ' to the laboratory? This will email them.')) return;
 
-  const body = {
-    fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
-    rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab
-  };
+  const body = Object.assign(
+    { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
+      rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
+    submissionMeta('Generator', String(TESTS.map(t => t.sample).join(', ')), '', sendToLab)
+  );
   const btn = document.getElementById(sendToLab ? 'btnLabSend' : 'btnLabFill');
   const prev = btn ? btn.innerHTML : '';
   try {
@@ -96,6 +97,7 @@ async function submitLabForm(sendToLab) {
     toast(sendToLab ? 'Sending to lab…' : 'Filling lab form…', 'info');
     await _spPost('labform', body);
     toast(sendToLab ? 'Lab form sent to the laboratory' : 'Lab form filled and archived', 'success');
+    if (typeof refreshSubmissions === 'function') refreshSubmissions();
   } catch (e) {
     console.error('[labform] submit failed:', e);
     toast('Could not generate the lab form', 'error');
@@ -118,18 +120,36 @@ async function submitRetestLabForm(retestId, sendToLab) {
   const p = labPayloadRetest(rec, rn);
   if (!p.rows.length) { toast('This retest has no pathogen to test', 'error'); return; }
   if (sendToLab && !confirm('Send Retest #' + rn + ' lab form for sample ' + rec.sample + ' to the laboratory? This will email them.')) return;
-  const body = {
-    fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
-    rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab
-  };
+  const body = Object.assign(
+    { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
+      rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
+    submissionMeta('Retest', String(rec.sample), rn, sendToLab)
+  );
   try {
     toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
     await _spPost('labform', body);
     toast(sendToLab ? 'Retest form sent to the laboratory' : 'Retest form filled and archived', 'success');
+    if (typeof refreshSubmissions === 'function') refreshSubmissions();
   } catch (e) {
     console.error('[labform] retest submit failed:', e);
     toast('Could not generate the retest lab form', 'error');
   }
+}
+
+// Submission metadata added to the labform payload so the flow can log a row
+// in the Submissions list: who did it, when, and whether it was sent or only
+// generated. "Sent to lab" is recorded when the user clicked Send (the form is
+// staged in PENDING AUTOMATION); "Generated" when it was only filled/archived.
+function submissionMeta(type, sample, retestNum, sendToLab) {
+  return {
+    submittedByEmail: (typeof CU !== 'undefined' && CU && CU.email) || '',
+    submittedByName:  (typeof CU !== 'undefined' && CU && CU.displayName) || '',
+    submittedAt:      new Date().toISOString(),
+    status:           sendToLab ? 'Sent to lab' : 'Generated',
+    type:             type,
+    sample:           sample,
+    retestNum:        retestNum || ''
+  };
 }
 
 // Node export (for the migration/test harness); ignored in the browser.

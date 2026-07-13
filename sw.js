@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v4';
+const CACHE_NAME = 'envirotrack-v5';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
@@ -12,6 +12,8 @@ const ASSETS = [
   './js/data.js',
   './js/storage.js',
   './js/sync.js',
+  './js/labform.js',
+  './js/submissions.js',
   './js/auth.js',
   './js/navigation.js',
   './js/generator.js',

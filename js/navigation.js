@@ -18,7 +18,7 @@ function showPage(p) {
 
   // Highlight parent group button for dropdown items
   const groupMap = {
-    'history': 'nav-records', 'retests': 'nav-records',
+    'history': 'nav-records', 'retests': 'nav-records', 'submissions': 'nav-records',
     'generator': 'nav-testing', 'reports': 'nav-testing',
     'settings': 'nav-settings'
   };
@@ -34,6 +34,7 @@ function showPage(p) {
   if(p==='dashboard') refreshDashboard();
   if(p==='history')   searchHistory();
   if(p==='retests')   loadRetests();
+  if(p==='submissions') { loadSubmissions(); refreshSubmissions(); }
   if(p==='reports')   { switchRepTab('stats'); }
   if(p==='settings')  { loadUsersTable(); switchCfgTab('users'); }
 }
