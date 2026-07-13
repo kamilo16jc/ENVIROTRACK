@@ -19,7 +19,7 @@ function showPage(p) {
   // Highlight parent group button for dropdown items
   const groupMap = {
     'history': 'nav-records', 'retests': 'nav-records',
-    'generator': 'nav-testing', 'reports': 'nav-testing', 'sqf': 'nav-testing',
+    'generator': 'nav-testing', 'reports': 'nav-testing',
     'settings': 'nav-settings'
   };
   if(groupMap[p]) {
@@ -36,14 +36,13 @@ function showPage(p) {
   if(p==='retests')   loadRetests();
   if(p==='reports')   { switchRepTab('stats'); }
   if(p==='settings')  { loadUsersTable(); switchCfgTab('users'); }
-  if(p==='sqf')       { initSQFYears(); buildSQF(); }
 }
 
 function updateNotifDot() {
   const hist     = GH();
   const resolved = GRV();
   const rids     = new Set(resolved.map(r => r.originalId));
-  const active   = hist.filter(h => h.resultado === 'Positivo' && !h.retestNum && !rids.has(h.id));
+  const active   = hist.filter(h => h.resultado === 'Positive' && !h.retestNum && !rids.has(h.id));
   const dot = document.getElementById('notifDot');
   if(dot) dot.classList.toggle('show', active.length > 0);
 }

@@ -2,22 +2,15 @@
 // MASTER MANAGEMENT
 // ═══════════════════════════════════════════════
 
-// localStorage keys
-const MASTER_ADD_KEY = 'cap_master_add'; // [{plant,sample,zone,area,line,location,custom:true}]
-const MASTER_DEL_KEY = 'cap_master_del'; // ['1945|303', '1935|140']
+// The catalog lives in SharePoint (list MasterPoints). Local cache =
+// cap_masterpoints, filled by syncPullMasterPoints() (js/sync.js).
+function saveMasterPoints(arr) { localStorage.setItem('cap_masterpoints', JSON.stringify(arr)); }
 
-function getMasterAdd() { return JSON.parse(localStorage.getItem(MASTER_ADD_KEY)||'[]'); }
-function getMasterDel() { return JSON.parse(localStorage.getItem(MASTER_DEL_KEY)||'[]'); }
-function saveMasterAdd(d) { localStorage.setItem(MASTER_ADD_KEY, JSON.stringify(d)); }
-function saveMasterDel(d) { localStorage.setItem(MASTER_DEL_KEY, JSON.stringify(d)); }
-
-// Returns merged active master for a plant
+// Active points for a plant (used by the generator).
 function getActiveMaster(plant) {
-  const base = (MASTER[plant]||[]).map(p => ({...p, _custom:false}));
-  const dels  = new Set(getMasterDel());
-  const adds  = getMasterAdd().filter(p => p.plant===plant).map(p => ({...p, _custom:true}));
-  const merged = [...base, ...adds].filter(p => !dels.has(plant+'|'+p.sample));
-  return merged;
+  return getMasterPoints()
+    .filter(p => p.plant === plant && p.active !== false)
+    .map(p => ({...p, _custom:false}));
 }
 
 // ── Tab switcher ──────────────────────────────
@@ -42,54 +35,44 @@ function loadMasterTable() {
   const plant  = document.getElementById('masterFilterPlant').value;
   const zone   = document.getElementById('masterFilterZone').value;
   const search = document.getElementById('masterSearch').value.trim().toLowerCase();
-  const dels   = new Set(getMasterDel());
 
-  // Base points
-  const base = (MASTER[plant]||[]).map(p => ({...p, _custom:false, _deleted: dels.has(plant+'|'+p.sample)}));
-  // Custom added points
-  const adds = getMasterAdd().filter(p => p.plant===plant).map(p => ({...p, _custom:true, _deleted: dels.has(plant+'|'+p.sample)}));
-  let all = [...base, ...adds];
-
-  // Filters
-  if(zone) all = all.filter(p => String(p.zone)===zone);
+  let all = getMasterPoints().filter(p => p.plant === plant);
+  if(zone)   all = all.filter(p => String(p.zone)===zone);
   if(search) all = all.filter(p =>
-    p.area.toLowerCase().includes(search) ||
-    p.location.toLowerCase().includes(search) ||
+    (p.area||'').toLowerCase().includes(search) ||
+    (p.location||'').toLowerCase().includes(search) ||
     String(p.sample).includes(search)
   );
+  all.sort((a,b) => a.sample - b.sample);
 
-  document.getElementById('masterCount').textContent = all.filter(p=>!p._deleted).length+' activos / '+all.length+' total';
+  document.getElementById('masterCount').textContent =
+    all.filter(p=>p.active!==false).length+' active / '+all.length+' total';
 
   const tbody = document.getElementById('masterTable');
   if(!all.length) {
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--gray-500);padding:32px">Sin puntos con esos filtros</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--gray-500);padding:32px">No points for these filters</td></tr>';
     return;
   }
 
   tbody.innerHTML = all.map(p => {
-    const deleted = p._deleted;
-    const rowStyle = deleted ? 'opacity:.45;text-decoration:line-through' : '';
-    const badge = p._custom
-      ? '<span style="background:#d1fae5;color:#059669;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">🟢 Custom</span>'
-      : '<span style="background:var(--gray-100);color:var(--gray-500);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">🔵 Base</span>';
-    const delBadge = deleted ? '<span style="background:var(--red-light);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px">🔴 Desactivado</span>' : '';
+    const off = p.active === false;
+    const rowStyle = off ? 'opacity:.45;text-decoration:line-through' : '';
+    const stBadge = off
+      ? '<span style="background:var(--red-light);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">Deactivated</span>'
+      : '<span style="background:#d1fae5;color:#059669;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">Active</span>';
     return `<tr style="${rowStyle}">
       <td style="font-weight:700;font-size:14px">${p.sample}</td>
       <td style="text-align:center">${p.zone}</td>
       <td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.area)}">${esc(p.area)}</td>
       <td>${esc(p.line||'N/A')}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.location)}">${esc(p.location)}</td>
-      <td>${badge}${delBadge}</td>
+      <td>${stBadge}</td>
       <td>
         <div style="display:flex;gap:5px">
-          ${!deleted
-            ? `<button class="btn btn-outline btn-sm" onclick="editMasterPoint('${plant}',${p.sample})" title="Editar">✏️</button>
-               <button class="btn btn-outline btn-sm" onclick="deactivateMasterPoint('${plant}',${p.sample})" style="color:var(--red)" title="Desactivar">🚫</button>`
-            : `<button class="btn btn-outline btn-sm" onclick="reactivateMasterPoint('${plant}',${p.sample})" style="color:var(--green)" title="Reactivar">✅</button>`
-          }
-          ${p._custom && !deleted
-            ? `<button class="btn btn-outline btn-sm" onclick="deleteMasterPoint('${plant}',${p.sample})" style="color:var(--red)" title="Eliminar permanentemente">🗑</button>`
-            : ''
+          ${!off
+            ? `<button class="btn btn-outline btn-sm" onclick="editMasterPoint('${plant}',${p.sample})" title="Edit"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+               <button class="btn btn-outline btn-sm" onclick="deactivateMasterPoint('${plant}',${p.sample})" style="color:var(--red)" title="Deactivate"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>`
+            : `<button class="btn btn-outline btn-sm" onclick="reactivateMasterPoint('${plant}',${p.sample})" style="color:var(--green)" title="Reactivate"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg></button>`
           }
         </div>
       </td>
@@ -100,7 +83,7 @@ function loadMasterTable() {
 // ── Modal ─────────────────────────────────────
 function openMasterModal(plant, sample) {
   const isEdit = plant && sample;
-  document.getElementById('masterModalTitle').textContent = isEdit ? '✏️ Editar Punto' : '➕ Agregar Punto de Muestreo';
+  document.getElementById('masterModalTitle').textContent = isEdit ? 'Edit Point' : 'Add Sampling Point';
   document.getElementById('editMasterKey').value = isEdit ? plant+'|'+sample : '';
   document.getElementById('masterModalMsg').textContent = '';
 
@@ -113,10 +96,7 @@ function openMasterModal(plant, sample) {
   document.getElementById('mLocation').value = '';
 
   if(isEdit) {
-    // Find the point
-    const base = (MASTER[plant]||[]).find(p => p.sample==sample);
-    const custom = getMasterAdd().find(p => p.plant===plant && p.sample==sample);
-    const pt = custom || base;
+    const pt = getMasterPoints().find(p => p.plant===plant && p.sample==sample);
     if(pt) {
       document.getElementById('mPlant').value    = plant;
       document.getElementById('mSample').value   = pt.sample;
@@ -124,8 +104,8 @@ function openMasterModal(plant, sample) {
       document.getElementById('mLine').value     = pt.line||'N/A';
       document.getElementById('mArea').value     = pt.area;
       document.getElementById('mLocation').value = pt.location;
-      // Lock sample# and plant when editing base
-      document.getElementById('mSample').disabled = !!base && !custom;
+      // sample # and plant are the key → locked while editing
+      document.getElementById('mSample').disabled = true;
       document.getElementById('mPlant').disabled  = true;
     }
   } else {
@@ -157,254 +137,218 @@ function saveMasterPoint() {
   const editKey  = document.getElementById('editMasterKey').value;
   const msg      = document.getElementById('masterModalMsg');
 
-  if(!area || !location) { msg.style.color='var(--red)'; msg.textContent='⚠️ Área y Ubicación son obligatorios.'; return; }
-  if(!sample || sample<1) { msg.style.color='var(--red)'; msg.textContent='⚠️ Ingresa un Sample # válido.'; return; }
+  if(!area || !location) { msg.style.color='var(--red)'; msg.textContent='Area and Location are required.'; return; }
+  if(!sample || sample<1) { msg.style.color='var(--red)'; msg.textContent='Enter a valid Sample #.'; return; }
 
-  const adds = getMasterAdd();
-  const dels = getMasterDel();
-  const editPlant = editKey ? editKey.split('|')[0] : null;
-  const editSample= editKey ? parseInt(editKey.split('|')[1]) : null;
+  const pts = getMasterPoints();
+  const editPlant  = editKey ? editKey.split('|')[0] : null;
+  const editSample = editKey ? parseInt(editKey.split('|')[1]) : null;
 
-  // Check duplicate sample# in plant (skip current if editing)
-  const baseHas   = (MASTER[plant]||[]).some(p => p.sample===sample && !(editPlant===plant && editSample===sample));
-  const customHas = adds.some(p => p.plant===plant && p.sample===sample && !(editPlant===plant && editSample===sample));
-  if(baseHas || customHas) {
+  // Duplicate sample# check (skip the one being edited)
+  const dup = pts.some(p => p.plant===plant && p.sample===sample &&
+                            !(editPlant===plant && editSample===sample));
+  if(dup) {
     msg.style.color='var(--red)';
-    msg.textContent='⚠️ Sample #'+sample+' ya existe en el edificio '+plant+'.';
+    msg.textContent='Sample #'+sample+' already exists in building '+plant+'.';
     return;
   }
 
   if(editKey) {
-    // Editing a custom point → update it
-    const idx = adds.findIndex(p => p.plant===editPlant && p.sample===editSample);
+    const idx = pts.findIndex(p => p.plant===editPlant && p.sample===editSample);
     if(idx>=0) {
-      adds[idx] = {plant, sample, zone, line, area, location, _custom:true, created: adds[idx].created};
-    } else {
-      // Editing a base point → create a custom override (deactivate base, add custom)
-      const delKey = editPlant+'|'+editSample;
-      if(!dels.includes(delKey)) dels.push(delKey);
-      saveMasterDel(dels);
-      adds.push({plant, sample, zone, line, area, location, _custom:true, created: new Date().toLocaleDateString('en-US')});
+      pts[idx] = {...pts[idx], plant, sample, zone, line, area, location, active:true};
+      saveMasterPoints(pts);
+      syncSafe(() => syncUpdatePoint(pts[idx]), 'update point');
     }
   } else {
-    adds.push({plant, sample, zone, line, area, location, _custom:true, created: new Date().toLocaleDateString('en-US')});
+    const np = {plant, sample, zone, line, area, location, active:true};
+    pts.push(np);
+    saveMasterPoints(pts);
+    syncSafe(() => syncPushPoint(np), 'create point');
   }
 
-  saveMasterAdd(adds);
   closeMasterModal();
   loadMasterTable();
-  toast('✅ Punto guardado correctamente','success');
+  toast('Point saved successfully','success');
 }
 
-// ── Deactivate / Reactivate / Delete ─────────
+// ── Deactivate / Reactivate ──────────────────
 function deactivateMasterPoint(plant, sample) {
-  if(!confirm('¿Desactivar Sample #'+sample+' de planta '+plant+'? No aparecerá en el generador pero el historial se mantiene.')) return;
-  const dels = getMasterDel();
-  const key = plant+'|'+sample;
-  if(!dels.includes(key)) dels.push(key);
-  saveMasterDel(dels);
+  if(!confirm('Deactivate Sample #'+sample+' from plant '+plant+'? It will not appear in the generator but the history is kept.')) return;
+  const pts = getMasterPoints();
+  const p = pts.find(x => x.plant===plant && x.sample==sample);
+  if(p) { p.active = false; saveMasterPoints(pts); syncSafe(() => syncUpdatePoint(p), 'deactivate point'); }
   loadMasterTable();
-  toast('🚫 Sample #'+sample+' desactivado','success');
+  toast('Sample #'+sample+' deactivated','success');
 }
 
 function reactivateMasterPoint(plant, sample) {
-  const dels = getMasterDel().filter(k => k !== plant+'|'+sample);
-  saveMasterDel(dels);
+  const pts = getMasterPoints();
+  const p = pts.find(x => x.plant===plant && x.sample==sample);
+  if(p) { p.active = true; saveMasterPoints(pts); syncSafe(() => syncUpdatePoint(p), 'reactivate point'); }
   loadMasterTable();
-  toast('✅ Sample #'+sample+' reactivado','success');
-}
-
-function deleteMasterPoint(plant, sample) {
-  if(!confirm('¿ELIMINAR permanentemente Sample #'+sample+'? Solo aplica a puntos custom.')) return;
-  const adds = getMasterAdd().filter(p => !(p.plant===plant && p.sample==sample));
-  saveMasterAdd(adds);
-  const dels = getMasterDel().filter(k => k !== plant+'|'+sample);
-  saveMasterDel(dels);
-  loadMasterTable();
-  toast('🗑 Sample #'+sample+' eliminado','success');
+  toast('Sample #'+sample+' reactivated','success');
 }
 
 // ═══════════════════════════════════════════════
 // USERS / SETTINGS
 // ═══════════════════════════════════════════════
-const DEFAULT_USERS = [
-  {id:'u1', name:'Admin', role:'Administrador', pin:'0000', active:true, created:'Sistema'},
-];
+// Users live in Firebase Auth and are managed via Cloud Functions (admin only).
+const userFn = name => fbFunctions.httpsCallable(name);
+let USERS_CACHE = [];
 
-function getUsers() {
-  const stored = localStorage.getItem('cap_users');
-  if(!stored) {
-    localStorage.setItem('cap_users', JSON.stringify(DEFAULT_USERS));
-    return DEFAULT_USERS;
-  }
-  return JSON.parse(stored);
+// Friendly message for callable errors.
+function fnError(e) {
+  const code = (e && e.code) || '';
+  if (code === 'functions/permission-denied')  return 'Only administrators can manage users.';
+  if (code === 'functions/unauthenticated')    return 'Please sign in again.';
+  if (code === 'functions/not-found' || code === 'functions/internal')
+    return 'User management is unavailable. If you just set this up, deploy the Cloud Functions first.';
+  if (code === 'functions/unavailable')        return 'Could not reach the server. Check your connection.';
+  return (e && e.message) || 'Something went wrong.';
 }
-function saveUsers(u) { localStorage.setItem('cap_users', JSON.stringify(u)); }
 
 function doLogin_dynamic() {
-  const name = document.getElementById('loginName').value.trim();
-  const pin  = document.getElementById('pinInput').value.trim();
-  const err  = document.getElementById('loginError');
-  if(!name) { err.textContent='Ingresa tu nombre.'; return; }
-  if(pin.length!==4) { err.textContent='El PIN debe tener 4 dígitos.'; return; }
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw    = document.getElementById('loginPassword').value;
+  const err   = document.getElementById('loginError');
+  if(!email) { err.textContent='Enter your email.'; return; }
+  if(!pw)    { err.textContent='Enter your password.'; return; }
 
-  const users = getUsers();
-  let user = users.find(u => u.pin===pin && u.active);
-  if(!user) { err.textContent='PIN incorrecto o usuario inactivo.'; return; }
+  err.textContent = 'Verifying…';
+  fbAuth.signInWithEmailAndPassword(email, pw)
+    .then(async cred => {
+      const user = cred.user;
+      // Read the role from the token's custom claims (set by an admin).
+      let role = 'Inspector';
+      try { const tok = await user.getIdTokenResult(); if (tok.claims && tok.claims.role) role = tok.claims.role; } catch(e){}
+      if (isAdmin(user.email) && role === 'Inspector') role = 'Administrator';
+      const name = user.displayName || user.email.split('@')[0];
+      CU = { id:user.uid, uid:user.uid, name, displayName:name,
+             email:user.email, role, active:true };
+      err.textContent='';
+      document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+      document.getElementById('userName').textContent   = name;
+      const ur = document.getElementById('userRole'); if(ur) ur.textContent = role;
+      document.getElementById('genCollectedBy').value   = name;
+      document.getElementById('genDate').value = new Date().toISOString().split('T')[0];
 
-  CU = {...user, displayName: name};
-  err.textContent='';
-  document.getElementById('userAvatar').textContent = name[0].toUpperCase();
-  document.getElementById('userName').textContent   = name;
-  const ur = document.getElementById('userRole'); if(ur) ur.textContent = user.role;
-  document.getElementById('genCollectedBy').value   = name;
-  document.getElementById('genDate').value = new Date().toISOString().split('T')[0];
+      // Show the Settings/Users panel only to admins
+      const sg = document.getElementById('nav-settings-group');
+      if(sg) sg.classList.toggle('visible', isAdmin(user.email, role));
 
-  // Show settings only for Admin
-  const sg = document.getElementById('nav-settings-group');
-  if(sg) sg.classList.toggle('visible', user.role==='Administrador');
-
-  document.getElementById('loginScreen').classList.remove('active');
-  document.getElementById('appScreen').classList.add('active');
-  refreshDashboard(); searchHistory();
-  resetSessionTimer();
+      document.getElementById('loginScreen').classList.remove('active');
+      document.getElementById('appScreen').classList.add('active');
+      refreshDashboard(); searchHistory();
+      // Load the catalog + latest records from SharePoint on entry.
+      syncSafe(() => syncPullMasterPoints(), 'pull points');
+      syncSafe(() => syncPullRecords().then(() => { refreshDashboard(); searchHistory(); }), 'pull records');
+      resetSessionTimer();
+    })
+    .catch(e => { err.textContent = fbAuthError(e); });
 }
 
 function loadUsersTable() {
-  const users = getUsers();
   const tbody = document.getElementById('usersTable');
-  if(!users.length) {
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-500);padding:32px">Sin usuarios registrados</td></tr>';
-    return;
-  }
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td style="font-weight:600">${esc(u.name)}</td>
-      <td>
-        <span class="badge ${u.role==='Administrador'?'badge-red':u.role==='Manager'?'badge-yellow':'badge-gray'}">
-          ${u.role}
-        </span>
-      </td>
-      <td style="font-family:var(--mono);font-size:13px;letter-spacing:.15em;color:var(--gray-400)">••••</td>
-      <td>
-        <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
-              color:${u.active?'var(--green)':'var(--gray-400)'}">
-          ${u.active?'✅ Activo':'⏸ Inactivo'}
-        </span>
-      </td>
-      <td style="font-size:12px;color:var(--gray-500)">${u.created||'—'}</td>
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-500);padding:32px">Loading…</td></tr>';
+  userFn('adminListUsers')().then(res => {
+    const users = (res.data || []).slice().sort((a,b)=>(a.email||'').localeCompare(b.email||''));
+    USERS_CACHE = users;
+    if(!users.length) {
+      tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-500);padding:32px">No users</td></tr>';
+      return;
+    }
+    const svgEdit   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+    const svgPause  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+    const svgPlay   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+    const svgTrash  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+    tbody.innerHTML = users.map(u => {
+      const isMe = CU && u.uid === CU.uid;
+      const created = u.created ? new Date(u.created).toLocaleDateString('en-US') : '—';
+      return `<tr>
+      <td style="font-weight:600">${esc(u.name || (u.email||'').split('@')[0])}${isMe?' <span style="font-size:10px;color:var(--gray-400);font-weight:500">(you)</span>':''}</td>
+      <td style="font-size:13px;color:var(--gray-700)">${esc(u.email)}</td>
+      <td><span class="badge ${u.role==='Administrator'?'badge-red':u.role==='Manager'?'badge-yellow':'badge-gray'}">${esc(u.role)}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:${u.active?'var(--green)':'var(--gray-400)'}">${u.active?'Active':'Inactive'}</span></td>
+      <td style="font-size:12px;color:var(--gray-500)">${created}</td>
       <td>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-outline btn-sm" onclick="editUser('${u.id}')" title="Editar">✏️</button>
-          <button class="btn btn-outline btn-sm" onclick="toggleUser('${u.id}')" 
-                  style="color:${u.active?'var(--red)':'var(--green)'}"
-                  title="${u.active?'Desactivar':'Activar'}">
-            ${u.active?'⏸':'▶'}
-          </button>
-          ${u.id!=='u1'?`<button class="btn btn-outline btn-sm" onclick="deleteUser('${u.id}')" style="color:var(--red)" title="Eliminar">🗑</button>`:''}
+          <button class="btn btn-outline btn-sm" onclick="editUser('${u.uid}')" title="Edit role / reset password">${svgEdit}</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleUser('${u.uid}',${u.active})" style="color:${u.active?'var(--red)':'var(--green)'}" title="${u.active?'Deactivate':'Activate'}"${isMe&&u.active?' disabled':''}>${u.active?svgPause:svgPlay}</button>
+          ${isMe?'':`<button class="btn btn-outline btn-sm" onclick="deleteUser('${u.uid}','${esc(u.email)}')" style="color:var(--red)" title="Delete">${svgTrash}</button>`}
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
+  }).catch(e => {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">'+esc(fnError(e))+'</td></tr>';
+  });
 }
 
-function openUserModal(id) {
-  document.getElementById('userModalTitle').textContent = id ? '✏️ Editar Usuario' : '➕ Nuevo Usuario';
-  document.getElementById('editUserId').value = id || '';
-  document.getElementById('uName').value = '';
-  document.getElementById('uRole').value = 'Inspector';
-  document.getElementById('uPin').value = '';
-  document.getElementById('pinValidMsg').textContent = 'El PIN debe ser único de 4 dígitos numéricos.';
-  document.getElementById('pinValidMsg').style.color = 'var(--gray-500)';
-
-  if(id) {
-    const user = getUsers().find(u=>u.id===id);
-    if(user) {
-      document.getElementById('uName').value = user.name;
-      document.getElementById('uRole').value = user.role;
-      document.getElementById('uPin').value  = user.pin;
-    }
-  }
+function openUserModal(uid) {
+  const editing = !!uid;
+  const u = editing ? USERS_CACHE.find(x=>x.uid===uid) : null;
+  document.getElementById('userModalTitle').textContent = editing ? 'Edit User' : 'New User';
+  document.getElementById('editUserId').value = uid || '';
+  document.getElementById('uEmail').value = u ? u.email : '';
+  document.getElementById('uEmail').disabled = editing;
+  document.getElementById('uName').value = u ? (u.name||'') : '';
+  document.getElementById('uName').disabled = editing;
+  document.getElementById('uRole').value = u ? u.role : 'Inspector';
+  document.getElementById('uPass').value = '';
+  document.getElementById('uPass').placeholder = editing ? 'Leave blank to keep current' : 'At least 6 characters';
+  const msg = document.getElementById('userMsg');
+  msg.textContent = editing ? 'Change the role, or set a new password below.' : 'Minimum 6 characters.';
+  msg.style.color = 'var(--gray-500)';
   document.getElementById('userModal').classList.add('open');
-  setTimeout(()=>document.getElementById('uName').focus(),100);
+  setTimeout(()=>document.getElementById(editing?'uRole':'uEmail').focus(),100);
 }
+function editUser(uid){ openUserModal(uid); }
 
 function closeUserModal() {
   document.getElementById('userModal').classList.remove('open');
 }
 
-function validatePinInput(el) {
-  el.value = el.value.replace(/\D/g,'');
-  const users = getUsers();
-  const editId = document.getElementById('editUserId').value;
-  const pin = el.value;
-  const msg = document.getElementById('pinValidMsg');
-  if(pin.length===4) {
-    const conflict = users.find(u=>u.pin===pin && u.id!==editId);
-    if(conflict) {
-      msg.textContent='⚠️ PIN ya está en uso por: '+conflict.name;
-      msg.style.color='var(--red)';
-    } else {
-      msg.textContent='✅ PIN disponible';
-      msg.style.color='var(--green)';
-    }
-  } else {
-    msg.textContent='El PIN debe ser único de 4 dígitos numéricos.';
-    msg.style.color='var(--gray-500)';
-  }
-}
-
 function saveUser() {
-  const name = document.getElementById('uName').value.trim();
-  const role = document.getElementById('uRole').value;
-  const pin  = document.getElementById('uPin').value.trim();
   const editId = document.getElementById('editUserId').value;
-
-  if(!name) { toast('Ingresa el nombre del usuario','error'); return; }
-  if(pin.length!==4 || !/^\d{4}$/.test(pin)) { toast('El PIN debe ser 4 dígitos numéricos','error'); return; }
-
-  const users = getUsers();
-  const conflict = users.find(u=>u.pin===pin && u.id!==editId);
-  if(conflict) { toast('PIN ya está en uso por '+conflict.name,'error'); return; }
+  const email  = document.getElementById('uEmail').value.trim();
+  const name   = document.getElementById('uName').value.trim();
+  const role   = document.getElementById('uRole').value;
+  const pass   = document.getElementById('uPass').value;
+  const btn    = document.getElementById('btnSaveUser');
+  const busy = b => { if(btn){ btn.disabled=b; btn.style.opacity=b?'.6':'1'; } };
 
   if(editId) {
-    const idx = users.findIndex(u=>u.id===editId);
-    if(idx>=0) {
-      users[idx].name = name;
-      users[idx].role = role;
-      users[idx].pin  = pin;
-    }
-    toast('✅ Usuario actualizado','success');
-  } else {
-    const newId = 'u'+Date.now();
-    users.push({
-      id: newId, name, role, pin, active: true,
-      created: new Date().toLocaleDateString('en-US')
-    });
-    toast('✅ Usuario creado exitosamente','success');
+    // Edit: update role, and password only if a new one was typed
+    if(pass && pass.length<6) { toast('Password must be at least 6 characters','error'); return; }
+    busy(true);
+    const jobs = [ userFn('adminSetRole')({uid:editId, role}) ];
+    if(pass) jobs.push(userFn('adminResetPassword')({uid:editId, password:pass}));
+    Promise.all(jobs)
+      .then(()=>{ toast('User updated','success'); closeUserModal(); loadUsersTable(); })
+      .catch(e=>toast(fnError(e),'error'))
+      .finally(()=>busy(false));
+    return;
   }
-
-  saveUsers(users);
-  closeUserModal();
-  loadUsersTable();
+  // Create
+  if(!email) { toast('Enter an email','error'); return; }
+  if(pass.length<6) { toast('Password must be at least 6 characters','error'); return; }
+  busy(true);
+  userFn('adminCreateUser')({email, password:pass, name, role})
+    .then(()=>{ toast('User created','success'); closeUserModal(); loadUsersTable(); })
+    .catch(e=>toast(fnError(e),'error'))
+    .finally(()=>busy(false));
 }
 
-function toggleUser(id) {
-  if(id==='u1') { toast('No puedes desactivar el Admin principal','error'); return; }
-  const users = getUsers();
-  const idx = users.findIndex(u=>u.id===id);
-  if(idx>=0) {
-    users[idx].active = !users[idx].active;
-    saveUsers(users);
-    loadUsersTable();
-    toast(users[idx].active?'✅ Usuario activado':'⏸ Usuario desactivado','success');
-  }
+function toggleUser(uid, currentlyActive) {
+  userFn('adminSetUserActive')({uid, active: !currentlyActive})
+    .then(()=>{ toast(currentlyActive?'User deactivated':'User activated','success'); loadUsersTable(); })
+    .catch(e=>toast(fnError(e),'error'));
 }
 
-function deleteUser(id) {
-  if(id==='u1') { toast('No puedes eliminar el Admin principal','error'); return; }
-  if(!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
-  const users = getUsers().filter(u=>u.id!==id);
-  saveUsers(users);
-  loadUsersTable();
-  toast('Usuario eliminado','success');
+function deleteUser(uid, email) {
+  if(!confirm('Delete '+(email||'this user')+'? This cannot be undone.')) return;
+  userFn('adminDeleteUser')({uid})
+    .then(()=>{ toast('User deleted','success'); loadUsersTable(); })
+    .catch(e=>toast(fnError(e),'error'));
 }

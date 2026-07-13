@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Local dev / one-time scripts (not part of the deployed app)
+_devserver.js
+_migrate_master.js
+
+# Local tooling
+.claude/
