@@ -250,6 +250,7 @@ function doLogin_dynamic() {
       syncSafe(() => syncPullMasterPoints(), 'pull points');
       syncSafe(() => Promise.all([syncPullRecords(), syncPullResolved()])
         .then(() => { refreshDashboard(); searchHistory(); loadRetests(); }), 'pull records');
+      syncSafe(() => syncPullSubmissions(), 'pull submissions');
       resetSessionTimer();
     })
     .catch(e => { err.textContent = fbAuthError(e); });
