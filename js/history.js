@@ -44,7 +44,7 @@ function searchHistory() {
         if(h.resultado==='Positive' && hasRetests)
           return '<span style="font-size:11px;color:var(--gray-400)"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Retests generated</span>';
         return '<button class="btn btn-sm" onclick="openFailModal('+h.id+')" style="background:'+(h.resultado==='Positive'?'#DC2626':'var(--navy)')+';color:white;font-size:11px;padding:5px 10px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>';
-      })()}</td>
+      })()}${canEditRecords&&canEditRecords()?'<button class="btn btn-sm btn-outline" onclick="openAdminEdit('+h.id+')" title="Admin — correct record" style="font-size:11px;padding:5px 8px;margin-left:6px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>':''}</td>
     </tr>`;
   }).join('');
 }
