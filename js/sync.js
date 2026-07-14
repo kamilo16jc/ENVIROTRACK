@@ -18,6 +18,88 @@ async function _spPost(op, body) {
   return res.data;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// OUTBOX — durable write queue (offline-safe)
+// Every write is enqueued in localStorage BEFORE hitting the network and
+// only removed once SharePoint confirms it. This prevents the data-loss
+// window where a failed push (offline / flow down) would be wiped by the
+// next destructive pull. Order is preserved and the flush stops on the
+// first failure so dependent ops (create → update) never run out of order.
+// ═══════════════════════════════════════════════════════════════
+
+const OUTBOX_KEY = 'cap_outbox';
+const getOutbox   = () => { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); } catch (e) { return []; } };
+const _setOutbox  = q  => localStorage.setItem(OUTBOX_KEY, JSON.stringify(q));
+
+// Enqueue a write. `body` must be a plain, already-mapped payload snapshot.
+function outboxAdd(op, body) {
+  const q = getOutbox();
+  q.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), op, body, ts: new Date().toISOString(), attempts: 0 });
+  _setOutbox(q);
+  updateSyncBadge();
+}
+
+// Drain the queue in order. Returns true when empty (fully synced), false if
+// items remain (still offline / failing). De-duped: concurrent callers share
+// the same in-flight flush and get the real result (no race on pulls).
+let _flushPromise = null;
+function flushOutbox() {
+  if (!SYNC_ENABLED) return Promise.resolve(getOutbox().length === 0);
+  if (_flushPromise) return _flushPromise;
+  _flushPromise = _doFlush().finally(() => { _flushPromise = null; });
+  return _flushPromise;
+}
+async function _doFlush() {
+  while (true) {
+    const q = getOutbox();
+    if (!q.length) { updateSyncBadge(); return true; }
+    const entry = q[0];
+    try {
+      await _spPost(entry.op, entry.body);
+    } catch (e) {
+      const q2 = getOutbox();
+      if (q2[0]) { q2[0].attempts = (q2[0].attempts || 0) + 1; _setOutbox(q2); }
+      console.warn('[outbox] flush stopped at ' + entry.op + ' (attempt ' + ((q2[0] && q2[0].attempts) || '?') + '):', e);
+      updateSyncBadge();
+      return false;
+    }
+    // Success → remove this exact entry (by id, in case the queue shifted).
+    const q3 = getOutbox();
+    const idx = q3.findIndex(x => x.id === entry.id);
+    if (idx >= 0) { q3.splice(idx, 1); _setOutbox(q3); }
+    updateSyncBadge();
+  }
+}
+
+// Discreet floating indicator: shows only when writes are still pending.
+// Clicking it forces a retry. Created lazily so no HTML changes are needed.
+function updateSyncBadge() {
+  if (typeof document === 'undefined' || !document.body) return;
+  let el = document.getElementById('syncBadge');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'syncBadge';
+    el.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:#C0392B;color:#fff;' +
+      'padding:8px 14px;border-radius:20px;font-family:var(--font,sans-serif);font-size:12px;font-weight:600;' +
+      'box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;display:none;align-items:center;gap:8px;user-select:none';
+    el.title = 'Some changes have not reached SharePoint yet. Click to retry.';
+    el.onclick = () => { el.textContent = 'Syncing…'; flushOutbox().then(updateSyncBadge); };
+    document.body.appendChild(el);
+  }
+  const n = getOutbox().length;
+  if (n > 0) {
+    el.textContent = n + (n > 1 ? ' changes' : ' change') + ' not synced — Retry';
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Auto-retry the moment connectivity returns.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { flushOutbox().then(updateSyncBadge); });
+}
+
 // ── Value helpers (SharePoint quirks) ──────────────────────────
 // Choice columns come back as { Value: "1935" }; plain columns as strings.
 const _val  = v => (v && typeof v === 'object' && 'Value' in v) ? v.Value : v;
@@ -108,8 +190,11 @@ function resolvedToSP(r) {
 // ═══════════════════════════════════════════════════════════════
 
 // Pull all Records → overwrite local cap_h. Returns true on success.
+// Guarded: flush pending writes FIRST; if any remain unsynced, skip the
+// overwrite so un-pushed local changes are never clobbered.
 async function syncPullRecords() {
   if (!SYNC_ENABLED) return false;
+  if (!(await flushOutbox())) { console.warn('[sync] pull Records skipped — pending local writes'); return false; }
   const data = await _spPost('recordsRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
   const recs = rows.map(spToRecord).filter(r => r.id);
@@ -121,25 +206,25 @@ async function syncPullRecords() {
 // PUSH — send local changes to SharePoint
 // ═══════════════════════════════════════════════════════════════
 
-async function syncPushRecords(recs) {
-  if (!SYNC_ENABLED || !recs || !recs.length) return;
-  await _spPost('recordsWrite', {
-    list: 'Records', action: 'create', items: recs.map(recordToSP)
-  });
+// All pushes ENQUEUE (durable) then trigger a flush. The payload is a mapped
+// snapshot taken now, so audit fields (who/when) reflect the action time even
+// if it flushes later. Never throws — pending state is shown via the badge.
+function syncPushRecords(recs) {
+  if (!SYNC_ENABLED || !recs || !recs.length) return Promise.resolve();
+  outboxAdd('recordsWrite', { list: 'Records', action: 'create', items: recs.map(recordToSP) });
+  return flushOutbox();
 }
 
-async function syncUpdateRecord(rec) {
-  if (!SYNC_ENABLED || !rec) return;
-  await _spPost('recordsUpdate', {
-    list: 'Records', action: 'update', items: [recordUpdateToSP(rec)]
-  });
+function syncUpdateRecord(rec) {
+  if (!SYNC_ENABLED || !rec) return Promise.resolve();
+  outboxAdd('recordsUpdate', { list: 'Records', action: 'update', items: [recordUpdateToSP(rec)] });
+  return flushOutbox();
 }
 
-async function syncPushResolved(resolvedItems) {
-  if (!SYNC_ENABLED || !resolvedItems || !resolvedItems.length) return;
-  await _spPost('resolvedWrite', {
-    list: 'ResolvedRetests', action: 'create', items: resolvedItems.map(resolvedToSP)
-  });
+function syncPushResolved(resolvedItems) {
+  if (!SYNC_ENABLED || !resolvedItems || !resolvedItems.length) return Promise.resolve();
+  outboxAdd('resolvedWrite', { list: 'ResolvedRetests', action: 'create', items: resolvedItems.map(resolvedToSP) });
+  return flushOutbox();
 }
 
 // SharePoint ResolvedRetests item → app resolved entry (READ).
@@ -164,6 +249,7 @@ function spToResolved(it) {
 // resurface as "Generate retests", and their retests become orphaned.
 async function syncPullResolved() {
   if (!SYNC_ENABLED) return false;
+  if (!(await flushOutbox())) { console.warn('[sync] pull Resolved skipped — pending local writes'); return false; }
   const data = await _spPost('resolvedRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
   const recs = rows.map(spToResolved).filter(r => r.originalId);
@@ -239,6 +325,7 @@ function pointToSP(p, isCreate) {
 // Pull the whole catalog → local cache (cap_masterpoints).
 async function syncPullMasterPoints() {
   if (!SYNC_ENABLED) return false;
+  if (!(await flushOutbox())) { console.warn('[sync] pull MasterPoints skipped — pending local writes'); return false; }
   const data = await _spPost('masterPointsRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
   const pts = rows.map(spToPoint).filter(p => p.sample);
@@ -248,18 +335,16 @@ async function syncPullMasterPoints() {
 
 const getMasterPoints = () => JSON.parse(localStorage.getItem('cap_masterpoints') || '[]');
 
-async function syncPushPoint(point) {      // create a new point
-  if (!SYNC_ENABLED || !point) return;
-  await _spPost('masterPointsWrite', {
-    list: 'MasterPoints', action: 'create', items: [pointToSP(point, true)]
-  });
+function syncPushPoint(point) {      // create a new point
+  if (!SYNC_ENABLED || !point) return Promise.resolve();
+  outboxAdd('masterPointsWrite', { list: 'MasterPoints', action: 'create', items: [pointToSP(point, true)] });
+  return flushOutbox();
 }
 
-async function syncUpdatePoint(point) {    // update by department + sample (edit / activate / deactivate)
-  if (!SYNC_ENABLED || !point) return;
-  await _spPost('masterPointsUpdate', {
-    list: 'MasterPoints', action: 'update', items: [pointToSP(point, false)]
-  });
+function syncUpdatePoint(point) {    // update by department + sample (edit / activate / deactivate)
+  if (!SYNC_ENABLED || !point) return Promise.resolve();
+  outboxAdd('masterPointsUpdate', { list: 'MasterPoints', action: 'update', items: [pointToSP(point, false)] });
+  return flushOutbox();
 }
 
 // Fire-and-forget wrapper: never let a sync failure break the local flow.
