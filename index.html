@@ -210,7 +210,7 @@
           <div class="card-title"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
           <div class="gen-controls">
             <div class="field"><label>Plant / Building</label>
-              <select id="genPlant" style="min-width:160px">
+              <select id="genPlant" style="min-width:160px" onchange="onPlantChange()">
                 <option value="">— Select —</option>
                 <option value="1945">1945</option><option value="1935">1935</option>
                 <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
@@ -219,6 +219,15 @@
             <div class="field"><label>Collected by</label><input type="text" id="genCollectedBy" placeholder="Name" style="min-width:180px"></div>
             <button class="btn btn-primary" onclick="generateTests()" style="margin-top:18px"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Generate Tests</button>
           </div>
+        </div>
+        <style>
+          .gen-progress{height:6px;background:var(--gray-100);border-radius:20px;overflow:hidden;max-width:420px;margin:0 auto}
+          .gen-progress-bar{height:100%;width:38%;background:var(--red);border-radius:20px;animation:genProg 1.1s ease-in-out infinite}
+          @keyframes genProg{0%{margin-left:-38%}100%{margin-left:100%}}
+        </style>
+        <div class="card" id="genLoading" style="display:none;text-align:center;padding:44px 20px">
+          <div id="genLoadingLabel" style="font-size:14px;color:var(--gray-600);font-weight:500;margin-bottom:16px">Loading tests…</div>
+          <div class="gen-progress"><div class="gen-progress-bar"></div></div>
         </div>
         <div class="card" id="genTableCard" style="display:none">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
