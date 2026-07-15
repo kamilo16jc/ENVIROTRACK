@@ -34,7 +34,12 @@ function refreshDashboard() {
     return '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:600">Plant '+p+'</span><span style="font-size:12px;color:var(--gray-500)">'+total+' points</span></div><div style="background:var(--gray-100);border-radius:4px;height:6px;overflow:hidden"><div style="background:var(--red);height:6px;width:'+pct+'%;border-radius:4px"></div></div><div style="font-size:11px;color:var(--gray-400);margin-top:3px">'+tested+' tests recorded</div></div>';
   }).join('');
   const resolved=GRV(), rids=new Set(resolved.map(r=>r.originalId));
-  const activePos=hist.filter(h=>h.resultado==='Positive'&&!rids.has(h.id));
+  // Only ORIGINAL positives that still need retests scheduled — mirrors the
+  // Retests view. Excludes retest records (a positive retest inside a resolved
+  // cascade is NOT pending), resolved cases, and positives that already spawned
+  // a round.
+  const rootsWithRetests=new Set(hist.filter(h=>h.retestNum&&h.originalId).map(h=>h.originalId));
+  const activePos=hist.filter(h=>h.resultado==='Positive'&&!h.retestNum&&!rids.has(h.id)&&!rootsWithRetests.has(h.id));
   document.getElementById('pendingRetests').innerHTML=activePos.length===0
     ?'<p style="color:var(--gray-500);font-size:13px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>No pending retests</p>'
     :activePos.slice(0,5).map(h=>'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-100)"><span style="font-weight:700;color:var(--red);font-size:14px">#'+h.sample+'</span><span style="font-size:12px;color:var(--gray-500)">'+h.planta+' — '+h.fecha+'</span><button class="btn btn-primary btn-sm" onclick="showPage(\'retests\')" style="margin-left:auto">Ver \u2192</button></div>').join('');
