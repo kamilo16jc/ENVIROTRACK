@@ -130,7 +130,7 @@ tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--gray-50);}
 tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 .center{text-align:center;}
-.px{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:var(--red-light);color:var(--red);border-radius:4px;font-weight:700;font-size:12px;}
+.px{display:inline-flex;align-items:center;justify-content:center;color:#4F46E5;font-weight:900;font-size:16px;line-height:1;}
 
 /* ── STATS ─────────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
