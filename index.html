@@ -286,19 +286,46 @@
     </div>
 
     <!-- RETESTS -->
+    <style>
+      .rt-empty{text-align:center;color:var(--gray-500);padding:48px 20px;font-size:14px}
+      .rt-case{border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;background:var(--white)}
+      .rt-case-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 18px;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+      .rt-sample{font-size:15px;font-weight:700;color:var(--gray-900)}
+      .rt-bldg{font-size:11px;font-weight:600;color:var(--gray-500);background:var(--gray-100);padding:2px 9px;border-radius:20px;margin-left:8px}
+      .rt-sub{font-size:12px;color:var(--gray-500);margin-top:4px}
+      .rt-tag{font-size:11px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap}
+      .rt-tag.warn{color:var(--yellow);background:var(--yellow-light)}
+      .rt-retest{display:flex;align-items:center;gap:14px;padding:13px 18px;border-top:1px solid var(--gray-100);flex-wrap:wrap}
+      .rt-rn{font-size:13px;font-weight:600;color:var(--gray-900);min-width:76px}
+      .rt-date{font-size:12px;color:var(--gray-500);min-width:92px}
+      .rt-dot{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;min-width:78px}
+      .rt-dot::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+      .rt-dot.pending{color:var(--yellow)}.rt-dot.neg{color:var(--green)}.rt-dot.pos{color:var(--red)}
+      .rt-lab{font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px}
+      .rt-lab.sent{color:var(--green);background:var(--green-light)}
+      .rt-lab.filled{color:var(--yellow);background:var(--yellow-light)}
+      .rt-lab.none{color:var(--gray-400);background:var(--gray-100)}
+      .rt-spacer{flex:1;min-width:12px}
+      .rt-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+      .rt-btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:6px 11px;border-radius:var(--radius-sm);border:1px solid var(--gray-200);background:var(--white);color:var(--gray-700);cursor:pointer;font-family:var(--font);transition:all .12s}
+      .rt-btn:hover{background:var(--gray-50);border-color:var(--gray-300)}
+      .rt-btn.accent{border-color:var(--navy);background:var(--navy);color:#fff}
+      .rt-btn.accent:hover{background:var(--navy-light)}
+      .rt-btn.send{border-color:var(--green);color:var(--green)}
+      .rt-btn.send:hover{background:var(--green-light)}
+      .rt-btn.send.done{background:var(--green);color:#fff;border-color:var(--green)}
+    </style>
     <div class="page" id="page-retests">
       <div class="page-header">
         <div><h1>Retest Management</h1><p>Positive tests in follow-up — mark OK when the result is negative</p></div>
       </div>
       <div class="page-body">
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <div class="card-title" style="margin-bottom:0;color:var(--red)"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Active Retests <span id="retestActiveCount" style="background:var(--red-light);color:var(--red);padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px">0</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+            <div class="card-title" style="margin-bottom:0;color:var(--gray-900)">Active Retests <span id="retestActiveCount" style="background:var(--gray-100);color:var(--gray-500);padding:2px 10px;border-radius:20px;font-size:12px;margin-left:8px">0</span></div>
+            <span style="font-size:12px;color:var(--gray-400);display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>already sent to the lab</span>
           </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Sample #</th><th>Building</th><th>Positive Date</th><th>Area</th><th>Location</th><th>Pathogen +</th><th style="text-align:center">Retest #</th><th>Lab Notes</th><th style="text-align:center">Actions</th></tr></thead>
-            <tbody id="retestsList"><tr><td colspan="9" style="text-align:center;color:var(--gray-500);padding:40px"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>No active retests</td></tr></tbody>
-          </table></div>
+          <div id="retestsList"><div class="rt-empty">No active retests</div></div>
         </div>
         <div class="card">
           <div class="card-title" style="color:var(--green)"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Resolved Retests</div>

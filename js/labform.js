@@ -136,6 +136,11 @@ async function submitRetestLabForm(retestId, sendToLab) {
   try {
     toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
     await _spPost('labform', body);
+    // Flag the retest locally so the Retests view shows sent/filled immediately
+    // (durable status comes from the Submissions log on next pull).
+    const all = GH(); const idx = all.findIndex(r => r.id === retestId);
+    if (idx >= 0) { if (sendToLab) all[idx].labSent = true; else all[idx].labFilled = true; SH(all); }
+    if (typeof loadRetests === 'function') loadRetests();
     toast(sendToLab ? 'Retest form sent to the laboratory' : 'Retest form filled and archived', 'success');
     if (typeof refreshSubmissions === 'function') refreshSubmissions();
   } catch (e) {

@@ -153,6 +153,23 @@ function confirmResult() {
 // ═══════════════════════════════════════════════
 // RETESTS
 // ═══════════════════════════════════════════════
+// Lab-form status for a retest: 'sent' (emailed to lab), 'filled' (form built,
+// not sent), or 'none'. Uses the immediate local flags set on click, and falls
+// back to the Submissions log (durable / multi-user) once it is available.
+function retestLabStatus(rt) {
+  if (rt.labSent) return 'sent';
+  const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
+  const rn   = String(rt.retestNum || '').replace(/[^0-9]/g, '');
+  const bldg = (typeof labBuilding === 'function') ? labBuilding(rt.planta) : rt.planta;
+  const match = subs.find(s => s.type === 'Retest' &&
+    String(s.sample) === String(rt.sample) &&
+    String(s.retestNum) === rn &&
+    (!s.building || s.building === bldg));
+  if (match && /sent/i.test(match.status)) return 'sent';
+  if (rt.labFilled || (match && match.status === 'Generated')) return 'filled';
+  return 'none';
+}
+
 function loadRetests() {
   const hist     = GH();
   const resolved = GRV();
@@ -201,66 +218,82 @@ function loadRetests() {
   const totalActive = pos.length + activeGroups.length;
   document.getElementById('retestActiveCount').textContent = totalActive;
 
-  const tbody = document.getElementById('retestsList');
+  const listEl = document.getElementById('retestsList');
   if (totalActive === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-500);padding:40px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>No active retests</td></tr>';
+    listEl.innerHTML = '<div class="rt-empty"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> No active retests</div>';
   } else {
-    const rows = [];
+    const cards = [];
+    const canSend = canSendToLab(CU && CU.email);
 
-    // Group A: positives without retests generated
+    // Group A: positives that still need their retests scheduled
     pos.forEach(orig => {
       const pats = [orig.ecoli?'E.Coli':'',orig.listeria?'Listeria':'',orig.salmonella?'Salmonella':'',orig.saureus?'S.Aureus':''].filter(Boolean).join(', ');
-      rows.push(`<tr style="background:#fff5f5;border-top:2px solid var(--red)">
-        <td style="font-weight:700;font-size:14px;color:var(--red)">${orig.sample}</td>
-        <td><span class="badge badge-gray">${orig.planta}</span></td>
-        <td style="font-size:12px;font-weight:600">${orig.fecha}</td>
-        <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(orig.area)}</td>
-        <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(orig.location)}">${esc(orig.location)}</td>
-        <td style="color:var(--red);font-weight:600;font-size:12px">${pats}${orig.failedPathogensLabel?'<br><span style="font-size:10px;background:var(--red-light);padding:2px 6px;border-radius:4px">Failed: '+esc(orig.failedPathogensLabel)+'</span>':''}</td>
-        <td style="text-align:center"><span class="badge badge-red">Positive</span></td>
-        <td style="font-size:11px;color:var(--gray-500)">${orig.labNotes||'—'}</td>
-        <td style="text-align:center"><span style="font-size:11px;color:var(--yellow);font-weight:600">Generate retests</span></td>
-      </tr>`);
+      cards.push(`<div class="rt-case">
+        <div class="rt-case-head">
+          <div>
+            <span class="rt-sample">Sample ${orig.sample}</span><span class="rt-bldg">${esc(orig.planta)}</span>
+            <div class="rt-sub">${esc(orig.area||'')}${orig.location?' · '+esc(orig.location):''} · Positive ${orig.fecha}${pats?' · '+esc(pats):''}</div>
+          </div>
+          <span class="rt-tag warn">Needs retests</span>
+        </div>
+        <div class="rt-retest">
+          <span class="rt-rn" style="color:var(--gray-500);font-weight:500">Not scheduled yet</span>
+          <span class="rt-spacer"></span>
+          <div class="rt-actions">
+            <button class="rt-btn accent" onclick="openRetestDateModal(${orig.id})"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule retests</button>
+          </div>
+        </div>
+      </div>`);
     });
 
-    // Group B: active retests (original already closed)
-    activeGroups.forEach(resolvedOrig => {
-      const retests = hist.filter(h => h.originalId === resolvedOrig.originalId && h.retestNum)
+    // Group B: active retests (original already closed) — one card per case
+    activeGroups.forEach(g => {
+      const retests = hist.filter(h => h.originalId === g.originalId && h.retestNum)
                           .sort((a,b) => a.retestNum.localeCompare(b.retestNum));
       if (!retests.length) return;
-      rows.push(`<tr style="background:#fff0f0;border-top:2px solid var(--red)">
-        <td style="font-weight:700;font-size:14px;color:var(--red)" rowspan="${retests.length+1}">${resolvedOrig.sample}</td>
-        <td><span class="badge badge-gray">${resolvedOrig.planta}</span></td>
-        <td style="font-size:12px;color:var(--gray-500)">${resolvedOrig.originalDate}</td>
-        <td colspan="3" style="font-size:12px;color:var(--gray-500)">${esc(resolvedOrig.area)}</td>
-        <td style="text-align:center"><span class="badge badge-red">Failed</span></td>
-        <td colspan="2" style="font-size:11px;color:var(--gray-400);font-style:italic;text-align:center">${resolvedOrig.notes||''}</td>
-      </tr>`);
-      retests.forEach((rt, i) => {
-        const isDone    = rt.resultado === 'Negative';
-        const isPending = rt.resultado === 'Pending';
-        const isPos     = rt.resultado === 'Positive';
-        const statusColor = isDone?'var(--green)':isPos?'var(--red)':'var(--yellow)';
-        const statusText  = isDone?'Negative':isPos?'Positive':'Pending';
-        rows.push(`<tr style="background:${isDone?'#f0fdf4':isPending?'#fffbeb':'#fff5f5'}">
-          <td><span class="badge badge-gray">${resolvedOrig.planta}</span></td>
-          <td style="font-size:12px">${rt.fecha}</td>
-          <td colspan="2" style="font-size:12px;color:var(--gray-700);font-weight:600">${rt.retestNum}</td>
-          <td></td>
-          <td style="text-align:center;font-size:12px;font-weight:600;color:${statusColor}">${statusText}</td>
-          <td style="font-size:11px;color:var(--gray-500)">${rt.labNotes||'—'}</td>
-          <td style="text-align:center">
-            <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap">
-              <button class="btn btn-primary btn-sm" onclick="exportRetestPDF(${rt.id})" style="font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
-              ${!isDone?`<button class="btn btn-sm" onclick="openFailModal(${rt.id})" style="background:var(--navy);color:white;font-size:10px;padding:4px 7px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Lab</button>`:''}
-              <button class="btn btn-outline btn-sm" onclick="submitRetestLabForm(${rt.id},false)" style="font-size:10px;padding:4px 7px" title="Fill lab form"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg>Form</button>
-              ${canSendToLab(CU&&CU.email)?`<button class="btn btn-success btn-sm" onclick="submitRetestLabForm(${rt.id},true)" style="font-size:10px;padding:4px 7px" title="Send to lab"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send</button>`:''}
-            </div>
-          </td>
-        </tr>`);
-      });
+      const orig = hist.find(h => h.id === g.originalId) || {};
+      const pats = orig.failedPathogensLabel ||
+        (g.notes || '').replace(/^Positive:\s*/, '').replace(/\.\s*3 retests.*/i, '').trim();
+
+      const rowsHtml = retests.map(rt => {
+        const res = rt.resultado;
+        const dotCls = res === 'Negative' ? 'neg' : res === 'Positive' ? 'pos' : 'pending';
+        const resTxt = res === 'Negative' ? 'Negative' : res === 'Positive' ? 'Positive' : 'Pending';
+        const isDone = res === 'Negative';
+        const lab = retestLabStatus(rt);
+        const labChip = lab === 'sent'
+          ? '<span class="rt-lab sent"><svg class="ln" width="11" height="11" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Sent to lab</span>'
+          : lab === 'filled'
+          ? '<span class="rt-lab filled">Form ready</span>'
+          : '<span class="rt-lab none">Not sent</span>';
+        return `<div class="rt-retest">
+          <span class="rt-rn">${esc(rt.retestNum)}</span>
+          <span class="rt-date">${rt.fecha}</span>
+          <span class="rt-dot ${dotCls}">${resTxt}</span>
+          ${labChip}
+          <span class="rt-spacer"></span>
+          <div class="rt-actions">
+            <button class="rt-btn" onclick="exportRetestPDF(${rt.id})" title="Retest PDF"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
+            <button class="rt-btn" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)">Form</button>
+            ${canSend?`<button class="rt-btn send ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="Send the form to the lab"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${lab==='sent'?'Sent':'Send'}</button>`:''}
+            ${!isDone?`<button class="rt-btn accent" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>`:''}
+          </div>
+        </div>`;
+      }).join('');
+
+      cards.push(`<div class="rt-case">
+        <div class="rt-case-head">
+          <div>
+            <span class="rt-sample">Sample ${g.sample}</span><span class="rt-bldg">${esc(g.planta)}</span>
+            <div class="rt-sub">${esc(g.area||'')}${g.location?' · '+esc(g.location):''} · Positive ${g.originalDate}${pats?' · '+esc(pats):''}</div>
+          </div>
+          <span class="rt-tag warn">In follow-up</span>
+        </div>
+        ${rowsHtml}
+      </div>`);
     });
-    tbody.innerHTML = rows.join('');
+
+    listEl.innerHTML = cards.join('');
   }
 
   // Resolved / closed rounds: show any closed round that is no longer active,
@@ -282,7 +315,7 @@ function loadRetests() {
         const outcome = esc_
           ? '<span style="color:var(--red);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Failed — new round generated</span>'
           : '<span style="color:var(--green);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'+(r.closedOnGenerate?'Retests all negative':'Negative / OK')+'</span>';
-        return `<tr style="background:${esc_?'#fff5f5':'#f0fdf4'}">
+        return `<tr>
         <td style="font-weight:700">${r.sample}</td>
         <td><span class="badge badge-gray">${r.planta}</span></td>
         <td>${r.area}</td>
