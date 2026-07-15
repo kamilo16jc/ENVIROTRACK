@@ -88,7 +88,8 @@ function bulkMarkNegativeHistory() {
 }
 
 function clearFilters() {
-  ['fPlant','fResult'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fPlant').value = '';
+  document.getElementById('fResult').value = 'Pending';   // default working view (lighter than All)
   ['fSample','fFrom','fTo'].forEach(id=>document.getElementById(id).value='');
   searchHistory();
 }
