@@ -143,7 +143,7 @@ function exportRetestPDF(id) {
   pdfDocControl(doc, tableEnd+4, M);
   pdfFooter(doc, W, M);
 
-  const pdfName = namePdfRetest(h.planta, h.fecha);
+  const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn);
   doc.save(pdfName + '.pdf');
   syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
   toast('✅ Retest #'+rn+' PDF exported for Sample #'+h.sample,'success');
