@@ -47,13 +47,13 @@ function _stamp(dt) {
 function nameSubmission(dept, date)   { return 'Submission_' + labBuilding(dept) + '_' + _mmddyyyy(date); }
 // Swabs_1945_05152026
 function namePdfGenerator(dept, date) { return 'Swabs_' + labBuilding(dept) + '_' + _mmddyyyy(date); }
-// Retest PDF name = SAME pattern as the submission Excel (Submission Form Retest
-// #N - <bldg> (sample #) - YYYY-MM-DD HH-MM). This makes it hit the exact same
-// branch of the file-organizing automation that already handles the xls forms,
-// and carries the retest number + sample for pairing. (date param unused — the
-// stamp is generated like the submission form.)
+// Retest PDF name: "Retest #N - <bldg> (sample #) - YYYY-MM-DD HH-MM".
+// Same date format as the submission form (so the file-organizing automation
+// parses the month and files it), carries the retest number + sample for
+// pairing/uniqueness. (date param unused — stamp generated like the form.)
 function namePdfRetest(dept, date, sample, retestNum) {
-  return nameSubmissionRetest(retestNum, dept, sample);
+  return 'Retest #' + retestNum + ' - ' + labBuilding(dept) +
+         ' (sample ' + sample + ') - ' + _stamp(new Date());
 }
 // Submission Form Retest #1 - 1945 (sample 423) - 2026-07-08 17-05
 function nameSubmissionRetest(retestNum, dept, sample) {
