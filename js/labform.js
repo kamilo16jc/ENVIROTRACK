@@ -121,31 +121,36 @@ async function savePdfToSharePoint(fileName, doc, folder) {
 }
 
 // ── Submit the RETEST lab form (from the Retests view) ────────
-async function submitRetestLabForm(retestId, sendToLab) {
+async function submitRetestLabForm(retestId, sendToLab, opts) {
+  opts = opts || {};
   const rec = GH().find(r => r.id === retestId);
   if (!rec) { toast('Retest not found', 'error'); return; }
   const rn = (String(rec.retestNum).match(/\d+/) || ['1'])[0]; // "Retest #2" → "2"
   const p = labPayloadRetest(rec, rn);
-  if (!p.rows.length) { toast('This retest has no pathogen to test', 'error'); return; }
-  if (sendToLab && !confirm('Send Retest #' + rn + ' lab form for sample ' + rec.sample + ' to the laboratory? This will email them.')) return;
+  if (!p.rows.length) { if (!opts.silent) toast('This retest has no pathogen to test', 'error'); return; }
+  if (sendToLab && !opts.skipConfirm &&
+      !confirm('Send Retest #' + rn + ' lab form for sample ' + rec.sample + ' to the laboratory? This will email them.')) return;
   const body = Object.assign(
     { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
       rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
     submissionMeta('Retest', String(rec.sample), rn, sendToLab)
   );
   try {
-    toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
+    if (!opts.silent) toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
     await _spPost('labform', body);
     // Flag the retest locally so the Retests view shows sent/filled immediately
     // (durable status comes from the Submissions log on next pull).
     const all = GH(); const idx = all.findIndex(r => r.id === retestId);
     if (idx >= 0) { if (sendToLab) all[idx].labSent = true; else all[idx].labFilled = true; SH(all); }
-    if (typeof loadRetests === 'function') loadRetests();
-    toast(sendToLab ? 'Retest form sent to the laboratory' : 'Retest form filled and archived', 'success');
-    if (typeof refreshSubmissions === 'function') refreshSubmissions();
+    if (!opts.silent) {
+      if (typeof loadRetests === 'function') loadRetests();
+      toast(sendToLab ? 'Retest form sent to the laboratory' : 'Retest form filled and archived', 'success');
+      if (typeof refreshSubmissions === 'function') refreshSubmissions();
+    }
   } catch (e) {
     console.error('[labform] retest submit failed:', e);
-    toast('Could not generate the retest lab form', 'error');
+    if (!opts.silent) toast('Could not generate the retest lab form', 'error');
+    else throw e;
   }
 }
 

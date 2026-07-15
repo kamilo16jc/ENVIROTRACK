@@ -224,6 +224,7 @@ function loadRetests() {
   } else {
     const cards = [];
     const canSend = canSendToLab(CU && CU.email);
+    const today = new Date().toISOString().split('T')[0];
 
     // Group A: positives that still need their retests scheduled
     pos.forEach(orig => {
@@ -260,16 +261,27 @@ function loadRetests() {
         const dotCls = res === 'Negative' ? 'neg' : res === 'Positive' ? 'pos' : 'pending';
         const resTxt = res === 'Negative' ? 'Negative' : res === 'Positive' ? 'Positive' : 'Pending';
         const isDone = res === 'Negative';
+        const isPending = res === 'Pending';
         const lab = retestLabStatus(rt);
         const labChip = lab === 'sent'
           ? '<span class="rt-lab sent"><svg class="ln" width="11" height="11" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Sent to lab</span>'
           : lab === 'filled'
           ? '<span class="rt-lab filled">Form ready</span>'
           : '<span class="rt-lab none">Not sent</span>';
+        // Overdue = still Pending and its scheduled date has passed; Due today = date is today
+        const dueChip = isPending
+          ? (rt.fecha < today ? '<span class="rt-due over">Overdue</span>'
+             : rt.fecha === today ? '<span class="rt-due today">Due today</span>' : '')
+          : '';
+        const check = isPending
+          ? `<input type="checkbox" class="rt-check" data-id="${rt.id}" onchange="updateRetestBulkBar()" title="Select to bulk-confirm Negative">`
+          : '<span style="width:16px;flex:none"></span>';
         return `<div class="rt-retest">
+          ${check}
           <span class="rt-rn">${esc(rt.retestNum)}</span>
           <span class="rt-date">${rt.fecha}</span>
           <span class="rt-dot ${dotCls}">${resTxt}</span>
+          ${dueChip}
           ${labChip}
           <span class="rt-spacer"></span>
           <div class="rt-actions">
@@ -281,13 +293,21 @@ function loadRetests() {
         </div>`;
       }).join('');
 
+      const pendingUnsent = retests.filter(rt => rt.resultado === 'Pending' && retestLabStatus(rt) !== 'sent').length;
+      const anyOverdue = retests.some(rt => rt.resultado === 'Pending' && rt.fecha < today);
+      const caseTag = anyOverdue
+        ? '<span class="rt-tag" style="color:#fff;background:var(--red)">Overdue</span>'
+        : '<span class="rt-tag warn">In follow-up</span>';
+      const sendAllBtn = (canSend && pendingUnsent)
+        ? `<button class="rt-btn send" onclick="sendAllCaseForms(${g.originalId})" title="Send all pending forms for this case"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send all (${pendingUnsent})</button>`
+        : '';
       cards.push(`<div class="rt-case">
         <div class="rt-case-head">
           <div>
             <span class="rt-sample">Sample ${g.sample}</span><span class="rt-bldg">${esc(g.planta)}</span>
             <div class="rt-sub">${esc(g.area||'')}${g.location?' · '+esc(g.location):''} · Positive ${g.originalDate}${pats?' · '+esc(pats):''}</div>
           </div>
-          <span class="rt-tag warn">In follow-up</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${caseTag}${sendAllBtn}</div>
         </div>
         ${rowsHtml}
       </div>`);
@@ -326,6 +346,56 @@ function loadRetests() {
         <td style="font-size:12px;color:var(--gray-500)">${r.notes||'—'}</td>
       </tr>`;
       }).join('');
+}
+
+// ── Bulk actions on the Retests view ─────────────────────────────
+function updateRetestBulkBar() {
+  const n = document.querySelectorAll('.rt-check:checked').length;
+  const bar = document.getElementById('retestBulkBar');
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  const c = document.getElementById('retestBulkCount');
+  if (c) c.textContent = n + ' selected';
+}
+function clearRetestSelection() {
+  document.querySelectorAll('.rt-check:checked').forEach(c => { c.checked = false; });
+  updateRetestBulkBar();
+}
+// Mark every checked (pending) retest as Negative in one go.
+function bulkMarkNegative() {
+  const ids = [...document.querySelectorAll('.rt-check:checked')].map(c => +c.dataset.id);
+  if (!ids.length) return;
+  if (!confirm('Mark ' + ids.length + ' retest(s) as Negative?')) return;
+  const hist = GH(); const today = new Date().toISOString().split('T')[0]; const changed = [];
+  ids.forEach(id => {
+    const r = hist.find(x => x.id === id);
+    if (r && r.resultado !== 'Negative') {
+      r.resultado = 'Negative'; r.resultDate = today;
+      r.failedPathogens = []; r.failedPathogensLabel = '';
+      changed.push(r);
+    }
+  });
+  if (!changed.length) return;
+  SH(hist);
+  changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'bulk negative'));
+  clearRetestSelection();
+  loadRetests();
+  if (typeof searchHistory === 'function') searchHistory();
+  if (typeof refreshDashboard === 'function') refreshDashboard();
+  toast(changed.length + ' retest(s) marked Negative', 'success');
+}
+// Send every pending, not-yet-sent retest form of a case to the lab at once.
+async function sendAllCaseForms(originalId) {
+  const pend = GH().filter(r => r.originalId === originalId && r.retestNum &&
+    r.resultado === 'Pending' && retestLabStatus(r) !== 'sent');
+  if (!pend.length) { toast('No pending forms to send for this case', 'info'); return; }
+  if (!confirm('Send ' + pend.length + ' retest form(s) for this case to the lab?')) return;
+  let ok = 0;
+  for (const r of pend) {
+    try { await submitRetestLabForm(r.id, true, { skipConfirm: true, silent: true }); ok++; }
+    catch (e) { console.error('[sendAll] failed for', r.id, e); }
+  }
+  loadRetests();
+  toast(ok + ' of ' + pend.length + ' form(s) sent to the lab', ok === pend.length ? 'success' : 'error');
 }
 
 function openRetestOkModal(id) {
