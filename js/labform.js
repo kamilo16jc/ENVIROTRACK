@@ -135,13 +135,18 @@ async function submitRetestLabForm(retestId, sendToLab, opts) {
       rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
     submissionMeta('Retest', String(rec.sample), rn, sendToLab)
   );
+  // Show the in-flight spinner on the row (single sends; bulk runs silent).
+  if (!opts.silent) {
+    if (typeof _retestSending !== 'undefined') _retestSending.add(retestId);
+    if (typeof loadRetests === 'function') loadRetests();
+  }
   try {
     if (!opts.silent) toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
     await _spPost('labform', body);
-    // Flag the retest locally so the Retests view shows sent/filled immediately
-    // (durable status comes from the Submissions log on next pull).
-    const all = GH(); const idx = all.findIndex(r => r.id === retestId);
-    if (idx >= 0) { if (sendToLab) all[idx].labSent = true; else all[idx].labFilled = true; SH(all); }
+    // Mark sent/filled in the DURABLE store (survives Records pulls → no green
+    // flicker). Only set AFTER the request completes = confirmed it fired.
+    if (typeof setLabStatusFlag === 'function') setLabStatusFlag(rec, sendToLab ? 'sent' : 'filled');
+    if (typeof _retestSending !== 'undefined') _retestSending.delete(retestId);
     if (!opts.silent) {
       if (typeof loadRetests === 'function') loadRetests();
       toast(sendToLab ? 'Retest form sent to the laboratory' : 'Retest form filled and archived', 'success');
@@ -149,7 +154,8 @@ async function submitRetestLabForm(retestId, sendToLab, opts) {
     }
   } catch (e) {
     console.error('[labform] retest submit failed:', e);
-    if (!opts.silent) toast('Could not generate the retest lab form', 'error');
+    if (typeof _retestSending !== 'undefined') _retestSending.delete(retestId);
+    if (!opts.silent) { if (typeof loadRetests === 'function') loadRetests(); toast('Could not generate the retest lab form', 'error'); }
     else throw e;
   }
 }

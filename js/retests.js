@@ -153,11 +153,30 @@ function confirmResult() {
 // ═══════════════════════════════════════════════
 // RETESTS
 // ═══════════════════════════════════════════════
-// Lab-form status for a retest: 'sent' (emailed to lab), 'filled' (form built,
-// not sent), or 'none'. Uses the immediate local flags set on click, and falls
-// back to the Submissions log (durable / multi-user) once it is available.
+// ── Durable lab-form status (survives Records pulls — NOT stored in cap_h) ──
+// Keyed by building|sample|retest# so a syncPullRecords (which overwrites cap_h)
+// can never wipe the "sent" mark. This is what fixes the green flicker.
+const LAB_STATUS_KEY = 'cap_labsent';
+function _labKey(rec) {
+  const bldg = (typeof labBuilding === 'function') ? labBuilding(rec.planta) : rec.planta;
+  const rn   = String(rec.retestNum || '').replace(/[^0-9]/g, '');
+  return bldg + '|' + rec.sample + '|' + rn;
+}
+function _labStore() { try { return JSON.parse(localStorage.getItem(LAB_STATUS_KEY) || '{}'); } catch (e) { return {}; } }
+function setLabStatusFlag(rec, status) {
+  const st = _labStore(); st[_labKey(rec)] = { status: status, at: new Date().toISOString() };
+  localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st));
+}
+function getLabStatusFlag(rec) { const e = _labStore()[_labKey(rec)]; return e ? e.status : ''; }
+
+// Retests currently being sent/filled (in-memory) → show a spinner on the row.
+const _retestSending = new Set();
+
+// Lab-form status for a retest: 'sent', 'filled', or 'none'. Reads the durable
+// local flag first (no flicker), then corroborates with the Submissions log.
 function retestLabStatus(rt) {
-  if (rt.labSent) return 'sent';
+  const flag = getLabStatusFlag(rt);
+  if (flag === 'sent') return 'sent';
   const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
   const rn   = String(rt.retestNum || '').replace(/[^0-9]/g, '');
   const bldg = (typeof labBuilding === 'function') ? labBuilding(rt.planta) : rt.planta;
@@ -166,7 +185,7 @@ function retestLabStatus(rt) {
     String(s.retestNum) === rn &&
     (!s.building || s.building === bldg));
   if (match && /sent/i.test(match.status)) return 'sent';
-  if (rt.labFilled || (match && match.status === 'Generated')) return 'filled';
+  if (flag === 'filled' || (match && match.status === 'Generated')) return 'filled';
   return 'none';
 }
 
@@ -286,9 +305,11 @@ function loadRetests() {
           <span class="rt-spacer"></span>
           <div class="rt-actions">
             <button class="rt-btn" onclick="exportRetestPDF(${rt.id})" title="Retest PDF"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
-            <button class="rt-btn" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)">Form</button>
+            ${_retestSending.has(rt.id)
+              ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
+              : `<button class="rt-btn" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)">Form</button>
             ${canSend?`<button class="rt-btn send ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="Send the form to the lab"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${lab==='sent'?'Sent':'Send'}</button>`:''}
-            ${!isDone?`<button class="rt-btn accent" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>`:''}
+            ${!isDone?`<button class="rt-btn accent" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>`:''}`}
           </div>
         </div>`;
       }).join('');
