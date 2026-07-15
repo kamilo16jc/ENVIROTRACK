@@ -33,6 +33,18 @@ function clearRepDates() {
   buildReports();
 }
 
+// Pathogens that ACTUALLY came back positive for a record — uses the recorded
+// failedPathogens (what the lab confirmed), NOT every pathogen that was tested
+// on a positive sample. Falls back to the tested flags only for legacy records
+// that predate failedPathogens. This is what prevents phantom pathogen positives
+// (e.g. a Salmonella "+" just because it was swabbed on an E.Coli-positive point).
+function positivePathogens(h) {
+  if (!h || h.resultado !== 'Positive') return [];
+  const f = Array.isArray(h.failedPathogens) ? h.failedPathogens.filter(Boolean) : [];
+  if (f.length) return f;
+  return ['ecoli','listeria','salmonella','saureus'].filter(k => h[k]);   // legacy fallback
+}
+
 function buildReports() {
   destroyCharts();
   if(window.Chart) Chart.defaults.animation = false; // render instantly → clean PDF capture
@@ -142,7 +154,7 @@ function buildReports() {
   const patNames = ['E.Coli','Listeria','Salmonella','S.Aureus'];
   const patKeys  = ['ecoli','listeria','salmonella','saureus'];
   const patTested = patKeys.map(k => hist.filter(h=>h[k]).length);
-  const patPos    = patKeys.map(k => hist.filter(h=>h[k]&&h.resultado==='Positive').length);
+  const patPos    = patKeys.map(k => hist.filter(h=>positivePathogens(h).includes(k)).length);
   chartInstances.pat = new Chart(document.getElementById('chartPat'), {
     type:'bar',
     data:{ labels:patNames,
@@ -289,7 +301,7 @@ function buildReports() {
     const total_p = hist.filter(h=>h.planta===p).length;
     const pos_p = ph.length;
     const rate_p = total_p>0?(pos_p/total_p*100).toFixed(1):'0.0';
-    const counts = patKeys2.map(k=>ph.filter(h=>h[k]).length);
+    const counts = patKeys2.map(k=>ph.filter(h=>positivePathogens(h).includes(k)).length);
     const rateColor = parseFloat(rate_p)>=20?'var(--red)':parseFloat(rate_p)>=10?'var(--yellow)':'var(--green)';
     return `<tr>
       <td><span class="badge badge-gray">${p}</span></td>
@@ -325,7 +337,7 @@ function exportReportPDF(opts) {
 
   const bStats=plants.map(p=>{const ph=hist.filter(h=>h.planta===p);const pp=ph.filter(h=>h.resultado==='Positive').length;return {p,total:ph.length,pos:pp,rate:ph.length>0?pp/ph.length*100:0};});
   const worstB=bStats.filter(b=>b.total>0).sort((a,b)=>b.rate-a.rate)[0];
-  const patStat=patKeys.map(k=>({k,n:hist.filter(h=>h[k]&&h.resultado==='Positive').length})).sort((a,b)=>b.n-a.n);
+  const patStat=patKeys.map(k=>({k,n:hist.filter(h=>positivePathogens(h).includes(k)).length})).sort((a,b)=>b.n-a.n);
   const worstPat=patStat[0];
   const zStat=[2,3,4].map(z=>{const zh=hist.filter(h=>h.zone==z);const zp=zh.filter(h=>h.resultado==='Positive').length;return {z,total:zh.length,pos:zp,rate:zh.length>0?zp/zh.length*100:0};});
   const worstZone=zStat.filter(z=>z.total>0).sort((a,b)=>b.rate-a.rate)[0];
@@ -468,7 +480,7 @@ function exportReportPDF(opts) {
   secTitle('Detail — Positives by Building & Pathogen');
   doc.autoTable({
     head:[['Building','E. Coli +','Listeria +','Salmonella +','S. Aureus +','Total Pos.','Positive Rate']],
-    body:bStats.map(b=>{const ph=hist.filter(h=>h.planta===b.p&&h.resultado==='Positive');return [b.p,...patKeys.map(k=>ph.filter(h=>h[k]).length),b.pos,b.total>0?b.rate.toFixed(1)+'%':'0%'];}),
+    body:bStats.map(b=>{const ph=hist.filter(h=>h.planta===b.p&&h.resultado==='Positive');return [b.p,...patKeys.map(k=>ph.filter(h=>positivePathogens(h).includes(k)).length),b.pos,b.total>0?b.rate.toFixed(1)+'%':'0%'];}),
     startY:y, margin:{left:M,right:M}, styles:tblStyle, headStyles:tblHead,
     columnStyles:{0:{halign:'left',fontStyle:'bold'}},
     didParseCell:d=>{ if(d.column.index>0&&d.column.index<6&&parseFloat(d.cell.raw)>0){d.cell.styles.textColor=[192,57,43];d.cell.styles.fontStyle='bold';} }
