@@ -5,6 +5,15 @@ async function generateTests() {
   const planta   = document.getElementById('genPlant').value;
   if(!planta) { toast('Select a plant','error'); return; }
 
+  // Drop any previously shown tests IMMEDIATELY (so a different building's tests
+  // can't be saved by mistake) and show the loading bar until the new data is ready.
+  TESTS = []; OVRS = []; RTITEMS = [];
+  document.getElementById('genTableBody').innerHTML = '';
+  document.getElementById('genTableCard').style.display = 'none';
+  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => { const b=document.getElementById(id); if(b) b.disabled=true; });
+  genShowLoading(planta);
+  try {
+
   // Pull the latest Records from SharePoint FIRST, so the 4-week
   // anti-repetition sees every user's data — not just this device's cache.
   if(SYNC_ENABLED) {
@@ -174,6 +183,27 @@ async function generateTests() {
     availPct+'% of available pool',
     'success'
   );
+  } finally { genHideLoading(); }
+}
+
+// ── Loading bar + building-change guard ──────────────────────────
+function genShowLoading(planta) {
+  const lbl = {'1945':'1945','1935':'1935','1931E':'1931 East','1931W':'1931 West'}[planta] || planta;
+  const t = document.getElementById('genLoadingLabel'); if (t) t.textContent = 'Loading tests for Plant ' + lbl + '…';
+  const el = document.getElementById('genLoading'); if (el) el.style.display = 'block';
+}
+function genHideLoading() { const el = document.getElementById('genLoading'); if (el) el.style.display = 'none'; }
+function clearGenView() {
+  TESTS = []; OVRS = []; RTITEMS = [];
+  const b = document.getElementById('genTableBody'); if (b) b.innerHTML = '';
+  const c = document.getElementById('genTableCard'); if (c) c.style.display = 'none';
+  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => { const x=document.getElementById(id); if(x) x.disabled=true; });
+  genHideLoading();
+}
+// Changing the building drops the stale tests and auto-loads the new one.
+function onPlantChange() {
+  if (document.getElementById('genPlant').value) generateTests();
+  else clearGenView();
 }
 
 function renderTests() {
