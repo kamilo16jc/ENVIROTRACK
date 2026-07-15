@@ -360,11 +360,9 @@ function clearRetestSelection() {
   document.querySelectorAll('.rt-check:checked').forEach(c => { c.checked = false; });
   updateRetestBulkBar();
 }
-// Mark every checked (pending) retest as Negative in one go.
-function bulkMarkNegative() {
-  const ids = [...document.querySelectorAll('.rt-check:checked')].map(c => +c.dataset.id);
-  if (!ids.length) return;
-  if (!confirm('Mark ' + ids.length + ' retest(s) as Negative?')) return;
+// Shared core: set the given record ids to Negative (today), sync each.
+// Returns how many actually changed. Used by both Retests and Test History.
+function _markRecordsNegative(ids) {
   const hist = GH(); const today = new Date().toISOString().split('T')[0]; const changed = [];
   ids.forEach(id => {
     const r = hist.find(x => x.id === id);
@@ -374,14 +372,23 @@ function bulkMarkNegative() {
       changed.push(r);
     }
   });
-  if (!changed.length) return;
+  if (!changed.length) return 0;
   SH(hist);
   changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'bulk negative'));
+  if (typeof refreshDashboard === 'function') refreshDashboard();
+  return changed.length;
+}
+// Mark every checked (pending) retest as Negative in one go.
+function bulkMarkNegative() {
+  const ids = [...document.querySelectorAll('.rt-check:checked')].map(c => +c.dataset.id);
+  if (!ids.length) return;
+  if (!confirm('Mark ' + ids.length + ' retest(s) as Negative?')) return;
+  const n = _markRecordsNegative(ids);
+  if (!n) return;
   clearRetestSelection();
   loadRetests();
   if (typeof searchHistory === 'function') searchHistory();
-  if (typeof refreshDashboard === 'function') refreshDashboard();
-  toast(changed.length + ' retest(s) marked Negative', 'success');
+  toast(n + ' retest(s) marked Negative', 'success');
 }
 // Send every pending, not-yet-sent retest form of a case to the lab at once.
 async function sendAllCaseForms(originalId) {

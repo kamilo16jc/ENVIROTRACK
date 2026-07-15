@@ -272,14 +272,20 @@
         <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
             <div class="card-title" style="margin-bottom:0">Results <span id="resultCount" style="background:var(--gray-100);color:var(--gray-500);padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px">0</span></div>
-            <span style="font-size:12px;color:var(--gray-400)">Click "<svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result" to record the lab result</span>
+            <span style="font-size:12px;color:var(--gray-400)">Select pending rows to confirm several as Negative at once</span>
+          </div>
+          <div id="histBulkBar" style="display:none;align-items:center;gap:12px;padding:11px 16px;margin-bottom:14px;background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-sm)">
+            <span id="histBulkCount" style="font-size:13px;font-weight:600;color:var(--green)"></span>
+            <span style="flex:1"></span>
+            <button class="rt-btn send" onclick="bulkMarkNegativeHistory()"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Mark selected as Negative</button>
+            <button class="rt-btn" onclick="clearHistSelection()">Clear</button>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Date</th><th>Building</th><th>Sample #</th><th>Zone</th><th>Area</th><th>Location</th>
+            <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" id="histSelectAll" onchange="toggleHistSelectAll(this)" title="Select all pending" style="width:15px;height:15px;accent-color:var(--green);cursor:pointer"></th><th>Date</th><th>Building</th><th>Sample #</th><th>Zone</th><th>Area</th><th>Location</th>
               <th style="text-align:center;width:36px">E.C</th><th style="text-align:center;width:36px">List</th>
               <th style="text-align:center;width:36px">Salm</th><th style="text-align:center;width:36px">S.A</th>
-              <th style="width:130px">Result</th><th style="width:70px">Retest</th><th style="width:90px"></th></tr></thead>
-            <tbody id="historyTable"><tr><td colspan="13" style="text-align:center;color:var(--gray-500);padding:40px">Records appear here automatically</td></tr></tbody>
+              <th style="width:130px">Result</th><th style="width:70px">Retest</th><th style="width:120px"></th></tr></thead>
+            <tbody id="historyTable"><tr><td colspan="14" style="text-align:center;color:var(--gray-500);padding:40px">Records appear here automatically</td></tr></tbody>
           </table></div>
         </div>
       </div>
