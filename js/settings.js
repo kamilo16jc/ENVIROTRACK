@@ -254,6 +254,7 @@ function doLogin_dynamic() {
       syncSafe(() => Promise.all([syncPullRecords(), syncPullResolved()])
         .then(() => { refreshDashboard(); searchHistory(); loadRetests(); updateNotifBadge(); }), 'pull records');
       syncSafe(() => syncPullSubmissions().then(() => updateNotifBadge()), 'pull submissions');
+      if (typeof startLiveSync === 'function') startLiveSync();   // focus-refresh + gentle poll + "updated Xm ago"
       resetSessionTimer();
     })
     .catch(e => { err.textContent = fbAuthError(e); });

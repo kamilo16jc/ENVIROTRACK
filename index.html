@@ -130,6 +130,16 @@
     <!-- Right side -->
     <div class="nav-right">
       <style>
+        #liveRefreshBtn{display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--gray-500);cursor:pointer;font-family:var(--font)}
+        #liveRefreshBtn:hover{border-color:var(--gray-300);color:var(--gray-700)}
+        #liveRefreshBtn.spin svg{animation:liveSpin .8s linear infinite}
+        @keyframes liveSpin{to{transform:rotate(360deg)}}
+      </style>
+      <button id="liveRefreshBtn" onclick="liveManualRefresh()" title="Refresh data from SharePoint">
+        <svg class="ln" width="14" height="14" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span id="liveSyncLabel"></span>
+      </button>
+      <style>
         .notif-count{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;background:#C0392B;color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
         .notif-panel{position:absolute;top:44px;right:0;width:366px;max-height:462px;overflow-y:auto;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 14px 38px rgba(16,24,40,.18);z-index:500;display:none}
         .notif-panel.open{display:block}
@@ -948,6 +958,7 @@
 <script src="js/dashboard.js"></script>
 <script src="js/reports.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/live.js"></script>
 <script src="js/init.js"></script>
 <script>
 (function(){
