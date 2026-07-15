@@ -27,8 +27,8 @@ function showPage(p) {
     if(parent) parent.classList.add('active');
   }
 
-  // Update notification dot
-  updateNotifDot();
+  // Update notification bell
+  if (typeof updateNotifBadge === 'function') updateNotifBadge();
 
   // Trigger page logic
   if(p==='dashboard') refreshDashboard();

@@ -139,6 +139,7 @@ const FLOW_ENV = {
   labform:            "FLOW_LABFORM",
   savepdf:            "FLOW_SAVEPDF",
   submissionsRead:    "FLOW_SUBMISSIONS_READ",
+  emailmonthly:       "FLOW_EMAIL_MONTHLY",
 };
 
 exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {

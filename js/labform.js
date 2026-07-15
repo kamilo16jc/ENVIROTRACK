@@ -107,9 +107,11 @@ async function submitLabForm(sendToLab) {
 }
 
 // ── Save a generated PDF (jsPDF doc) to SharePoint (FOLDER PROVISIONAL) ──
-async function savePdfToSharePoint(fileName, doc) {
+async function savePdfToSharePoint(fileName, doc, folder) {
   const b64 = doc.output('datauristring').split('base64,')[1];
-  await _spPost('savepdf', { fileName: fileName, contentBase64: b64 });
+  const body = { fileName: fileName, contentBase64: b64 };
+  if (folder) body.folder = folder;   // optional destination subfolder (flow may honor it)
+  await _spPost('savepdf', body);
 }
 
 // ── Submit the RETEST lab form (from the Retests view) ────────

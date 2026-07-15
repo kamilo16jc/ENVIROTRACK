@@ -300,9 +300,10 @@ function buildReports() {
   }).join('');
 }
 
-function exportReportPDF() {
+function exportReportPDF(opts) {
+  opts = opts || {};
   const hist = getFilteredHistory();
-  if(!hist.length) { toast('No data to export','error'); return; }
+  if(!hist.length) { if(!opts.returnDoc) toast('No data to export','error'); return; }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
   const W=215.9, H=279.4, M=14, today=new Date().toLocaleDateString('en-US');
@@ -495,8 +496,108 @@ function exportReportPDF() {
     doc.text('Page '+p+' of '+pages,W-M,H-7,{align:'right'});
   }
 
-  doc.save('Caputo_Environmental_Report_'+new Date().toISOString().split('T')[0]+'.pdf');
+  const fname = opts.fileName || 'Caputo_Environmental_Report_'+new Date().toISOString().split('T')[0];
+  if(opts.returnDoc) return { doc: doc, fname: fname };
+  doc.save(fname+'.pdf');
   toast('✅ Professional report exported','success');
+}
+
+// ═══════════════════════════════════════════════
+// MONTHLY REPORT → SharePoint (Option 1 automation)
+// Admin generates the previous month's PDF (with its charts) once, and it
+// lands in SharePoint. A scheduled Power Automate flow then emails it on the
+// 2nd of each month. See automation/monthly-report-flow.md.
+// ═══════════════════════════════════════════════
+// Build the previous-month report PDF (with its charts) and return it plus the
+// pre-formatted date strings. Restores the user's current Reports view after.
+// Returns null when there is no data for last month.
+async function _buildPrevMonthReport() {
+  const rf = document.getElementById('repFrom'), rt = document.getElementById('repTo'), rp = document.getElementById('reportPeriod');
+  const now = new Date();
+  const firstPrev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const lastPrev  = new Date(now.getFullYear(), now.getMonth(),   0);
+  const ymd = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const tag = firstPrev.getFullYear()+'-'+String(firstPrev.getMonth()+1).padStart(2,'0'); // "2026-06"
+  const longOpts = { month:'long', day:'numeric', year:'numeric' };
+
+  const sF = rf?rf.value:'', sT = rt?rt.value:'', sP = rp?rp.value:'';
+  if (rf) rf.value = ymd(firstPrev);
+  if (rt) rt.value = ymd(lastPrev);
+  buildReports();
+  await new Promise(r => setTimeout(r, 120));                        // let the canvases paint
+  let res;
+  try { res = exportReportPDF({ returnDoc:true, fileName:'Monthly_Report_'+tag }); }
+  finally { if (rf) rf.value = sF; if (rt) rt.value = sT; if (rp) rp.value = sP; buildReports(); }
+  if (!res || !res.doc) return null;
+  return {
+    doc: res.doc, tag: tag, fileName: 'Monthly_Report_'+tag,
+    monthLabel:  firstPrev.toLocaleDateString('en-US', { month:'long', year:'numeric' }),
+    periodStart: firstPrev.toLocaleDateString('en-US', longOpts),
+    periodEnd:   lastPrev.toLocaleDateString('en-US', longOpts),
+    genDate:     now.toLocaleDateString('en-US', longOpts)
+  };
+}
+
+// Professional HTML email body (values already filled in — no flow expressions).
+function monthlyEmailBodyHtml(r) {
+  return '' +
+'<div style="font-family:-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;background:#eef1f5;padding:24px 0">' +
+'<table role="presentation" width="580" cellpadding="0" cellspacing="0" align="center" style="width:580px;max-width:580px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.08)">' +
+'<tr><td style="background:#16243d;padding:24px 30px">' +
+'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#8fa4c7;text-transform:uppercase">Caputo Foods &middot; Wiscon Corp</div>' +
+'<div style="padding-top:6px;font-size:20px;font-weight:700;color:#fff">Environmental Monitoring &mdash; Monthly Report</div>' +
+'<div style="padding-top:3px;font-size:14px;color:#c3d0e6">'+esc(r.monthLabel)+'</div></td></tr>' +
+'<tr><td style="height:4px;background:#C0392B;font-size:0;line-height:0">&nbsp;</td></tr>' +
+'<tr><td style="padding:26px 30px 8px">' +
+'<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#334155">Please find attached the Environmental Monitoring report for <strong>'+esc(r.monthLabel)+'</strong>, covering all four production buildings.</p>' +
+'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;border:1px solid #e2e8f0;border-radius:8px">' +
+'<tr><td style="padding:14px 18px;font-size:13px;line-height:1.9;color:#334155">' +
+'<strong style="color:#16243d">Reporting period:</strong> '+esc(r.periodStart)+' &ndash; '+esc(r.periodEnd)+'<br>' +
+'<strong style="color:#16243d">Buildings:</strong> 1945, 1935, 1931E, 1931W<br>' +
+'<strong style="color:#16243d">Generated:</strong> '+esc(r.genDate)+'</td></tr></table>' +
+'<p style="margin:18px 0 0;font-size:14px;line-height:1.6;color:#334155">The full analysis, charts and recommendations are in the attached PDF.</p></td></tr>' +
+'<tr><td style="padding:20px 30px 26px">' +
+'<div style="border-top:1px solid #e2e8f0;padding-top:14px;font-size:12px;line-height:1.6;color:#94a3b8">This is an automated message from the EnviroTrack system.<br>Quality Assurance &middot; Caputo Cheese &mdash; Wiscon Corp &middot; Confidential</div>' +
+'</td></tr></table></div>';
+}
+
+// PRIMARY monthly action: generate last month's PDF and EMAIL it straight to QA
+// via a tiny 2-action HTTP flow (no SharePoint file fetching). Also archives a
+// copy to SharePoint best-effort.
+async function emailMonthlyReport() {
+  if (typeof canEditRecords === 'function' && !canEditRecords()) { toast('Administrators only','error'); return; }
+  const r = await _buildPrevMonthReport();
+  if (!r) { toast('No data recorded for last month — nothing to send','error'); return; }
+  const b64 = r.doc.output('datauristring').split('base64,')[1];
+  try {
+    toast('Sending monthly report to QA…','info');
+    await _spPost('emailmonthly', {
+      fileName: r.fileName + '.pdf',
+      contentBase64: b64,
+      subject: 'Environmental Monitoring Report — ' + r.monthLabel,
+      bodyHtml: monthlyEmailBodyHtml(r)
+    });
+    toast('Monthly report for ' + r.monthLabel + ' sent to QA','success');
+    syncSafe(() => savePdfToSharePoint(r.fileName, r.doc, 'Monthly Reports'), 'archive monthly'); // best-effort archive
+  } catch (e) {
+    console.error('[monthly] email failed:', e);
+    toast('Could not send monthly report — check your connection','error');
+  }
+}
+
+// Kept for archival-only use (saves to SharePoint without emailing).
+async function saveMonthlyReportToSharePoint() {
+  if (typeof canEditRecords === 'function' && !canEditRecords()) { toast('Administrators only','error'); return; }
+  const r = await _buildPrevMonthReport();
+  if (!r) { toast('No data recorded for last month — nothing to save','error'); return; }
+  try {
+    toast('Saving monthly report…','info');
+    await savePdfToSharePoint(r.fileName, r.doc, 'Monthly Reports');
+    toast('Monthly report for ' + r.tag + ' saved to SharePoint','success');
+  } catch (e) {
+    console.error('[monthly] save failed:', e);
+    toast('Could not save monthly report — check your connection','error');
+  }
 }
 
 // ═══════════════════════════════════════════════
