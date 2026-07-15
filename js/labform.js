@@ -37,10 +37,6 @@ function _mmddyyyy(date) {
   const d = new Date(date + 'T12:00:00');
   return _p2(d.getMonth() + 1) + _p2(d.getDate()) + d.getFullYear();
 }
-function _mmddyyyyDash(date) {
-  const d = new Date(date + 'T12:00:00');
-  return _p2(d.getMonth() + 1) + '-' + _p2(d.getDate()) + '-' + d.getFullYear();
-}
 function _stamp(dt) {
   dt = dt || new Date();
   return dt.getFullYear() + '-' + _p2(dt.getMonth() + 1) + '-' + _p2(dt.getDate()) +
@@ -51,11 +47,13 @@ function _stamp(dt) {
 function nameSubmission(dept, date)   { return 'Submission_' + labBuilding(dept) + '_' + _mmddyyyy(date); }
 // Swabs_1945_05152026
 function namePdfGenerator(dept, date) { return 'Swabs_' + labBuilding(dept) + '_' + _mmddyyyy(date); }
-// Retest Form #1 - 1945 (sample 423) - 07-13-2026  (parallels the submission form
-// so the automation can pair the PDF with its retest submission by #N + sample)
+// Retest PDF name = SAME pattern as the submission Excel (Submission Form Retest
+// #N - <bldg> (sample #) - YYYY-MM-DD HH-MM). This makes it hit the exact same
+// branch of the file-organizing automation that already handles the xls forms,
+// and carries the retest number + sample for pairing. (date param unused — the
+// stamp is generated like the submission form.)
 function namePdfRetest(dept, date, sample, retestNum) {
-  return 'Retest Form #' + retestNum + ' - ' + labBuilding(dept) +
-         ' (sample ' + sample + ') - ' + _mmddyyyyDash(date);
+  return nameSubmissionRetest(retestNum, dept, sample);
 }
 // Submission Form Retest #1 - 1945 (sample 423) - 2026-07-08 17-05
 function nameSubmissionRetest(retestNum, dept, sample) {
