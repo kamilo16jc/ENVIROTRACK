@@ -138,7 +138,10 @@ function spToRecord(it) {
     failedPathogensLabel: _pick(it, 'failedPathogensLabel', 'FailedPathogensLabel') || '',
     isRetest:   !!_pick(it, 'isRetest', 'IsRetest'),
     originalId: Number(_pick(it, 'originalId', 'OriginalId')) || 0,
-    scheduled:  !!_pick(it, 'scheduled', 'Scheduled')
+    scheduled:  !!_pick(it, 'scheduled', 'Scheduled'),
+    enteredByEmail: _pick(it, 'enteredByEmail', 'EnteredByEmail') || '',
+    enteredByName:  _pick(it, 'enteredByName', 'EnteredByName') || '',
+    enteredAt:      _pick(it, 'enteredAt', 'EnteredAt') || ''
   };
 }
 
@@ -239,7 +242,10 @@ function spToResolved(it) {
     resolvedDate:     _pick(it, 'resolvedDate', 'ResolvedDate') || '',
     retestNum:        _pick(it, 'retestNum', 'RetestNum') || '',
     notes:            _pick(it, 'notes', 'Notes') || '',
-    closedOnGenerate: !!_pick(it, 'closedOnGenerate', 'ClosedOnGenerate')
+    closedOnGenerate: !!_pick(it, 'closedOnGenerate', 'ClosedOnGenerate'),
+    enteredByEmail:   _pick(it, 'enteredByEmail', 'EnteredByEmail') || '',
+    enteredByName:    _pick(it, 'enteredByName', 'EnteredByName') || '',
+    enteredAt:        _pick(it, 'enteredAt', 'EnteredAt') || ''
   };
 }
 

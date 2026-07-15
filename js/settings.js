@@ -239,6 +239,9 @@ function doLogin_dynamic() {
       // "Send to Lab" only for the configured sender (email tied to their account)
       const bls = document.getElementById('btnLabSend');
       if(bls) bls.style.display = canSendToLab(user.email) ? '' : 'none';
+      // "Save Monthly Report" only for admins (feeds the automatic monthly email)
+      const bsm = document.getElementById('btnSaveMonthly');
+      if(bsm) bsm.style.display = isAdmin(user.email, role) ? '' : 'none';
 
       document.getElementById('loginScreen').classList.remove('active');
       document.getElementById('appScreen').classList.add('active');
@@ -249,8 +252,8 @@ function doLogin_dynamic() {
       // together, then refresh the views that depend on both.
       syncSafe(() => syncPullMasterPoints(), 'pull points');
       syncSafe(() => Promise.all([syncPullRecords(), syncPullResolved()])
-        .then(() => { refreshDashboard(); searchHistory(); loadRetests(); }), 'pull records');
-      syncSafe(() => syncPullSubmissions(), 'pull submissions');
+        .then(() => { refreshDashboard(); searchHistory(); loadRetests(); updateNotifBadge(); }), 'pull records');
+      syncSafe(() => syncPullSubmissions().then(() => updateNotifBadge()), 'pull submissions');
       resetSessionTimer();
     })
     .catch(e => { err.textContent = fbAuthError(e); });
