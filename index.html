@@ -343,6 +343,8 @@
       .rt-due.over{color:#fff;background:var(--red)}
       .rt-due.today{color:var(--yellow);background:var(--yellow-light)}
       .rt-check{width:16px;height:16px;accent-color:var(--green);cursor:pointer;flex:none}
+      .rt-spin{width:14px;height:14px;border:2px solid var(--gray-200);border-top-color:var(--navy);border-radius:50%;display:inline-block;animation:rtSpin .7s linear infinite;vertical-align:middle}
+      @keyframes rtSpin{to{transform:rotate(360deg)}}
       #retestBulkBar{display:none;align-items:center;gap:12px;padding:11px 16px;margin-bottom:14px;background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-sm)}
     </style>
     <div class="page" id="page-retests">
