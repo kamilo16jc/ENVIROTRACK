@@ -610,6 +610,11 @@ const BUILDING_MIN_SAMPLES = { '1945':10, '1935':7, '1931E':7, '1931W':7 };
 function minSamplesFor(plant, fallback) {
   return BUILDING_MIN_SAMPLES[plant] || fallback || SQF_MIN_TESTS;
 }
+// The environmental program went fully live in the last two weeks of June 2026.
+// Weeks before this (Monday 2026-06-15) came from onboarding/migration data
+// (e.g. 1945 had records while 1935/1931E/1931W were not yet in use) and would
+// show as false "incomplete weeks" — they are excluded from SQF compliance.
+const SQF_PROGRAM_START = '2026-06-15';
 
 function switchRepTab(tab) {
   ['stats','sqf'].forEach(t => {
@@ -665,7 +670,8 @@ function buildSQF() {
     weekMap[key].zones.add(h.zone);
   });
 
-  const allWeeks = Object.values(weekMap).filter(w => plants.includes(w.plant));
+  const allWeeks = Object.values(weekMap)
+    .filter(w => plants.includes(w.plant) && w.week >= SQF_PROGRAM_START);
   const totalWeeks = allWeeks.length;
   const compliantFreq = allWeeks.filter(w => w.count >= minSamplesFor(w.plant, minTests)).length;
   const compliantZone2 = allWeeks.filter(w => w.zones.has(2)).length;
@@ -969,7 +975,7 @@ function exportSQFpdf() {
     if(!weekMap2[key]) weekMap2[key]={plant:h.planta,week:wk,count:0};
     weekMap2[key].count++;
   });
-  const badWks=Object.values(weekMap2).filter(w=>w.count<minSamplesFor(w.plant, minT)&&plants2.includes(w.plant)).sort((a,b)=>a.week.localeCompare(b.week));
+  const badWks=Object.values(weekMap2).filter(w=>w.count<minSamplesFor(w.plant, minT)&&plants2.includes(w.plant)&&w.week>=SQF_PROGRAM_START).sort((a,b)=>a.week.localeCompare(b.week));
 
   if(badWks.length>0){
     y=doc.lastAutoTable.finalY+8;
