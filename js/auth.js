@@ -9,6 +9,7 @@ function doLogout() {
   try { clearInterval(countdownTimer); } catch(e){}
   try { const sw=document.getElementById('sessionWarning'); if(sw) sw.style.display='none'; } catch(e){}
   try { fbAuth.signOut(); } catch(e){}
+  try { if (typeof stopLiveSync === 'function') stopLiveSync(); } catch(e){}
   CU = null; TESTS = []; OVRS = []; RTITEMS = [];
   try { document.getElementById('loginEmail').value = ''; } catch(e){}
   try { document.getElementById('loginPassword').value  = ''; } catch(e){}
