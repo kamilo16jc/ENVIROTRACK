@@ -2,7 +2,12 @@
   --red:#C0392B;--red-dark:#922B21;--red-light:#FDEDEC;
   --navy:#1C1C1E;--navy-light:#2C2C2E;
   --white:#fff;
-  --bg:#F5F5F7;
+  --bg:#F6F4FB;                                 /* soft lavender base */
+  /* Very soft purple colour wash — subtle enough not to compete with the data */
+  --bg-tint:
+    radial-gradient(1100px 620px at 12% -12%, rgba(139,92,246,.10), transparent 62%),
+    radial-gradient(900px 520px at 92% -6%,  rgba(99,102,241,.08), transparent 58%),
+    radial-gradient(820px 560px at 55% 112%, rgba(168,85,247,.07), transparent 62%);
   --gray-50:#FAFAFA;--gray-100:#F2F2F7;--gray-200:#E5E5EA;
   --gray-300:#D1D1D6;--gray-400:#AEAEB2;--gray-500:#8E8E93;
   --gray-700:#3C3C43;--gray-800:#636366;--gray-900:#0B0B0D;
@@ -13,7 +18,7 @@
   --radius:12px;--radius-sm:8px;--radius-lg:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:var(--font);background:var(--bg);color:var(--gray-900);min-height:100vh;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-attachment:fixed;color:var(--gray-900);min-height:100vh;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 .screen{display:none;}.screen.active{display:flex;}
 
 /* ── LOGIN ─────────────────────────────────────────────────── */
@@ -95,7 +100,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--gray-900);min-heig
 .page-header{background:var(--white);padding:20px 32px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .page-header h1{font-size:20px;font-weight:700;letter-spacing:-.4px;}
 .page-header p{font-size:13px;color:var(--gray-500);margin-top:2px;}
-.page-body{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg);}
+.page-body{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg-tint),var(--bg);background-attachment:fixed;}
 
 /* ── CARDS ─────────────────────────────────────────────────── */
 .card{background:var(--white);border-radius:var(--radius);border:1px solid rgba(0,0,0,.06);padding:24px;margin-bottom:20px;}
