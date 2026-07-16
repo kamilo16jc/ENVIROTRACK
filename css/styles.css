@@ -103,7 +103,15 @@ body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-atta
 .page-body{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg-tint),var(--bg);background-attachment:fixed;}
 
 /* ── CARDS ─────────────────────────────────────────────────── */
-.card{background:var(--white);border-radius:var(--radius);border:1px solid rgba(0,0,0,.06);padding:24px;margin-bottom:20px;}
+/* Soft lavender-tinted surface (not flat white) + 3D bevel like the stat cards */
+.card{background:linear-gradient(165deg,#FDFBFF 0%,#F3F0FB 100%);
+  border-radius:var(--radius);
+  border:1px solid rgba(109,64,190,.12);
+  padding:24px;margin-bottom:20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    0 1px 2px rgba(76,29,149,.06),
+    0 10px 26px rgba(76,29,149,.09);}
 .card-title{font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.07em;margin-bottom:16px;}
 
 /* ── BUTTONS ───────────────────────────────────────────────── */
@@ -127,12 +135,13 @@ select,input[type=text],input[type=date]{font-family:var(--font);font-size:14px;
 select:focus,input[type=text]:focus,input[type=date]:focus{border-color:var(--red);}
 
 /* ── TABLES ────────────────────────────────────────────────── */
-.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--gray-200);}
+/* Tables sit on the lavender cards — tint their chrome to match (no grey clash) */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid rgba(109,64,190,.12);background:rgba(255,255,255,.55);}
 table{width:100%;border-collapse:collapse;font-size:13px;}
-thead th{background:var(--gray-50);padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--gray-200);white-space:nowrap;}
-tbody tr{border-bottom:1px solid rgba(0,0,0,.04);transition:background .1s;}
+thead th{background:#F3EFFB;padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(109,64,190,.14);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(109,64,190,.07);transition:background .1s;}
 tbody tr:last-child{border-bottom:none;}
-tbody tr:hover{background:var(--gray-50);}
+tbody tr:hover{background:rgba(139,92,246,.06);}
 tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 .center{text-align:center;}
 .px{display:inline-flex;align-items:center;justify-content:center;color:#4F46E5;font-weight:900;font-size:16px;line-height:1;}
