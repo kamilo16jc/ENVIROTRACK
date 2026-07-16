@@ -42,7 +42,12 @@ function positivePathogens(h) {
   if (!h || h.resultado !== 'Positive') return [];
   const f = Array.isArray(h.failedPathogens) ? h.failedPathogens.filter(Boolean) : [];
   if (f.length) return f;
-  return ['ecoli','listeria','salmonella','saureus'].filter(k => h[k]);   // legacy fallback
+  // No failedPathogens recorded (legacy record): only infer when a SINGLE
+  // pathogen was tested — then it must be the one that failed. If several were
+  // tested we cannot know which, so attribute to none rather than invent
+  // positives for every pathogen that happened to be swabbed.
+  const tested = ['ecoli','listeria','salmonella','saureus'].filter(k => h[k]);
+  return tested.length === 1 ? tested : [];
 }
 
 function buildReports() {
