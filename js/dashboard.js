@@ -31,7 +31,7 @@ function refreshDashboard() {
   document.getElementById('plantStats').innerHTML=['1945','1935','1931E','1931W'].map(p=>{
     const total=getActiveMaster(p).length, tested=hist.filter(h=>h.planta===p).length;
     const pct=total>0?Math.min(100,Math.round(tested/total*100)):0;
-    return '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:600">Plant '+p+'</span><span style="font-size:12px;color:var(--gray-500)">'+total+' points</span></div><div style="background:var(--gray-100);border-radius:4px;height:6px;overflow:hidden"><div style="background:var(--red);height:6px;width:'+pct+'%;border-radius:4px"></div></div><div style="font-size:11px;color:var(--gray-400);margin-top:3px">'+tested+' tests recorded</div></div>';
+    return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:600">Plant '+p+'</span><span style="font-size:12px;color:var(--gray-500)">'+total+' points</span></div><div class="cov-track"><div class="cov-fill cov-'+p+'" style="--w:'+pct+'%"></div></div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">'+tested+' tests recorded</div></div>';
   }).join('');
   const resolved=GRV(), rids=new Set(resolved.map(r=>r.originalId));
   // Cases still in follow-up (mirrors the Retests view's "active" set):
