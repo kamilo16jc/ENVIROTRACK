@@ -243,21 +243,43 @@ function doLogin_dynamic() {
       const bsm = document.getElementById('btnSaveMonthly');
       if(bsm) bsm.style.display = isAdmin(user.email, role) ? '' : 'none';
 
+      // Don't reveal the app yet — show the loading splash and wait until ALL
+      // the SharePoint data has synced, so the user never lands on stale/empty
+      // views. Login screen stays hidden underneath.
       document.getElementById('loginScreen').classList.remove('active');
-      document.getElementById('appScreen').classList.add('active');
-      refreshDashboard(); searchHistory();
-      // Load the catalog + latest records + resolved rounds from SharePoint on
-      // entry. Resolved MUST be pulled too: it anchors the active-retest groups
-      // and marks which positives are already closed. Pull records and resolved
-      // together, then refresh the views that depend on both.
-      syncSafe(() => syncPullMasterPoints(), 'pull points');
-      syncSafe(() => Promise.all([syncPullRecords(), syncPullResolved()])
-        .then(() => { refreshDashboard(); searchHistory(); loadRetests(); updateNotifBadge(); }), 'pull records');
-      syncSafe(() => syncPullSubmissions().then(() => updateNotifBadge()), 'pull submissions');
-      if (typeof startLiveSync === 'function') startLiveSync();   // focus-refresh + gentle poll + "updated Xm ago"
-      resetSessionTimer();
+      bootSyncThenEnter();
     })
     .catch(e => { err.textContent = fbAuthError(e); });
+}
+
+// Show the splash, run every startup pull to completion (with a safety timeout
+// so a slow/offline SharePoint can't hang the login), then populate the views
+// and reveal the app.
+async function bootSyncThenEnter() {
+  const splash = document.getElementById('loadingSplash');
+  const fill = document.getElementById('lsFill'), txt = document.getElementById('lsText');
+  if (splash) splash.classList.add('show');
+  const setProg = (done, total) => {
+    if (fill) fill.style.width = Math.round(done / total * 100) + '%';
+    if (txt)  txt.textContent = done >= total ? 'Almost ready…' : 'Syncing latest data… (' + done + '/' + total + ')';
+  };
+
+  const jobs = [ syncPullMasterPoints, syncPullRecords, syncPullResolved, syncPullSubmissions ];
+  let done = 0; setProg(0, jobs.length);
+  const track = fn => Promise.resolve().then(fn).catch(() => {}).finally(() => setProg(++done, jobs.length));
+  const all = Promise.all(jobs.map(track));
+  // Safety net: never block entry more than ~18s (offline / flow down → use cache)
+  await Promise.race([ all, new Promise(r => setTimeout(r, 18000)) ]);
+
+  // Populate every view once, with the freshly-synced data
+  try { refreshDashboard(); searchHistory(); loadRetests();
+        if (typeof loadSubmissions === 'function') loadSubmissions();
+        if (typeof updateNotifBadge === 'function') updateNotifBadge(); } catch (e) {}
+  if (typeof startLiveSync === 'function') startLiveSync();
+  resetSessionTimer();
+
+  if (splash) splash.classList.remove('show');
+  document.getElementById('appScreen').classList.add('active');
 }
 
 function loadUsersTable() {
