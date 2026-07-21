@@ -153,15 +153,12 @@ function confirmResult() {
 // ═══════════════════════════════════════════════
 // RETESTS
 // ═══════════════════════════════════════════════
-// ── Durable lab-form status (survives Records pulls — NOT stored in cap_h) ──
-// Keyed by building|sample|retest# so a syncPullRecords (which overwrites cap_h)
-// can never wipe the "sent" mark. This is what fixes the green flicker.
+// ── Durable lab-form status — keyed by the retest record's UNIQUE id ──
+// NOT sample+retest#: that collides across rounds (round 2's "Retest #1" would
+// inherit round 1's "sent" status). The record id is stable and survives the
+// Records pull that overwrites cap_h.
 const LAB_STATUS_KEY = 'cap_labsent';
-function _labKey(rec) {
-  const bldg = (typeof labBuilding === 'function') ? labBuilding(rec.planta) : rec.planta;
-  const rn   = String(rec.retestNum || '').replace(/[^0-9]/g, '');
-  return bldg + '|' + rec.sample + '|' + rn;
-}
+function _labKey(rec) { return String(rec.id); }
 function _labStore() { try { return JSON.parse(localStorage.getItem(LAB_STATUS_KEY) || '{}'); } catch (e) { return {}; } }
 function setLabStatusFlag(rec, status) {
   const st = _labStore(); st[_labKey(rec)] = { status: status, at: new Date().toISOString() };
@@ -169,27 +166,60 @@ function setLabStatusFlag(rec, status) {
 }
 function getLabStatusFlag(rec) { const e = _labStore()[_labKey(rec)]; return e ? e.status : ''; }
 
+// One-time migration: old flags were keyed building|sample|retest#. Move each to
+// the OLDEST (lowest-id) matching retest — i.e. the earliest round — so a round
+// that was already sent keeps its status while later rounds start clean.
+function migrateLabStatusKeys() {
+  if (localStorage.getItem('cap_labsent_mig') === '1') return;
+  const hist = GH(); if (!hist.length) return;
+  const st = _labStore(); let changed = false;
+  const bldgOf = h => (typeof labBuilding === 'function') ? labBuilding(h.planta) : h.planta;
+  Object.keys(st).forEach(key => {
+    if (key.indexOf('|') < 0) return;                       // already id-based
+    const parts = key.split('|'); const sample = parts[1], rn = parts[2], bldg = parts[0];
+    const matches = hist.filter(h => h.retestNum &&
+      String(h.sample) === String(sample) &&
+      String(h.retestNum).replace(/[^0-9]/g, '') === rn && bldgOf(h) === bldg);
+    if (matches.length) {
+      const oldest = matches.reduce((a, b) => (a.id <= b.id ? a : b));
+      if (!st[oldest.id]) st[oldest.id] = st[key];
+    }
+    delete st[key]; changed = true;
+  });
+  if (changed) localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st));
+  localStorage.setItem('cap_labsent_mig', '1');
+}
+
 // Retests currently being sent/filled (in-memory) → show a spinner on the row.
 const _retestSending = new Set();
 
-// Lab-form status for a retest: 'sent', 'filled', or 'none'. Reads the durable
-// local flag first (no flicker), then corroborates with the Submissions log.
+// Lab-form status for a retest: 'sent', 'filled', or 'none'. The durable per-id
+// flag is authoritative. The Submissions log is only trusted when there's NO
+// round ambiguity (a single retest with this sample+retest#) — otherwise an
+// earlier round's submission would contaminate a newer round.
 function retestLabStatus(rt) {
   const flag = getLabStatusFlag(rt);
   if (flag === 'sent') return 'sent';
-  const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
+  if (flag === 'filled') return 'filled';
   const rn   = String(rt.retestNum || '').replace(/[^0-9]/g, '');
   const bldg = (typeof labBuilding === 'function') ? labBuilding(rt.planta) : rt.planta;
-  const match = subs.find(s => s.type === 'Retest' &&
-    String(s.sample) === String(rt.sample) &&
-    String(s.retestNum) === rn &&
-    (!s.building || s.building === bldg));
-  if (match && /sent/i.test(match.status)) return 'sent';
-  if (flag === 'filled' || (match && match.status === 'Generated')) return 'filled';
+  const twins = GH().filter(h => h.retestNum &&
+    String(h.sample) === String(rt.sample) &&
+    String(h.retestNum).replace(/[^0-9]/g, '') === rn &&
+    ((typeof labBuilding === 'function') ? labBuilding(h.planta) : h.planta) === bldg);
+  if (twins.length <= 1) {
+    const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
+    const match = subs.find(s => s.type === 'Retest' &&
+      String(s.sample) === String(rt.sample) &&
+      String(s.retestNum) === rn && (!s.building || s.building === bldg));
+    if (match && /sent/i.test(match.status)) return 'sent';
+    if (match && match.status === 'Generated') return 'filled';
+  }
   return 'none';
 }
 
 function loadRetests() {
+  migrateLabStatusKeys();               // one-time: old sample+retest# flags → per-id
   const hist     = GH();
   const resolved = GRV();
   const rids     = new Set(resolved.map(r => r.originalId));
@@ -229,9 +259,11 @@ function loadRetests() {
   const closedGroups = [...resolved.filter(r => r.closedOnGenerate), ...syntheticGroups];
   const activeGroups = closedGroups.filter(r => {
     const myRetests = hist.filter(h => h.originalId === r.originalId && h.retestNum);
-    const hasPending   = myRetests.some(h => h.resultado === 'Pending');
-    const hasEscalated = myRetests.some(h => h.resultado === 'Positive');
-    return myRetests.length > 0 && hasPending && !hasEscalated;
+    // Active while it still has ANY pending retest — even if one already failed
+    // (escalated). This keeps an escalated round's still-pending retests visible
+    // as its OWN card, alongside the new round it spawned (they no longer
+    // overwrite each other, and each keeps its own dates/sent status).
+    return myRetests.length > 0 && myRetests.some(h => h.resultado === 'Pending');
   });
 
   const totalActive = pos.length + activeGroups.length;
@@ -345,7 +377,9 @@ function loadRetests() {
     const my = hist.filter(h => h.originalId === r.originalId && h.retestNum);
     const hasPending   = my.some(h => h.resultado === 'Pending');
     const hasEscalated = my.some(h => h.resultado === 'Positive');
-    return { show: !(hasPending && !hasEscalated), escalated: hasEscalated };
+    // Resolved only once NO retest is pending — consistent with activeGroups, so
+    // a round is either active (has pending) or resolved (none), never both.
+    return { show: !hasPending, escalated: hasEscalated };
   };
   const resolvedToShow = resolved.filter(r => roundState(r).show);
   const rTbody = document.getElementById('retestResolved');
