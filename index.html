@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
 <!-- PWA -->
@@ -835,6 +836,33 @@
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeAdminEdit()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmAdminEdit()" id="btnAeSave" disabled><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save Correction</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ RETEST PHOTOS MODAL ══════ -->
+<div class="modal-overlay" id="photoModal">
+  <div class="modal" style="width:560px">
+    <h3><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Evidence Photos <span id="phTitle" style="font-size:12px;font-weight:600;color:var(--gray-500);margin-left:6px"></span></h3>
+
+    <div class="modal-label" style="margin-top:6px;margin-bottom:8px">Attached photos</div>
+    <div id="phGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:6px;max-height:260px;overflow-y:auto"></div>
+
+    <div style="display:flex;gap:20px;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-100)">
+      <div style="text-align:center;flex:none">
+        <div id="phQR" style="width:180px;height:180px;background:var(--gray-50);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:12px;overflow:hidden">Loading QR…</div>
+      </div>
+      <div style="font-size:13px;line-height:1.7;color:var(--gray-700)">
+        <div style="font-weight:700;color:var(--gray-900);margin-bottom:4px">Add a photo from your phone</div>
+        1. Open your phone camera<br>
+        2. Scan this QR code<br>
+        3. Take the evidence photo → it uploads here<br>
+        <button class="rt-btn" onclick="refreshRetestPhotos()" style="margin-top:10px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh photos</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closePhotoModal()">Close</button>
     </div>
   </div>
 </div>

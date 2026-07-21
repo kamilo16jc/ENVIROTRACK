@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EnviroTrack — Attach Photo</title>
+<style>
+  :root{--navy:#16243d;--violet:#6d40be;--green:#1A7A3A;--red:#C0392B}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#0f1830;color:#fff;min-height:100dvh;
+       display:flex;flex-direction:column;align-items:center;padding:24px 18px calc(24px + env(safe-area-inset-bottom))}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:-.02em;margin-top:8px}
+  .logo svg{width:26px;height:26px}
+  .ctx{margin-top:6px;font-size:13px;color:#aebbd6;text-align:center}
+  .card{width:100%;max-width:440px;background:#fff;color:#16243d;border-radius:16px;margin-top:22px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+  h1{font-size:16px;margin-bottom:4px}
+  .sub{font-size:12.5px;color:#64748b;margin-bottom:16px}
+  .drop{border:2px dashed #cbd5e1;border-radius:12px;padding:26px 14px;text-align:center;color:#64748b;font-size:14px;position:relative}
+  .drop svg{width:34px;height:34px;color:#94a3b8;margin-bottom:8px}
+  input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+  #preview{display:none;width:100%;border-radius:12px;margin-top:14px;max-height:60vh;object-fit:contain;background:#f1f5f9}
+  .row{display:flex;gap:10px;margin-top:16px}
+  .btn{flex:1;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .btn.primary{background:var(--green);color:#fff}
+  .btn.ghost{background:#f1f5f9;color:#475569}
+  .btn:disabled{opacity:.5}
+  .msg{margin-top:14px;font-size:13.5px;text-align:center;font-weight:600;min-height:18px}
+  .msg.ok{color:var(--green)}.msg.err{color:var(--red)}
+  .note{width:100%;max-width:440px;font-size:11.5px;color:#7d8bab;text-align:center;margin-top:18px;line-height:1.5}
+  .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:s .7s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/></svg>EnviroTrack</div>
+  <div class="ctx" id="ctxLabel">Attach evidence photo</div>
+
+  <div class="card">
+    <h1>Take the evidence photo</h1>
+    <div class="sub" id="ctxSub">Point the camera at the sample / shipping label and capture.</div>
+
+    <label class="drop" id="drop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <div id="dropText">Tap to open the camera</div>
+      <input type="file" accept="image/*" capture="environment" id="file">
+    </label>
+
+    <img id="preview" alt="preview">
+
+    <div class="row" id="actions" style="display:none">
+      <button class="btn ghost" id="retake">Retake</button>
+      <button class="btn primary" id="send">Send photo</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="note" id="linkNote">Open this from the QR code in EnviroTrack. If you reached it another way, the upload target is missing.</div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const UP  = qs.get('url')   || '';          // upload endpoint (from the QR)
+  const REF = qs.get('ref')   || '';          // what this photo is attached to
+  const LBL = qs.get('label') || '';          // human label, e.g. "Retest #1 · Sample 148"
+  if (LBL) { document.getElementById('ctxLabel').textContent = LBL;
+             document.getElementById('ctxSub').textContent = 'Evidence for: ' + LBL; }
+  if (UP) document.getElementById('linkNote').style.display = 'none';
+
+  const fileEl = document.getElementById('file');
+  const prev = document.getElementById('preview');
+  const actions = document.getElementById('actions');
+  const msg = document.getElementById('msg');
+  const sendBtn = document.getElementById('send');
+  let dataUrl = '';
+
+  // Downscale + compress on the device — phone photos are huge (5-10 MB).
+  function compress(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const r = new FileReader();
+      r.onload = () => { img.onload = () => {
+        const max = 1400;
+        let { width:w, height:h } = img;
+        if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w*s); h = Math.round(h*s); }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      }; img.onerror = reject; img.src = r.result; };
+      r.onerror = reject; r.readAsDataURL(file);
+    });
+  }
+
+  fileEl.addEventListener('change', async () => {
+    const f = fileEl.files && fileEl.files[0]; if (!f) return;
+    msg.textContent = ''; msg.className = 'msg';
+    try {
+      dataUrl = await compress(f);
+      prev.src = dataUrl; prev.style.display = 'block';
+      actions.style.display = 'flex';
+      document.getElementById('drop').style.display = 'none';
+    } catch (e) { msg.textContent = 'Could not read the image.'; msg.className = 'msg err'; }
+  });
+
+  document.getElementById('retake').addEventListener('click', () => {
+    dataUrl=''; fileEl.value=''; prev.style.display='none'; actions.style.display='none';
+    document.getElementById('drop').style.display='block'; msg.textContent=''; msg.className='msg';
+  });
+
+  sendBtn.addEventListener('click', async () => {
+    if (!dataUrl) return;
+    if (!UP) { msg.textContent = 'No upload target — open from the QR code.'; msg.className='msg err'; return; }
+    const prevHtml = sendBtn.innerHTML;
+    sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spin"></span> Sending…';
+    msg.textContent = ''; msg.className = 'msg';
+    try {
+      const stamp = new Date();
+      const body = {
+        retestId: REF,
+        fileName: 'photo_' + REF.replace(/[^0-9A-Za-z]/g,'') + '_' + stamp.getTime() + '.jpg',
+        contentBase64: dataUrl.split('base64,')[1],
+        label: LBL,
+        uploadedAt: stamp.toISOString()
+      };
+      const res = await fetch(UP, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      if (res.status >= 200 && res.status < 300) {
+        msg.textContent = '✓ Photo saved to EnviroTrack. You can close this.'; msg.className = 'msg ok';
+        actions.style.display = 'none';
+      } else {
+        msg.textContent = 'Upload failed (HTTP ' + res.status + '). Try again.'; msg.className='msg err';
+        sendBtn.disabled = false; sendBtn.innerHTML = prevHtml;
+      }
+    } catch (e) {
+      msg.textContent = 'Network error — try again.'; msg.className='msg err';
+      sendBtn.disabled = false; sendBtn.innerHTML = prevHtml;
+    }
+  });
+</script>
+</body>
+</html>
