@@ -18,6 +18,27 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
+<!-- LOADING SPLASH (shown after login while data syncs) -->
+<style>
+  #loadingSplash{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+    background:radial-gradient(1000px 600px at 50% -10%,rgba(139,92,246,.14),transparent 60%),#16243d;color:#fff;font-family:var(--font)}
+  #loadingSplash.show{display:flex}
+  .ls-logo{display:flex;align-items:center;gap:12px;font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .ls-logo svg{width:34px;height:34px}
+  .ls-sub{font-size:13px;color:#c3d0e6;margin-top:-8px}
+  .ls-bar{width:260px;height:6px;border-radius:6px;background:rgba(255,255,255,.15);overflow:hidden}
+  .ls-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#8b5cf6,#6366f1);transition:width .35s ease}
+  .ls-pct{font-size:12px;color:#8fa4c7;letter-spacing:.03em}
+  .ls-spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;display:inline-block;animation:lsSpin .7s linear infinite;vertical-align:-3px;margin-right:7px}
+  @keyframes lsSpin{to{transform:rotate(360deg)}}
+</style>
+<div id="loadingSplash">
+  <div class="ls-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/></svg>EnviroTrack</div>
+  <div class="ls-sub">Environmental Monitoring — Caputo Foods</div>
+  <div class="ls-bar"><div class="ls-fill" id="lsFill"></div></div>
+  <div class="ls-pct"><span class="ls-spin"></span><span id="lsText">Syncing latest data…</span></div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen" class="screen active">
   <div class="login-card">
