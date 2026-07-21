@@ -264,7 +264,7 @@ async function bootSyncThenEnter() {
     if (txt)  txt.textContent = done >= total ? 'Almost ready…' : 'Syncing latest data… (' + done + '/' + total + ')';
   };
 
-  const jobs = [ syncPullMasterPoints, syncPullRecords, syncPullResolved, syncPullSubmissions ];
+  const jobs = [ syncPullMasterPoints, syncPullRecords, syncPullResolved, syncPullSubmissions, syncPullPhotos ];
   let done = 0; setProg(0, jobs.length);
   const track = fn => Promise.resolve().then(fn).catch(() => {}).finally(() => setProg(++done, jobs.length));
   const all = Promise.all(jobs.map(track));

@@ -279,6 +279,7 @@ function loadRetests() {
     const cards = [];
     const canSend = canSendToLab(CU && CU.email);
     const today = new Date().toISOString().split('T')[0];
+    const allPhotos = (typeof getPhotos === 'function') ? getPhotos() : [];
 
     // Group A: positives that still need their retests scheduled
     pos.forEach(orig => {
@@ -340,6 +341,7 @@ function loadRetests() {
           <span class="rt-spacer"></span>
           <div class="rt-actions">
             <button class="rt-btn" onclick="exportRetestPDF(${rt.id})" title="Retest PDF"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
+            <button class="rt-btn${allPhotos.filter(p=>String(p.retestId)===String(rt.id)).length?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Photo${(()=>{const n=allPhotos.filter(p=>String(p.retestId)===String(rt.id)).length;return n?' '+n:'';})()}</button>
             ${_retestSending.has(rt.id)
               ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
               : `<button class="rt-btn" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)">Form</button>
@@ -461,6 +463,55 @@ async function sendAllCaseForms(originalId) {
   }
   loadRetests();
   toast(ok + ' of ' + pend.length + ' form(s) sent to the lab', ok === pend.length ? 'success' : 'error');
+}
+
+// ── Retest evidence photos (QR → phone capture → SharePoint) ─────
+let _photoRetestId = '', _photoLabel = '';
+function openPhotoModal(retestId, label) {
+  _photoRetestId = String(retestId);
+  _photoLabel = label || ('Retest ' + retestId);
+  document.getElementById('phTitle').textContent = _photoLabel;
+  renderPhotoGrid();
+  document.getElementById('photoModal').classList.add('open');
+  buildPhotoQR();
+  if (typeof syncPullPhotos === 'function')     // freshen in the background
+    syncSafe(() => syncPullPhotos().then(renderPhotoGrid), 'pull photos');
+}
+function closePhotoModal() { document.getElementById('photoModal').classList.remove('open'); }
+function renderPhotoGrid() {
+  const grid = document.getElementById('phGrid'); if (!grid) return;
+  const photos = ((typeof getPhotos === 'function') ? getPhotos() : []).filter(p => String(p.retestId) === _photoRetestId);
+  if (!photos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--gray-400);font-size:13px;padding:16px 0">No photos yet — scan the QR to add one.</div>';
+    return;
+  }
+  grid.innerHTML = photos.map(p =>
+    '<a href="' + esc(p.fileUrl) + '" target="_blank" rel="noopener" title="' + esc(p.label || p.fileName) + '" style="display:block;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;background:var(--gray-50);text-decoration:none">' +
+    '<img src="' + esc(p.fileUrl) + '" alt="photo" style="width:100%;height:96px;object-fit:cover;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+    '<span style="display:none;height:96px;align-items:center;justify-content:center;color:var(--navy);font-size:12px;font-weight:600">Open photo →</span>' +
+    '<span style="display:block;font-size:10px;color:var(--gray-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc((typeof fmtSubDate === 'function') ? fmtSubDate(p.uploadedAt) : (p.uploadedAt || '')) + '</span></a>'
+  ).join('');
+}
+function buildPhotoQR() {
+  const box = document.getElementById('phQR'); if (!box) return;
+  box.innerHTML = 'Loading QR…';
+  Promise.resolve((typeof getPhotoUploadUrl === 'function') ? getPhotoUploadUrl() : '').then(url => {
+    if (!url) { box.innerHTML = '<span style="padding:10px;text-align:center">Upload URL unavailable</span>'; return; }
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');   // app folder (…/ENVIROTRACK/)
+    const capture = base + 'capture.html?url=' + encodeURIComponent(url) +
+      '&ref=' + encodeURIComponent(_photoRetestId) + '&label=' + encodeURIComponent(_photoLabel);
+    box.innerHTML = '';
+    try { new QRCode(box, { text: capture, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M }); }
+    catch (e) { box.innerHTML = '<span style="padding:10px">QR library not loaded</span>'; }
+  }).catch(() => { box.innerHTML = '<span style="padding:10px">Could not load QR</span>'; });
+}
+function refreshRetestPhotos() {
+  if (typeof syncPullPhotos !== 'function') return;
+  syncSafe(() => syncPullPhotos().then(() => {
+    renderPhotoGrid();
+    if (typeof loadRetests === 'function') loadRetests();
+    if (typeof toast === 'function') toast('Photos refreshed', 'success');
+  }), 'pull photos');
 }
 
 function openRetestOkModal(id) {

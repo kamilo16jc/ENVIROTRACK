@@ -297,6 +297,40 @@ async function syncPullSubmissions() {
 const getSubmissions = () => JSON.parse(localStorage.getItem('cap_submissions') || '[]');
 
 // ═══════════════════════════════════════════════════════════════
+// RETEST PHOTOS — evidence images attached to a retest (uploaded from
+// a phone via the QR capture page; the app reads them to display).
+// ═══════════════════════════════════════════════════════════════
+function spToPhoto(it) {
+  const url = _pick(it, 'fileUrl', 'FileUrl');
+  return {
+    retestId:   String(_pick(it, 'retestId', 'RetestId') || ''),
+    fileName:   _pick(it, 'fileName', 'FileName') || '',
+    fileUrl:    (url && typeof url === 'object') ? (url.Url || url.url || '') : (url || ''),
+    label:      _pick(it, 'label', 'Label') || '',
+    uploadedAt: _pick(it, 'uploadedAt', 'UploadedAt') || '',
+    uploadedByName: _pick(it, 'uploadedByName', 'UploadedByName') || ''
+  };
+}
+const getPhotos = () => JSON.parse(localStorage.getItem('cap_photos') || '[]');
+async function syncPullPhotos() {
+  if (!SYNC_ENABLED) return false;
+  const data = await _spPost('photosRead', {});
+  const rows = Array.isArray(data) ? data : (data && data.value) || [];
+  localStorage.setItem('cap_photos', JSON.stringify(rows.map(spToPhoto).filter(p => p.retestId)));
+  return true;
+}
+// The signed-in desktop asks the proxy for the raw upload URL to embed in the QR
+// (the phone posts there directly). Cached briefly so opening several QRs is snappy.
+let _photoUploadUrl = '';
+async function getPhotoUploadUrl() {
+  if (_photoUploadUrl) return _photoUploadUrl;
+  if (!SYNC_ENABLED) return '';
+  const r = await _spPost('photoUploadUrl', {});
+  _photoUploadUrl = (r && r.url) || '';
+  return _photoUploadUrl;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MASTER POINTS — the full sampling catalog lives in SharePoint
 // ═══════════════════════════════════════════════════════════════
 

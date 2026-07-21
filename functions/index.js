@@ -140,6 +140,8 @@ const FLOW_ENV = {
   savepdf:            "FLOW_SAVEPDF",
   submissionsRead:    "FLOW_SUBMISSIONS_READ",
   emailmonthly:       "FLOW_EMAIL_MONTHLY",
+  photoUploadUrl:     "FLOW_PHOTO_UPLOAD",
+  photosRead:         "FLOW_PHOTOS_READ",
 };
 
 exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
@@ -154,6 +156,12 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   const url = process.env[envKey];
   if (!url) {
     throw new HttpsError("failed-precondition", "Flow URL not configured for " + op);
+  }
+  // photoUploadUrl: the signed-in desktop needs the raw upload URL to embed in
+  // the QR (the phone posts directly, without Firebase auth). Return it here
+  // instead of calling the flow — keeps the URL out of the public client code.
+  if (op === "photoUploadUrl") {
+    return { url: url };
   }
   let res;
   try {
