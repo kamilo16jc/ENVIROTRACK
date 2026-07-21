@@ -478,6 +478,24 @@ function openPhotoModal(retestId, label) {
     syncSafe(() => syncPullPhotos().then(renderPhotoGrid), 'pull photos');
 }
 function closePhotoModal() { document.getElementById('photoModal').classList.remove('open'); }
+const _photoDataCache = {};   // fileName -> data URI (fetched via the flow)
+function _photoB64(r) {
+  if (!r) return '';
+  if (typeof r === 'string') return r;
+  return r.content || r['$content'] || (r.body && r.body['$content']) || '';
+}
+// Load a photo THROUGH the flow (runs on the owner's connection) so it shows for
+// everyone regardless of their SharePoint session/permissions. Falls back to the
+// direct URL only if the content flow isn't wired yet.
+async function loadPhotoInto(img, photo) {
+  if (_photoDataCache[photo.fileName]) { img.src = _photoDataCache[photo.fileName]; return; }
+  try {
+    const r = await _spPost('photoContent', { fileName: photo.fileName });
+    const b64 = _photoB64(r);
+    if (b64) { const uri = 'data:image/jpeg;base64,' + b64; _photoDataCache[photo.fileName] = uri; img.src = uri; return; }
+  } catch (e) { /* flow not ready → fall back below */ }
+  if (photo.fileUrl) img.src = photo.fileUrl;
+}
 function renderPhotoGrid() {
   const grid = document.getElementById('phGrid'); if (!grid) return;
   const photos = ((typeof getPhotos === 'function') ? getPhotos() : []).filter(p => String(p.retestId) === _photoRetestId);
@@ -485,13 +503,23 @@ function renderPhotoGrid() {
     grid.innerHTML = '<div style="grid-column:1/-1;color:var(--gray-400);font-size:13px;padding:16px 0">No photos yet — scan the QR to add one.</div>';
     return;
   }
-  grid.innerHTML = photos.map(p =>
-    '<a href="' + esc(p.fileUrl) + '" target="_blank" rel="noopener" title="' + esc(p.label || p.fileName) + '" style="display:block;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;background:var(--gray-50);text-decoration:none">' +
-    '<img src="' + esc(p.fileUrl) + '" alt="photo" style="width:100%;height:96px;object-fit:cover;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
-    '<span style="display:none;height:96px;align-items:center;justify-content:center;color:var(--navy);font-size:12px;font-weight:600">Open photo →</span>' +
-    '<span style="display:block;font-size:10px;color:var(--gray-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc((typeof fmtSubDate === 'function') ? fmtSubDate(p.uploadedAt) : (p.uploadedAt || '')) + '</span></a>'
+  grid.innerHTML = photos.map((p, i) =>
+    '<div title="' + esc(p.label || p.fileName) + '" onclick="openPhotoLightbox(' + i + ')" style="cursor:zoom-in;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;background:var(--gray-100)">' +
+    '<img data-idx="' + i + '" alt="photo" style="width:100%;height:96px;object-fit:cover;display:block;background:var(--gray-100)">' +
+    '<span style="display:block;font-size:10px;color:var(--gray-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc((typeof fmtSubDate === 'function') ? fmtSubDate(p.uploadedAt) : (p.uploadedAt || '')) + '</span></div>'
   ).join('');
+  _photoGridPhotos = photos;
+  [...grid.querySelectorAll('img[data-idx]')].forEach(img => loadPhotoInto(img, photos[+img.dataset.idx]));
 }
+let _photoGridPhotos = [];
+function openPhotoLightbox(i) {
+  const p = _photoGridPhotos[i]; if (!p) return;
+  const lb = document.getElementById('photoLightbox'); const img = document.getElementById('plbImg');
+  img.src = _photoDataCache[p.fileName] || p.fileUrl || '';
+  document.getElementById('plbCap').textContent = (p.label || p.fileName) + ((typeof fmtSubDate === 'function' && p.uploadedAt) ? ' · ' + fmtSubDate(p.uploadedAt) : '');
+  lb.classList.add('open');
+}
+function closePhotoLightbox() { document.getElementById('photoLightbox').classList.remove('open'); }
 function buildPhotoQR() {
   const box = document.getElementById('phQR'); if (!box) return;
   box.innerHTML = 'Loading QR…';

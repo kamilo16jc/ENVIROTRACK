@@ -840,6 +840,13 @@
   </div>
 </div>
 
+<!-- ══════ PHOTO LIGHTBOX ══════ -->
+<div id="photoLightbox" onclick="closePhotoLightbox()" style="position:fixed;inset:0;z-index:10000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(11,11,13,.9);padding:24px;cursor:zoom-out">
+  <img id="plbImg" alt="photo" style="max-width:94vw;max-height:82vh;object-fit:contain;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+  <div id="plbCap" style="color:#e5e5ea;font-size:13px;text-align:center;max-width:90vw"></div>
+</div>
+<style>#photoLightbox.open{display:flex}</style>
+
 <!-- ══════ RETEST PHOTOS MODAL ══════ -->
 <div class="modal-overlay" id="photoModal">
   <div class="modal" style="width:560px">

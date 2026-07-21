@@ -142,6 +142,7 @@ const FLOW_ENV = {
   emailmonthly:       "FLOW_EMAIL_MONTHLY",
   photoUploadUrl:     "FLOW_PHOTO_UPLOAD",
   photosRead:         "FLOW_PHOTOS_READ",
+  photoContent:       "FLOW_PHOTO_CONTENT",
 };
 
 exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
