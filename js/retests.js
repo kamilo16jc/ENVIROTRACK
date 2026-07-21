@@ -203,18 +203,21 @@ function retestLabStatus(rt) {
   if (flag === 'filled') return 'filled';
   const rn   = String(rt.retestNum || '').replace(/[^0-9]/g, '');
   const bldg = (typeof labBuilding === 'function') ? labBuilding(rt.planta) : rt.planta;
-  const twins = GH().filter(h => h.retestNum &&
+  // Rounds of the same sample share sample+retest#, so also match the submission
+  // on the retest DATE (collectionDate). Each round has different dates, so this
+  // pins the submission to the exact physical retest — no cross-round contamination.
+  const single = GH().filter(h => h.retestNum &&
     String(h.sample) === String(rt.sample) &&
     String(h.retestNum).replace(/[^0-9]/g, '') === rn &&
-    ((typeof labBuilding === 'function') ? labBuilding(h.planta) : h.planta) === bldg);
-  if (twins.length <= 1) {
-    const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
-    const match = subs.find(s => s.type === 'Retest' &&
-      String(s.sample) === String(rt.sample) &&
-      String(s.retestNum) === rn && (!s.building || s.building === bldg));
-    if (match && /sent/i.test(match.status)) return 'sent';
-    if (match && match.status === 'Generated') return 'filled';
-  }
+    ((typeof labBuilding === 'function') ? labBuilding(h.planta) : h.planta) === bldg).length <= 1;
+  const subs = (typeof getSubmissions === 'function') ? getSubmissions() : [];
+  const match = subs.find(s => s.type === 'Retest' &&
+    String(s.sample) === String(rt.sample) &&
+    String(s.retestNum) === rn &&
+    (!s.building || s.building === bldg) &&
+    (s.collectionDate ? s.collectionDate === rt.fecha : single));  // date pins the round; legacy (no date) only if unambiguous
+  if (match && /sent/i.test(match.status)) return 'sent';
+  if (match && match.status === 'Generated') return 'filled';
   return 'none';
 }
 
