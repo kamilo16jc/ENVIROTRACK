@@ -1,3 +1,11 @@
+// Local calendar date as YYYY-MM-DD. NOTE: never use toISOString() for "today" —
+// it returns the UTC date, which after ~7pm in the Americas is already tomorrow,
+// making same-day retests look Overdue. Retest fechas are stored in local dates.
+function todayLocal(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 // ═══════════════════════════════════════════════
 // FAIL MODAL
 // ═══════════════════════════════════════════════
@@ -99,7 +107,7 @@ function confirmResult() {
 
   hist[idx].resultado = FAILRES;
   hist[idx].labNotes  = document.getElementById('failNotes').value.trim();
-  hist[idx].resultDate = new Date().toISOString().split('T')[0];
+  hist[idx].resultDate = todayLocal();
 
   if(FAILRES==='Positive') {
     // Collect which specific pathogens failed
@@ -278,7 +286,7 @@ function loadRetests() {
   } else {
     const cards = [];
     const canSend = canSendToLab(CU && CU.email);
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocal();
     const allPhotos = (typeof getPhotos === 'function') ? getPhotos() : [];
 
     // Group A: positives that still need their retests scheduled
@@ -426,7 +434,7 @@ function clearRetestSelection() {
 // Shared core: set the given record ids to Negative (today), sync each.
 // Returns how many actually changed. Used by both Retests and Test History.
 function _markRecordsNegative(ids) {
-  const hist = GH(); const today = new Date().toISOString().split('T')[0]; const changed = [];
+  const hist = GH(); const today = todayLocal(); const changed = [];
   ids.forEach(id => {
     const r = hist.find(x => x.id === id);
     if (r && r.resultado !== 'Negative') {
@@ -590,7 +598,7 @@ function confirmRetestOk() {
   const resolved=GRV();
   const retests=hist.filter(r=>r.sample==h.sample&&r.planta===h.planta&&r.retestNum);
   const last=retests[retests.length-1];
-  const resolvedEntry={originalId:h.id,sample:h.sample,planta:h.planta,area:h.area,location:h.location,originalDate:h.fecha,resolvedDate:new Date().toISOString().split('T')[0],retestNum:last?last.retestNum:'—',notes};
+  const resolvedEntry={originalId:h.id,sample:h.sample,planta:h.planta,area:h.area,location:h.location,originalDate:h.fecha,resolvedDate:todayLocal(),retestNum:last?last.retestNum:'—',notes};
   resolved.push(resolvedEntry);
   SRV(resolved);
   syncSafe(() => syncPushResolved([resolvedEntry]), 'push resolved ok');
@@ -653,7 +661,7 @@ function openRetestDateModal(origId) {
   }
 
   const dateInput = document.getElementById('retestStartDate');
-  dateInput.value = suggestedStart.toISOString().split('T')[0];
+  dateInput.value = todayLocal(suggestedStart);
   updateRetestPreview();
   document.getElementById('retestDateModal').classList.add('open');
   dateInput.addEventListener('input', updateRetestPreview);
@@ -718,7 +726,7 @@ function confirmRetestDates() {
       ...orig,
       ...onlyFailed,
       id: nextId++,
-      fecha: d.toISOString().split('T')[0],
+      fecha: todayLocal(d),
       resultado: 'Pending',
       retestNum: 'Retest #'+(i+1),
       location: orig.location,
@@ -745,7 +753,7 @@ function confirmRetestDates() {
       area:             orig.area,
       location:         orig.location,
       originalDate:    orig.fecha,
-      resolvedDate:     new Date().toISOString().split('T')[0],
+      resolvedDate:     todayLocal(),
       retestNum:        '—',
       notes:            'Positive: '+(orig.failedPathogensLabel||'—')+'. 3 retests scheduled.',
       closedOnGenerate: true
