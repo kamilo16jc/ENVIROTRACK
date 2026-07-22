@@ -313,22 +313,26 @@ function loadRetests() {
 
       const rowsHtml = retests.map(rt => {
         const res = rt.resultado;
-        const dotCls = res === 'Negative' ? 'neg' : res === 'Positive' ? 'pos' : 'pending';
-        const resTxt = res === 'Negative' ? 'Negative' : res === 'Positive' ? 'Positive' : 'Pending';
         const isDone = res === 'Negative';
         const isPending = res === 'Pending';
         const nPhotos = allPhotos.filter(p => String(p.retestId) === String(rt.id)).length;
         const lab = retestLabStatus(rt);
-        const labChip = lab === 'sent'
-          ? '<span class="rt-lab sent"><svg class="ln" width="11" height="11" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Sent to lab</span>'
+        // Status letter badges: result · due · lab. Text lives in the top legend + tooltips.
+        const resBadge = res === 'Negative'
+          ? '<span class="rt-badge green" title="Negative">✓</span>'
+          : res === 'Positive'
+          ? '<span class="rt-badge red" title="Positive">✗</span>'
+          : '<span class="rt-badge amber" title="Pending result">P</span>';
+        const dueBadge = (isPending && rt.fecha < today)
+          ? '<span class="rt-badge red" title="Overdue">O</span>'
+          : (isPending && rt.fecha === today)
+          ? '<span class="rt-badge amber" title="Due today">D</span>'
+          : '<span class="rt-badge muted" title="On schedule">·</span>';
+        const labBadge = lab === 'sent'
+          ? '<span class="rt-badge green" title="Sent to lab">S</span>'
           : lab === 'filled'
-          ? '<span class="rt-lab filled">Form ready</span>'
-          : '<span class="rt-lab none">Not sent</span>';
-        // Overdue = still Pending and its scheduled date has passed; Due today = date is today
-        const dueChip = isPending
-          ? (rt.fecha < today ? '<span class="rt-due over">Overdue</span>'
-             : rt.fecha === today ? '<span class="rt-due today">Due today</span>' : '')
-          : '';
+          ? '<span class="rt-badge amber" title="Form ready">F</span>'
+          : '<span class="rt-badge muted" title="Not sent to lab">S</span>';
         const check = isPending
           ? `<input type="checkbox" class="rt-check" data-id="${rt.id}" onchange="updateRetestBulkBar()" title="Select to bulk-confirm Negative">`
           : '<span style="width:16px;flex:none"></span>';
@@ -336,9 +340,7 @@ function loadRetests() {
           ${check}
           <span class="rt-rn">${esc(rt.retestNum)}</span>
           <span class="rt-date">${rt.fecha}</span>
-          <span class="rt-dot ${dotCls}">${resTxt}</span>
-          ${dueChip}
-          ${labChip}
+          <span class="rt-status">${resBadge}${dueBadge}${labBadge}</span>
           <span class="rt-spacer"></span>
           <div class="rt-actions">
             <button class="rt-btn ico" onclick="exportRetestPDF(${rt.id})" title="Download retest PDF"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
