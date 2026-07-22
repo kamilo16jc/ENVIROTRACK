@@ -124,11 +124,16 @@ body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-atta
 .btn:disabled{opacity:.45;cursor:not-allowed;}
 
 /* ── BADGES ────────────────────────────────────────────────── */
-.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;color:#fff;}
-.badge-red{background:var(--red);color:#fff;}
-.badge-green{background:var(--green);color:#fff;}
-.badge-yellow{background:var(--yellow);color:#fff;}
-.badge-gray{background:var(--gray-500);color:#fff;}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.40),inset 0 -2px 0 rgba(0,0,0,.16),0 1px 3px rgba(20,45,90,.14),0 4px 9px rgba(20,45,90,.14);
+  transition:transform .14s ease, box-shadow .14s ease;}
+.badge:hover{transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 0 rgba(0,0,0,.18),0 3px 6px rgba(20,45,90,.18),0 9px 18px rgba(20,45,90,.20);}
+.badge-red{background:linear-gradient(135deg,#fb7185,#e11d48);color:#fff;}
+.badge-green{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;}
+.badge-yellow{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;}
+.badge-gray{background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff;}
 
 /* ── FORMS ─────────────────────────────────────────────────── */
 select,input[type=text],input[type=date]{font-family:var(--font);font-size:14px;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);color:var(--gray-900);background:var(--white);outline:none;transition:border-color .2s;}
