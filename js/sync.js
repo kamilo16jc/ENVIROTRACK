@@ -167,7 +167,11 @@ function recordUpdateToSP(r) {
   return {
     id: r.id,
     resultado: r.resultado || '',
-    resultDate: r.resultDate || '',
+    // The SharePoint ResultDate is a Date column: sending '' (or null/omitted)
+    // makes the flow's "Update item" fail SILENTLY — it returns 202 but persists
+    // nothing, so a later pull reverts the change. When clearing the result
+    // (re-open to Pending) we therefore fall back to a valid date instead of ''.
+    resultDate: r.resultDate || r.fecha || todayLocal(),
     labNotes: r.labNotes || '',
     failedPathogens: Array.isArray(r.failedPathogens) ? r.failedPathogens.join(',') : (r.failedPathogens || ''),
     failedPathogensLabel: r.failedPathogensLabel || ''
