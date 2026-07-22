@@ -857,7 +857,7 @@
     <div class="modal-label" style="margin-top:6px;margin-bottom:8px">Attached photos</div>
     <div id="phGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:6px;max-height:260px;overflow-y:auto"></div>
 
-    <div style="display:flex;gap:20px;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-100)">
+    <div id="phQRBlock" style="display:flex;gap:20px;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-100)">
       <div style="text-align:center;flex:none">
         <div id="phQR" style="width:180px;height:180px;background:var(--gray-50);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:12px;overflow:hidden">Loading QR…</div>
       </div>
@@ -868,6 +868,10 @@
         3. Take the evidence photo → it uploads here<br>
         <button class="rt-btn" onclick="refreshRetestPhotos()" style="margin-top:10px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh photos</button>
       </div>
+    </div>
+    <div id="phAddMore" style="display:none;gap:8px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100)">
+      <button class="rt-btn" onclick="showPhotoQR()"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>Add another photo</button>
+      <button class="rt-btn" onclick="refreshRetestPhotos()"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
     </div>
 
     <div class="modal-actions">

@@ -479,6 +479,22 @@ function openPhotoModal(retestId, label) {
     syncSafe(() => syncPullPhotos().then(renderPhotoGrid), 'pull photos');
 }
 function closePhotoModal() { document.getElementById('photoModal').classList.remove('open'); }
+function showPhotoQR() {
+  const b = document.getElementById('phQRBlock'); if (b) b.style.display = 'flex';
+  const a = document.getElementById('phAddMore'); if (a) a.style.display = 'none';
+}
+// Photo timestamps come back from SharePoint as "MM/DD/YYYY HH:mm:ss" in UTC (no
+// tz marker), so parse them as UTC and render in the viewer's local time.
+function fmtPhotoDate(v) {
+  if (!v) return '';
+  let d;
+  const m = String(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) d = new Date(Date.UTC(+m[3], +m[1] - 1, +m[2], +m[4], +m[5], +(m[6] || 0)));
+  else d = new Date(v);
+  if (isNaN(d)) return esc(String(v));
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
 const _photoDataCache = {};   // fileName -> data URI (fetched via the flow)
 function _photoB64(r) {
   if (!r) return '';
@@ -500,14 +516,22 @@ async function loadPhotoInto(img, photo) {
 function renderPhotoGrid() {
   const grid = document.getElementById('phGrid'); if (!grid) return;
   const photos = ((typeof getPhotos === 'function') ? getPhotos() : []).filter(p => String(p.retestId) === _photoRetestId);
+  const qrBlock = document.getElementById('phQRBlock');
+  const addMore = document.getElementById('phAddMore');
   if (!photos.length) {
     grid.innerHTML = '<div style="grid-column:1/-1;color:var(--gray-400);font-size:13px;padding:16px 0">No photos yet — scan the QR to add one.</div>';
+    // No photos → show the QR to capture the first one, hide the "add another" row.
+    if (qrBlock) qrBlock.style.display = 'flex';
+    if (addMore) addMore.style.display = 'none';
     return;
   }
+  // Photos already attached → hide the QR, offer a compact "add another / refresh" row.
+  if (qrBlock) qrBlock.style.display = 'none';
+  if (addMore) addMore.style.display = 'flex';
   grid.innerHTML = photos.map((p, i) =>
     '<div title="' + esc(p.label || p.fileName) + '" onclick="openPhotoLightbox(' + i + ')" style="cursor:zoom-in;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;background:var(--gray-100)">' +
     '<img data-idx="' + i + '" alt="photo" style="width:100%;height:96px;object-fit:cover;display:block;background:var(--gray-100)">' +
-    '<span style="display:block;font-size:10px;color:var(--gray-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc((typeof fmtSubDate === 'function') ? fmtSubDate(p.uploadedAt) : (p.uploadedAt || '')) + '</span></div>'
+    '<span style="display:block;font-size:10px;color:var(--gray-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(fmtPhotoDate(p.uploadedAt)) + '</span></div>'
   ).join('');
   _photoGridPhotos = photos;
   [...grid.querySelectorAll('img[data-idx]')].forEach(img => loadPhotoInto(img, photos[+img.dataset.idx]));
@@ -517,7 +541,7 @@ function openPhotoLightbox(i) {
   const p = _photoGridPhotos[i]; if (!p) return;
   const lb = document.getElementById('photoLightbox'); const img = document.getElementById('plbImg');
   img.src = _photoDataCache[p.fileName] || p.fileUrl || '';
-  document.getElementById('plbCap').textContent = (p.label || p.fileName) + ((typeof fmtSubDate === 'function' && p.uploadedAt) ? ' · ' + fmtSubDate(p.uploadedAt) : '');
+  document.getElementById('plbCap').textContent = (p.label || p.fileName) + (p.uploadedAt ? ' · ' + fmtPhotoDate(p.uploadedAt) : '');
   lb.classList.add('open');
 }
 function closePhotoLightbox() { document.getElementById('photoLightbox').classList.remove('open'); }
