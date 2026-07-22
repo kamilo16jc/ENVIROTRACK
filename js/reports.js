@@ -366,15 +366,15 @@ function exportReportPDF(opts) {
   const chartImg=(id)=>{ const c=document.getElementById(id); try{ return c&&c.width? {img:c.toDataURL('image/png',1.0), ar:c.width/c.height}:null; }catch(e){ return null; } };
   const bullet=(txt)=>{ const lines=doc.splitTextToSize(txt,W-M*2-8); ensure(lines.length*4.2+2); doc.setFillColor(192,57,43); doc.circle(M+2,y-0.8,0.8,'F'); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,45,55); doc.text(lines,M+5,y); y+=lines.length*4.2+1.5; };
 
-  // ── Header band ──────────────────────────────────────────────────────
-  doc.setFillColor(26,35,50); doc.rect(0,0,W,30,'F');
+  // ── Header (white — the wordmark logo has dark navy text, a colored band hides it) ──
   try{ doc.addImage(LOGO,'PNG',M,8,34,10.5); }catch(e){}
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(255,255,255);
-  doc.text('Environmental Monitoring Report',W/2,13,{align:'center'});
-  doc.setFontSize(11); doc.setTextColor(232,120,110);
-  doc.text('CAPUTO FOODS',W/2,20,{align:'center'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(200,206,216);
-  doc.text('Period:  '+fmt(from)+'   to   '+fmt(to)+'          Generated: '+today,W/2,26,{align:'center'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(26,35,50);
+  doc.text('Environmental Monitoring Report',W/2,15,{align:'center'});
+  doc.setFontSize(11); doc.setTextColor(192,57,43);
+  doc.text('CAPUTO FOODS',W/2,21.5,{align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(110,120,135);
+  doc.text('Period:  '+fmt(from)+'   to   '+fmt(to)+'          Generated: '+today,W/2,27,{align:'center'});
+  doc.setDrawColor(210,215,222); doc.setLineWidth(0.4); doc.line(M,31,W-M,31);
   y=37;
 
   // ── Executive summary ────────────────────────────────────────────────
