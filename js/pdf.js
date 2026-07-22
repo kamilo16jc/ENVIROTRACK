@@ -70,6 +70,7 @@ function exportPDF() {
   doc.save(pdfName + '.pdf');
   syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save generator pdf');
   toast('✅ PDF exported','success');
+  document.getElementById('btnPDF')?.classList.add('done');
 }
 
 // ═══════════════════════════════════════════════

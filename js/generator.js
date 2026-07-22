@@ -164,10 +164,10 @@ async function generateTests() {
   document.getElementById('quickAddBar').style.display='flex';
   document.getElementById('overrideCard').style.display='none';
   document.getElementById('retestSection').style.display='none';
-  document.getElementById('btnPDF').disabled=false;
-  document.getElementById('btnSave').disabled=false;
-  document.getElementById('btnLabFill').disabled=false;
-  document.getElementById('btnLabSend').disabled=false;
+  // Fresh tests → enable the action buttons and clear any previous "done" (green) state.
+  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => {
+    const b = document.getElementById(id); if (b) { b.disabled = false; b.classList.remove('done'); }
+  });
 
   const lbl = {'1945':'1945','1935':'1935','1931E':'1931 East','1931W':'1931 West'}[planta]||planta;
   document.getElementById('genTableTitle').textContent = 'Generated Tests — Plant '+lbl+
@@ -346,5 +346,6 @@ function saveWeek() {
   // Mirror the new week to SharePoint (non-blocking; local save already done).
   syncSafe(() => syncPushRecords(recs), 'push new week');
   toast('✅ '+recs.length+' records saved','success');
+  document.getElementById('btnSave')?.classList.add('done');
   refreshDashboard(); searchHistory();
 }

@@ -97,18 +97,18 @@ async function submitLabForm(sendToLab) {
     submissionMeta('Generator', String(TESTS.map(t => t.sample).join(', ')), '', sendToLab)
   );
   const btn = document.getElementById(sendToLab ? 'btnLabSend' : 'btnLabFill');
-  const prev = btn ? btn.innerHTML : '';
   try {
-    if (btn) { btn.disabled = true; btn.textContent = sendToLab ? 'Sending…' : 'Filling…'; }
+    if (btn) btn.disabled = true;   // icon-only: dim while busy, keep the icon
     toast(sendToLab ? 'Sending to lab…' : 'Filling lab form…', 'info');
     await _spPost('labform', body);
     toast(sendToLab ? 'Lab form sent to the laboratory' : 'Lab form filled and archived', 'success');
+    if (btn) btn.classList.add('done');   // turn the icon green
     if (typeof refreshSubmissions === 'function') refreshSubmissions();
   } catch (e) {
     console.error('[labform] submit failed:', e);
     toast('Could not generate the lab form', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = prev; }
+    if (btn) btn.disabled = false;
   }
 }
 
