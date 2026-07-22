@@ -141,43 +141,58 @@
     </div>
 
     <!-- Right side -->
-    <div class="nav-right">
-      <style>
-        #liveRefreshBtn{display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--gray-500);cursor:pointer;font-family:var(--font)}
-        #liveRefreshBtn:hover{border-color:var(--gray-300);color:var(--gray-700)}
-        #liveRefreshBtn.spin svg{animation:liveSpin .8s linear infinite}
-        @keyframes liveSpin{to{transform:rotate(360deg)}}
-      </style>
-      <button id="liveRefreshBtn" onclick="liveManualRefresh()" title="Refresh data from SharePoint">
-        <svg class="ln" width="14" height="14" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        <span id="liveSyncLabel"></span>
-      </button>
-      <style>
-        .notif-count{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;background:#C0392B;color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
-        .notif-panel{position:absolute;top:44px;right:0;width:366px;max-height:462px;overflow-y:auto;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 14px 38px rgba(16,24,40,.18);z-index:500;display:none}
-        .notif-panel.open{display:block}
-        .notif-item{display:flex;gap:11px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--gray-100);transition:background .12s}
-        .notif-item:hover{background:#eef2f8 !important}
-      </style>
-      <div class="notif-wrap" id="notifWrap" style="position:relative">
-        <button class="nav-notif" title="Notifications" onclick="toggleNotifPanel()" style="color:var(--gray-600)">
-          <svg class="ln" width="17" height="17" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-count" id="notifCount" style="display:none">0</span>
-        </button>
-        <div class="notif-panel" id="notifPanel">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--gray-100)">
-            <span style="font-size:14px;font-weight:700;color:var(--gray-900)">Notifications</span>
-            <button onclick="markAllNotifRead()" style="background:none;border:none;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Mark all read</button>
-          </div>
-          <div id="notifBody"></div>
-        </div>
-      </div>
-      <div class="nav-user">
-        <div class="nav-avatar" id="userAvatar">–</div>
-        <span class="nav-uname" id="userName">–</span>
-      </div>
-      <button onclick="doLogout()" style="background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-500);font-family:var(--font);display:flex;align-items:center;gap:5px;position:relative;z-index:300;" onmouseover="this.style.background='#FDEDEC';this.style.color='#C0392B';this.style.borderColor='#C0392B'" onmouseout="this.style.background='none';this.style.color='var(--gray-500)';this.style.borderColor='var(--gray-200)'"><svg class="ln" width="14" height="14" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Log out</button>
+    <style>
+      .nav-greet{margin-left:auto;text-align:right;line-height:1.2}
+      .nav-greet .hi{font-size:15px;font-weight:800;color:var(--gray-900);letter-spacing:-.01em}
+      .nav-greet .dt{font-size:10.5px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.09em;margin-top:2px}
+    </style>
+    <div class="nav-greet" id="navGreet">
+      <div class="hi">Hello, <span id="greetName">–</span></div>
+      <div class="dt" id="greetDate">–</div>
     </div>
   </nav>
+
+  <!-- Sub-header: minimalist 3D controls -->
+  <div class="subbar">
+    <style>
+      .subbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:9px 24px;background:var(--white);border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:58px;z-index:190}
+      .hdr-btn{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--gray-600);
+        border:1px solid rgba(255,255,255,.6);background:linear-gradient(135deg,#ffffff,#e9edf3);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 rgba(0,0,0,.06),0 2px 4px rgba(20,45,90,.10),0 5px 12px rgba(20,45,90,.10);
+        transition:transform .14s ease,box-shadow .14s ease,color .14s ease}
+      .hdr-btn:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 0 rgba(0,0,0,.08),0 4px 8px rgba(20,45,90,.14),0 12px 22px rgba(20,45,90,.16)}
+      .hdr-btn.spin svg{animation:liveSpin .8s linear infinite}
+      .hdr-btn.logout:hover{color:#C0392B}
+      @keyframes liveSpin{to{transform:rotate(360deg)}}
+      .hdr-avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;letter-spacing:.03em;cursor:default;user-select:none;
+        background:linear-gradient(135deg,#8b5cf6,#6d28d9);border:1px solid rgba(255,255,255,.28);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.22),0 2px 5px rgba(76,29,149,.30),0 7px 16px rgba(76,29,149,.28);
+        transition:transform .14s ease,box-shadow .14s ease}
+      .hdr-avatar:hover{transform:translateY(-2px)}
+      .notif-count{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;background:#C0392B;color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
+      .notif-panel{position:absolute;top:48px;right:0;width:366px;max-height:462px;overflow-y:auto;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 14px 38px rgba(16,24,40,.18);z-index:500;display:none}
+      .notif-panel.open{display:block}
+      .notif-item{display:flex;gap:11px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--gray-100);transition:background .12s}
+      .notif-item:hover{background:#eef2f8 !important}
+    </style>
+    <button class="hdr-btn" id="liveRefreshBtn" onclick="liveManualRefresh()" title="Refresh data">
+      <svg class="ln" width="16" height="16" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <div class="notif-wrap" id="notifWrap" style="position:relative">
+      <button class="hdr-btn" title="Notifications" onclick="toggleNotifPanel()">
+        <svg class="ln" width="20" height="20" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-count" id="notifCount" style="display:none">0</span>
+      </button>
+      <div class="notif-panel" id="notifPanel">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:14px;font-weight:700;color:var(--gray-900)">Notifications</span>
+          <button onclick="markAllNotifRead()" style="background:none;border:none;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Mark all read</button>
+        </div>
+        <div id="notifBody"></div>
+      </div>
+    </div>
+    <div class="hdr-avatar" id="userAvatar" title="Signed in">–</div>
+    <button class="hdr-btn logout" onclick="doLogout()" title="Log out"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+  </div>
   <div class="main-content">
 
     <!-- DASHBOARD -->

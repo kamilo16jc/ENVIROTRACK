@@ -56,14 +56,16 @@ async function refreshLiveData(opts) {
 }
 
 function _renderLastSync() {
-  const el = document.getElementById('liveSyncLabel');
-  if (!el) return;
-  if (!_lastSyncAt) { el.textContent = ''; return; }
-  const s = Math.floor((Date.now() - _lastSyncAt) / 1000);
-  el.textContent = s < 10 ? 'Updated just now'
+  const s = _lastSyncAt ? Math.floor((Date.now() - _lastSyncAt) / 1000) : null;
+  const txt = s === null ? 'Refresh data'
+    : s < 10   ? 'Updated just now'
     : s < 60   ? 'Updated ' + s + 's ago'
     : s < 3600 ? 'Updated ' + Math.floor(s / 60) + 'm ago'
     :            'Updated ' + Math.floor(s / 3600) + 'h ago';
+  const el = document.getElementById('liveSyncLabel');   // optional text (removed from header)
+  if (el) el.textContent = _lastSyncAt ? txt : '';
+  const btn = document.getElementById('liveRefreshBtn'); // show the freshness in the tooltip
+  if (btn) btn.title = txt;
 }
 
 function liveManualRefresh() {

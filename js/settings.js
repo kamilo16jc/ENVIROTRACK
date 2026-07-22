@@ -227,8 +227,15 @@ function doLogin_dynamic() {
       CU = { id:user.uid, uid:user.uid, name, displayName:name,
              email:user.email, role, active:true };
       err.textContent='';
-      document.getElementById('userAvatar').textContent = name[0].toUpperCase();
-      document.getElementById('userName').textContent   = name;
+      // Avatar = initials of first name + first surname (e.g. "Julian Agudelo" → "JA")
+      const _parts = name.trim().split(/\s+/).filter(Boolean);
+      const _initials = ((_parts[0]||'?')[0] + (_parts[1] ? _parts[1][0] : '')).toUpperCase();
+      document.getElementById('userAvatar').textContent = _initials;
+      document.getElementById('userAvatar').title = name;
+      const _un = document.getElementById('userName'); if (_un) _un.textContent = name;
+      const _gn = document.getElementById('greetName'); if (_gn) _gn.textContent = _parts[0] || name;
+      const _gd = document.getElementById('greetDate');
+      if (_gd) _gd.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }).toUpperCase();
       const ur = document.getElementById('userRole'); if(ur) ur.textContent = role;
       document.getElementById('genCollectedBy').value   = name;
       document.getElementById('genDate').value = todayLocal();
