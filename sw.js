@@ -1,12 +1,13 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v44';
+const CACHE_NAME = 'envirotrack-v45';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
   './',
   './index.html',
+  './img/logo.svg',
   './css/styles.css',
   './js/firebase-init.js',
   './js/data.js',

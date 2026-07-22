@@ -368,7 +368,7 @@ function exportReportPDF(opts) {
 
   // ── Header band ──────────────────────────────────────────────────────
   doc.setFillColor(26,35,50); doc.rect(0,0,W,30,'F');
-  try{ doc.addImage(LOGO,'JPEG',M,7.5,25,13); }catch(e){}
+  try{ doc.addImage(LOGO,'PNG',M,8,34,10.5); }catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(255,255,255);
   doc.text('Environmental Monitoring Report',W/2,13,{align:'center'});
   doc.setFontSize(11); doc.setTextColor(232,120,110);
@@ -880,7 +880,7 @@ function exportSQFpdf() {
   const W=215.9, M=14, today=new Date().toLocaleDateString('en-US');
 
   // ── Header ─────────────────────────────────────────────────────────
-  try { doc.addImage(LOGO,'JPEG',M,8,28,14); } catch(e){}
+  try { doc.addImage(LOGO,'PNG',M,8,36,11.1); } catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(0,0,0);
   doc.text('SQF Compliance Report',W/2,13,{align:'center'});
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(192,57,43);
