@@ -317,6 +317,7 @@ function loadRetests() {
         const resTxt = res === 'Negative' ? 'Negative' : res === 'Positive' ? 'Positive' : 'Pending';
         const isDone = res === 'Negative';
         const isPending = res === 'Pending';
+        const nPhotos = allPhotos.filter(p => String(p.retestId) === String(rt.id)).length;
         const lab = retestLabStatus(rt);
         const labChip = lab === 'sent'
           ? '<span class="rt-lab sent"><svg class="ln" width="11" height="11" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Sent to lab</span>'
@@ -340,13 +341,13 @@ function loadRetests() {
           ${labChip}
           <span class="rt-spacer"></span>
           <div class="rt-actions">
-            <button class="rt-btn" onclick="exportRetestPDF(${rt.id})" title="Retest PDF"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
-            <button class="rt-btn${allPhotos.filter(p=>String(p.retestId)===String(rt.id)).length?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Photo${(()=>{const n=allPhotos.filter(p=>String(p.retestId)===String(rt.id)).length;return n?' '+n:'';})()}</button>
+            <button class="rt-btn ico" onclick="exportRetestPDF(${rt.id})" title="Download retest PDF"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+            <button class="rt-btn ico${nPhotos?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos${nPhotos?' ('+nPhotos+')':''}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>${nPhotos?'<span class="rt-count">'+nPhotos+'</span>':''}</button>
             ${_retestSending.has(rt.id)
               ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
-              : `<button class="rt-btn" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)">Form</button>
-            ${canSend?`<button class="rt-btn send ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="Send the form to the lab"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${lab==='sent'?'Sent':'Send'}</button>`:''}
-            ${!isDone?`<button class="rt-btn accent" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>`:''}`}
+              : `<button class="rt-btn ico" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
+            ${canSend?`<button class="rt-btn send ico ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="${lab==='sent'?'Sent to lab':'Send to lab'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>`:''}
+            ${!isDone?`<button class="rt-btn accent ico" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>`:''}`}
           </div>
         </div>`;
       }).join('');

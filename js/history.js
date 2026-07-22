@@ -34,7 +34,7 @@ function searchHistory() {
     } else if(h.resultado==='Positive' && GH().some(r => r.originalId===h.id && r.retestNum)) {
       action = '<span style="font-size:11px;color:var(--gray-400);display:inline-flex;align-items:center;gap:5px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Retests done</span>';
     } else {
-      action = '<button class="rt-btn accent" onclick="openFailModal('+h.id+')"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Result</button>';
+      action = '<button class="rt-btn accent ico" onclick="openFailModal('+h.id+')" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>';
     }
     const editBtn = canEdit ? '<button class="rt-btn" onclick="openAdminEdit('+h.id+')" title="Correct record" style="padding:6px 8px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>' : '';
 
