@@ -178,6 +178,6 @@ function exportHistoryPDF() {
     headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',fontSize:7,lineColor:[0,0,0],lineWidth:0.15},
     columnStyles:{0:{cellWidth:20},1:{cellWidth:17},2:{cellWidth:15,halign:'center'},3:{cellWidth:10,halign:'center'},4:{cellWidth:38},5:{cellWidth:55},6:{cellWidth:9,halign:'center'},7:{cellWidth:9,halign:'center'},8:{cellWidth:10,halign:'center'},9:{cellWidth:9,halign:'center'},10:{cellWidth:22},11:{cellWidth:18}}
   });
-  doc.save('Caputo_Historial_'+new Date().toISOString().split('T')[0]+'.pdf');
+  doc.save('Caputo_Historial_'+todayLocal()+'.pdf');
   toast('✅ PDF exported','success');
 }

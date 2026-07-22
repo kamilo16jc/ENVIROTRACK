@@ -1,10 +1,4 @@
-// Local calendar date as YYYY-MM-DD. NOTE: never use toISOString() for "today" —
-// it returns the UTC date, which after ~7pm in the Americas is already tomorrow,
-// making same-day retests look Overdue. Retest fechas are stored in local dates.
-function todayLocal(d) {
-  d = d || new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
+// todayLocal() lives in storage.js (loaded first) — used across the app.
 
 // ═══════════════════════════════════════════════
 // FAIL MODAL

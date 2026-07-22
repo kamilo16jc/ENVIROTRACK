@@ -13,6 +13,18 @@ let FAILRES = null;
 let OKID    = null;
 
 // ═══════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════
+// Local calendar date as YYYY-MM-DD. NEVER use toISOString() for a "today" date:
+// it returns the UTC date, which after ~7pm in the Americas is already tomorrow —
+// so generated tests, result dates, etc. get stamped a day ahead. All app dates
+// (fecha, resultDate, retest dates) are local calendar dates.
+function todayLocal(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// ═══════════════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════════════
 const GH  = ()  => JSON.parse(localStorage.getItem('cap_h')  || '[]');
