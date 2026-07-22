@@ -199,7 +199,33 @@
     <div class="page active" id="page-dashboard">
       <div class="page-header">
         <div><h1>Dashboard</h1><p>Environmental monitoring program overview</p></div>
-        <button class="btn btn-primary" onclick="showPage('generator')">+ Generate Tests</button>
+        <style>
+          .gen-cta{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:9px;
+            padding:12px 22px;border-radius:14px;cursor:pointer;font-family:var(--font);
+            font-size:14px;font-weight:800;letter-spacing:.01em;color:#fff;
+            background:linear-gradient(135deg,#ff6a5a 0%,#e11d48 55%,#c0392b 100%);
+            border:1px solid rgba(255,255,255,.28);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.22),0 3px 6px rgba(192,57,43,.30),0 10px 22px rgba(192,57,43,.32);
+            transition:transform .16s ease,box-shadow .16s ease}
+          .gen-cta:hover{transform:translateY(-3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 0 rgba(0,0,0,.24),0 6px 12px rgba(192,57,43,.34),0 18px 34px rgba(192,57,43,.42)}
+          .gen-cta:active{transform:translateY(-1px)}
+          .gen-cta>*{position:relative;z-index:1}
+          .gen-cta::after{content:"";position:absolute;top:0;left:-60%;width:45%;height:100%;z-index:0;
+            background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-18deg);animation:genSweep 3.2s ease-in-out infinite}
+          @keyframes genSweep{0%{left:-60%}55%{left:130%}100%{left:130%}}
+          .gen-cta-ic{font-size:16px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25));animation:genPulse 2s ease-in-out infinite}
+          @keyframes genPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+          .gen-cta-spark{position:absolute;font-size:10px;color:#fff;opacity:0;pointer-events:none;z-index:2;text-shadow:0 0 6px rgba(255,255,255,.9);animation:genTwinkle 2.4s ease-in-out infinite}
+          .gen-cta .s1{top:6px;left:18px;animation-delay:.1s}
+          .gen-cta .s2{bottom:7px;right:30px;animation-delay:.9s}
+          .gen-cta .s3{top:9px;right:16px;font-size:8px;animation-delay:1.7s}
+          @keyframes genTwinkle{0%,100%{opacity:0;transform:scale(.4) rotate(0)}50%{opacity:1;transform:scale(1) rotate(90deg)}}
+          @media (prefers-reduced-motion:reduce){.gen-cta::after,.gen-cta-ic,.gen-cta-spark{animation:none}.gen-cta-spark{opacity:.6}}
+        </style>
+        <button class="gen-cta" onclick="showPage('generator')">
+          <span class="gen-cta-spark s1">✦</span><span class="gen-cta-spark s2">✦</span><span class="gen-cta-spark s3">✦</span>
+          <span class="gen-cta-ic">✨</span><span>Generate Tests</span>
+        </button>
       </div>
       <div class="page-body">
         <div class="stats-grid">
