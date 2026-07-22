@@ -303,7 +303,7 @@ const getSubmissions = () => JSON.parse(localStorage.getItem('cap_submissions') 
 function spToPhoto(it) {
   const url = _pick(it, 'fileUrl', 'FileUrl');
   return {
-    retestId:   String(_pick(it, 'retestId', 'RetestId') || ''),
+    retestId:   String(_pick(it, 'retestId', 'RetestId', 'ref', 'Ref') || ''),
     fileName:   _pick(it, 'fileName', 'FileName') || '',
     fileUrl:    (url && typeof url === 'object') ? (url.Url || url.url || '') : (url || ''),
     label:      _pick(it, 'label', 'Label') || '',
