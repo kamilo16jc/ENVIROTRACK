@@ -178,5 +178,12 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (!res.ok) {
     throw new HttpsError("internal", "Flow returned HTTP " + res.status);
   }
+  // photoContent returns the raw base64 of the image (not JSON). Unwrap a
+  // surrounding quote if the flow returned it as a JSON string.
+  if (op === "photoContent") {
+    let c = text || "";
+    if (c[0] === '"') { try { c = JSON.parse(c); } catch (e) {} }
+    return { content: c };
+  }
   return text ? JSON.parse(text) : null;
 });
