@@ -51,8 +51,7 @@ async function generateTests() {
   });
 
   // ── Current week ───────────────────────────────────────────────────
-  const selectedDate = document.getElementById('genDate').value ||
-                       new Date().toISOString().split('T')[0];
+  const selectedDate = document.getElementById('genDate').value || todayLocal();
   const currentWeek  = isoWeek(selectedDate);
 
   // Weeks to exclude: last 4 calendar weeks before current week

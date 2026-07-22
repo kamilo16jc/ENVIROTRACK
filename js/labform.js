@@ -86,7 +86,7 @@ function canSendToLab(email) { return LAB_SENDER_EMAILS.includes((email || '').t
 async function submitLabForm(sendToLab) {
   if (!TESTS || !TESTS.length) { toast('Generate tests first', 'error'); return; }
   const planta = document.getElementById('genPlant').value;
-  const fecha  = document.getElementById('genDate').value || new Date().toISOString().split('T')[0];
+  const fecha  = document.getElementById('genDate').value || todayLocal();
   const p = labPayloadNormal(planta, fecha, TESTS);
   if (!p.rows.length) { toast('The tests have no pathogens selected', 'error'); return; }
   if (sendToLab && !confirm('Send the lab form for ' + p.building + ' to the laboratory? This will email them.')) return;

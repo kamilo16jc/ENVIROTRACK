@@ -73,7 +73,7 @@ ACTIVITY_EVENTS.forEach(evt =>
 // INIT
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('genDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('genDate').value = todayLocal();
 });
 
 // ── EnviroTrack typing animation ─────────────────

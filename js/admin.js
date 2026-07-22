@@ -159,12 +159,12 @@ function confirmAdminEdit() {
       rec.resultado = 'Positive';
       rec.failedPathogens = failed;
       rec.failedPathogensLabel = failed.map(k => AE_PATS[k]).join(', ');
-      rec.resultDate = new Date().toISOString().split('T')[0];
+      rec.resultDate = todayLocal();
     } else if (AERES === 'Negative') {
       rec.resultado = 'Negative';
       rec.failedPathogens = [];
       rec.failedPathogensLabel = '';
-      rec.resultDate = new Date().toISOString().split('T')[0];
+      rec.resultDate = todayLocal();
     } else { // Pending — re-open a wrongly-finalized test
       rec.resultado = 'Pending';
       rec.failedPathogens = [];

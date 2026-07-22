@@ -21,7 +21,7 @@ function getFilteredHistory() {
   if(!isNaN(days)) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutStr = cutoff.toISOString().split('T')[0];
+    const cutStr = todayLocal(cutoff);
     hist = hist.filter(h => h.fecha >= cutStr);
   }
   return hist;
@@ -513,7 +513,7 @@ function exportReportPDF(opts) {
     doc.text('Page '+p+' of '+pages,W-M,H-7,{align:'right'});
   }
 
-  const fname = opts.fileName || 'Caputo_Environmental_Report_'+new Date().toISOString().split('T')[0];
+  const fname = opts.fileName || 'Caputo_Environmental_Report_'+todayLocal();
   if(opts.returnDoc) return { doc: doc, fname: fname };
   doc.save(fname+'.pdf');
   toast('✅ Professional report exported','success');
@@ -1018,6 +1018,6 @@ function exportSQFpdf() {
     doc.text('Pg. '+i+' de '+pages,W-M,fY,{align:'right'});
   }
 
-  doc.save('Caputo_SQF_Compliance_'+year+'_'+new Date().toISOString().split('T')[0]+'.pdf');
+  doc.save('Caputo_SQF_Compliance_'+year+'_'+todayLocal()+'.pdf');
   toast('✅ SQF Report exported','success');
 }

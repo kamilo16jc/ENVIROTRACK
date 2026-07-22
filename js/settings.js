@@ -231,7 +231,7 @@ function doLogin_dynamic() {
       document.getElementById('userName').textContent   = name;
       const ur = document.getElementById('userRole'); if(ur) ur.textContent = role;
       document.getElementById('genCollectedBy').value   = name;
-      document.getElementById('genDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('genDate').value = todayLocal();
 
       // Show the Settings/Users panel only to admins
       const sg = document.getElementById('nav-settings-group');
