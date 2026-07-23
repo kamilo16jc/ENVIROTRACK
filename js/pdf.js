@@ -2,7 +2,7 @@
 // PDF — MAIN WEEKLY FORM
 // ═══════════════════════════════════════════════
 function pdfHeader(doc,planta,sqf,W,margin) {
-  try{doc.addImage(LOGO,'PNG',margin,6,40,12.3);}catch(e){}
+  try{doc.addImage(LOGO,'JPEG',margin,5,34,17);}catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
   doc.text('SQF # '+sqf+': '+planta+' Sample Collection Form',W/2,10,{align:'center'});
   doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
