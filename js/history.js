@@ -45,10 +45,10 @@ function searchHistory() {
       <td style="text-align:center">${h.zone}</td>
       <td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(h.area)}">${esc(h.area)}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(h.location)}">${esc(h.location)}</td>
-      <td class="center">${h.ecoli?'<span class="px">X</span>':dash}</td>
-      <td class="center">${h.listeria?'<span class="px">X</span>':dash}</td>
-      <td class="center">${h.salmonella?'<span class="px">X</span>':dash}</td>
-      <td class="center">${h.saureus?'<span class="px">X</span>':dash}</td>
+      <td class="center">${h.ecoli?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="center">${h.listeria?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="center">${h.salmonella?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="center">${h.saureus?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td><span class="badge badge-${h.resultado==='Positive'?'red':h.resultado==='Negative'?'green':'yellow'}" style="font-size:11px">${h.resultado==='Positive'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>':h.resultado==='Negative'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14 14"/></svg>'}${h.resultado}</span>
           ${h.resultado==='Positive'&&h.failedPathogensLabel?'<div style="font-size:10px;color:var(--red);font-weight:600;margin-top:1px">'+esc(h.failedPathogensLabel)+'</div>':''}
           ${h.labNotes?'<div style="font-size:10px;color:var(--gray-400);margin-top:1px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(h.labNotes)+'">'+esc(h.labNotes)+'</div>':''}</td>
