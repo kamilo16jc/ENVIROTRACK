@@ -219,11 +219,11 @@ function renderTests() {
       <td><input type="text" value="${t.area}" style="width:100%" onchange="chg(${i},'area',this.value,this)"></td>
       <td><input type="text" value="${t.line}" style="width:55px" onchange="chg(${i},'line',this.value,this)"></td>
       <td><input type="text" value="${t.location}" style="width:100%" onchange="chg(${i},'location',this.value,this)"></td>
-      <td class="pat-cell" onclick="togPat(${i},0)">${t.ecoli?'<span class="px">X</span>':'<span style="color:var(--gray-200)">–</span>'}</td>
-      <td class="pat-cell" onclick="togPat(${i},1)">${t.listeria?'<span class="px">X</span>':'<span style="color:var(--gray-200)">–</span>'}</td>
-      <td class="pat-cell" onclick="togPat(${i},2)">${t.salmonella?'<span class="px">X</span>':'<span style="color:var(--gray-200)">–</span>'}</td>
-      <td class="pat-cell" onclick="togPat(${i},3)">${t.saureus?'<span class="px">X</span>':'<span style="color:var(--gray-200)">–</span>'}</td>
-      <td style="text-align:center"><button class="btn btn-outline btn-sm" onclick="rmTest(${i})" style="padding:4px 8px;color:var(--red)"><svg class="ln" width="13" height="13" viewBox="0 0 24 24" style="vertical-align:-2px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+      <td class="pat-cell" onclick="togPat(${i},0)">${t.ecoli?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="pat-cell" onclick="togPat(${i},1)">${t.listeria?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="pat-cell" onclick="togPat(${i},2)">${t.salmonella?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td class="pat-cell" onclick="togPat(${i},3)">${t.saureus?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
+      <td style="text-align:center"><button class="gen-del" onclick="rmTest(${i})" title="Remove this test"><svg class="ln" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>
     </tr>`).join('');
 }
 
