@@ -292,7 +292,17 @@
               </select></div>
             <div class="field"><label>Sampling date</label><input type="date" id="genDate"></div>
             <div class="field"><label>Collected by</label><input type="text" id="genCollectedBy" placeholder="Name" style="min-width:180px"></div>
-            <button class="btn btn-primary" onclick="generateTests()" style="margin-top:18px"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Generate Tests</button>
+            <style>
+              .gen-run{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;margin-top:18px;border-radius:13px;cursor:pointer;color:#fff;
+                border:1px solid rgba(255,255,255,.28);
+                background:linear-gradient(135deg,#ff6a5a,#e11d48 60%,#c0392b);
+                box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.22),0 3px 6px rgba(192,57,43,.30),0 9px 18px rgba(192,57,43,.30);
+                transition:transform .15s ease,box-shadow .15s ease}
+              .gen-run:hover{transform:translateY(-2px) scale(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 0 rgba(0,0,0,.24),0 6px 12px rgba(192,57,43,.34),0 16px 30px rgba(192,57,43,.40)}
+              .gen-run:active{transform:translateY(0)}
+              .gen-run svg{width:20px;height:20px}
+            </style>
+            <button class="gen-run" onclick="generateTests()" title="Generate Tests" aria-label="Generate Tests"><svg class="ln" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
           </div>
         </div>
         <style>
