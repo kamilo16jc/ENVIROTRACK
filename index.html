@@ -296,9 +296,17 @@
           </div>
         </div>
         <style>
-          .gen-progress{height:6px;background:var(--gray-100);border-radius:20px;overflow:hidden;max-width:420px;margin:0 auto}
-          .gen-progress-bar{height:100%;width:38%;background:var(--red);border-radius:20px;animation:genProg 1.1s ease-in-out infinite}
-          @keyframes genProg{0%{margin-left:-38%}100%{margin-left:100%}}
+          .gen-progress{position:relative;height:10px;background:linear-gradient(#e5eaf1,#eef1f6);border-radius:20px;overflow:hidden;max-width:440px;margin:0 auto;
+            box-shadow:inset 0 1px 3px rgba(20,45,90,.20),inset 0 -1px 0 rgba(255,255,255,.7)}
+          .gen-progress-bar{position:absolute;top:0;left:-42%;height:100%;width:42%;border-radius:20px;
+            background:linear-gradient(90deg,#0F5F63,#2aa198,#8DC63F);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 12px rgba(45,161,152,.55);
+            animation:genProg 1.3s cubic-bezier(.65,0,.35,1) infinite}
+          @keyframes genProg{0%{left:-42%}100%{left:102%}}
+          .gen-progress::after{content:"";position:absolute;top:0;left:-55%;width:42%;height:100%;z-index:1;
+            background:linear-gradient(100deg,transparent,rgba(255,255,255,.6),transparent);transform:skewX(-18deg);animation:genShine 1.9s ease-in-out infinite}
+          @keyframes genShine{0%{left:-55%}60%{left:125%}100%{left:125%}}
+          @media (prefers-reduced-motion:reduce){.gen-progress-bar,.gen-progress::after{animation:none}.gen-progress-bar{left:0;width:100%}}
         </style>
         <div class="card" id="genLoading" style="display:none;text-align:center;padding:44px 20px">
           <div id="genLoadingLabel" style="font-size:14px;color:var(--gray-600);font-weight:500;margin-bottom:16px">Loading tests…</div>
