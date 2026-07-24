@@ -11,6 +11,8 @@ let QPATS   = {ecoli:0,listeria:1,salmonella:0,saureus:0};
 let FAILID  = null;
 let FAILRES = null;
 let OKID    = null;
+let _genUnsaved   = false;  // tests generated but not yet saved to history
+let _genPendingNav = null;  // page the user tried to navigate to while unsaved
 
 // ═══════════════════════════════════════════════
 // DATE HELPERS

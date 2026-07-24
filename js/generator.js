@@ -168,6 +168,7 @@ async function generateTests() {
   ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => {
     const b = document.getElementById(id); if (b) { b.disabled = false; b.classList.remove('done'); }
   });
+  setGenUnsaved(true);   // these tests are not in the history until saved
 
   const lbl = {'1945':'1945','1935':'1935','1931E':'1931 East','1931W':'1931 West'}[planta]||planta;
   document.getElementById('genTableTitle').textContent = 'Generated Tests — Plant '+lbl+
@@ -332,9 +333,17 @@ function confirmQuickAdd() {
 }
 
 // SAVE WEEK
-function saveWeek() {
-  if(!TESTS.length) { toast('No tests to save','error'); return; }
-  if(!confirm('Save this week to the history?')) return;
+// Toggle the "unsaved tests" flag + its warning banner on the generator page.
+function setGenUnsaved(v) {
+  _genUnsaved = !!v;
+  const b = document.getElementById('genUnsavedBanner');
+  if (b) b.style.display = v ? 'flex' : 'none';
+}
+
+function saveWeek(opts) {
+  opts = opts || {};
+  if(!TESTS.length) { toast('No tests to save','error'); return false; }
+  if(!opts.skipConfirm && !confirm('Save this week to the history?')) return false;
   const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value;
   const by     = document.getElementById('genCollectedBy').value;
@@ -347,5 +356,7 @@ function saveWeek() {
   syncSafe(() => syncPushRecords(recs), 'push new week');
   toast('✅ '+recs.length+' records saved','success');
   document.getElementById('btnSave')?.classList.add('done');
+  setGenUnsaved(false);
   refreshDashboard(); searchHistory();
+  return true;
 }
