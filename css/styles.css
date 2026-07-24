@@ -75,10 +75,16 @@ body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-atta
 .nav-btn-icon svg,.dd-icon svg,.nav-notif svg,.nav-right button svg{display:block;}
 .nav-arrow{display:inline-flex;align-items:center;color:var(--gray-400);transition:transform .2s;margin-left:1px;}
 .nav-group:hover .nav-arrow{transform:rotate(180deg);}
-.dropdown{position:absolute;top:100%;left:0;background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.1),0 2px 8px rgba(0,0,0,.06);min-width:184px;padding:8px;padding-top:14px;margin-top:-8px;opacity:0;pointer-events:none;transform:translateY(-4px) scale(.98);transition:all .18s cubic-bezier(.4,0,.2,1);z-index:999;border:1px solid rgba(0,0,0,.06);}
+.dropdown{position:absolute;top:100%;left:0;
+  background:rgba(255,255,255,.42);
+  backdrop-filter:blur(22px) saturate(1.7);
+  -webkit-backdrop-filter:blur(22px) saturate(1.7);
+  border-radius:14px;border:1px solid rgba(255,255,255,.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(16,24,40,.06),0 12px 34px rgba(16,24,40,.20),0 3px 10px rgba(16,24,40,.10);
+  min-width:184px;padding:8px;padding-top:14px;margin-top:-8px;opacity:0;pointer-events:none;transform:translateY(-4px) scale(.98);transition:all .18s cubic-bezier(.4,0,.2,1);z-index:999;}
 .nav-group:hover .dropdown{opacity:1;pointer-events:all;transform:translateY(0) scale(1);}
-.dd-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .1s;}
-.dd-item:hover{background:var(--bg);}
+.dd-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .12s,box-shadow .12s;}
+.dd-item:hover{background:rgba(255,255,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(16,24,40,.10);}
 /* Minimalist: no colored chip, just the line icon + name (description hidden) */
 .dd-icon{width:20px;height:20px;background:transparent!important;border-radius:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .dd-name{font-size:13.5px;font-weight:600;color:var(--gray-900);}
