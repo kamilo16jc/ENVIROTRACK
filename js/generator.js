@@ -189,7 +189,7 @@ async function generateTests() {
 // ── Loading bar + building-change guard ──────────────────────────
 function genShowLoading(planta) {
   const lbl = {'1945':'1945','1935':'1935','1931E':'1931 East','1931W':'1931 West'}[planta] || planta;
-  const t = document.getElementById('genLoadingLabel'); if (t) t.textContent = 'Loading tests for Plant ' + lbl + '…';
+  const t = document.getElementById('genLoadingLabel'); if (t) t.textContent = 'Loading Plant ' + lbl;
   const el = document.getElementById('genLoading'); if (el) el.style.display = 'block';
 }
 function genHideLoading() { const el = document.getElementById('genLoading'); if (el) el.style.display = 'none'; }
