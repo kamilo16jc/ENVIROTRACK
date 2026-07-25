@@ -210,15 +210,15 @@ function renderTests() {
   document.getElementById('genTableBody').innerHTML = TESTS.map((t,i) => `
     <tr class="${t.modified?'modified':''}">
       <td style="color:var(--gray-400);font-size:11px;font-weight:600;text-align:center">${i+1}</td>
-      <td><input type="text" value="${t.sample}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)">
+      <td><input type="text" value="${esc(t.sample)}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)">
           ${t.modified?'<span class="ob"><svg class="ln" width="11" height="11" viewBox="0 0 24 24" style="vertical-align:-1px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>':''}</td>
       <td><select onchange="chg(${i},'zone',this.value,this)" style="width:65px">
           <option ${t.zone==2?'selected':''}>2</option>
           <option ${t.zone==3?'selected':''}>3</option>
           <option ${t.zone==4?'selected':''}>4</option></select></td>
-      <td><input type="text" value="${t.area}" style="width:100%" onchange="chg(${i},'area',this.value,this)"></td>
-      <td><input type="text" value="${t.line}" style="width:55px" onchange="chg(${i},'line',this.value,this)"></td>
-      <td><input type="text" value="${t.location}" style="width:100%" onchange="chg(${i},'location',this.value,this)"></td>
+      <td><input type="text" value="${esc(t.area)}" style="width:100%" onchange="chg(${i},'area',this.value,this)"></td>
+      <td><input type="text" value="${esc(t.line)}" style="width:55px" onchange="chg(${i},'line',this.value,this)"></td>
+      <td><input type="text" value="${esc(t.location)}" style="width:100%" onchange="chg(${i},'location',this.value,this)"></td>
       <td class="pat-cell" onclick="togPat(${i},0)">${t.ecoli?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td class="pat-cell" onclick="togPat(${i},1)">${t.listeria?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td class="pat-cell" onclick="togPat(${i},2)">${t.salmonella?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
@@ -253,7 +253,7 @@ function confirmOverride() {
   TESTS[idx].modified = true;
   OVRS.push({sample:TESTS[idx].sample,field,oldVal,newVal,reason,by:CU.displayName,time:new Date().toLocaleTimeString()});
   renderTests();
-  document.getElementById('overrideLog').innerHTML = OVRS.map(o => `<tr><td style="font-weight:600">${o.sample}</td><td>${o.field}</td><td style="color:var(--red)">${o.oldVal}</td><td style="color:var(--green)">${o.newVal}</td><td>${o.reason}</td><td>${o.by}</td><td style="color:var(--gray-500)">${o.time}</td></tr>`).join('');
+  document.getElementById('overrideLog').innerHTML = OVRS.map(o => `<tr><td style="font-weight:600">${esc(o.sample)}</td><td>${esc(o.field)}</td><td style="color:var(--red)">${esc(o.oldVal)}</td><td style="color:var(--green)">${esc(o.newVal)}</td><td>${esc(o.reason)}</td><td>${esc(o.by)}</td><td style="color:var(--gray-500)">${esc(o.time)}</td></tr>`).join('');
   document.getElementById('overrideCard').style.display = 'block';
   document.getElementById('overrideModal').classList.remove('open');
   PENDO = null;

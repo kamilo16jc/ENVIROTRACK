@@ -3,11 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<!-- Content-Security-Policy: limits where scripts load from and, critically,
+     restricts where the page may send data (connect-src) — so an injected
+     script cannot exfiltrate to an arbitrary server. GitHub Pages cannot set
+     HTTP headers, hence the meta tag. NOTE: clickjacking (X-Frame-Options /
+     frame-ancestors) still requires a real header and is not enforceable here. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.firebaseio.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'">
 <title>Caputo Foods — Environmental Monitoring</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js" integrity="sha384-VA0FoBFnoj52hvJgGJB/86X6Ymgc+m/+C9RHXKKzH0qDAaY6MHnY5C97eYjQIqRj" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
 <!-- PWA -->
@@ -1090,9 +1096,9 @@
 
 <div class="toast" id="toast"></div>
 <!-- Firebase (compat SDK) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" integrity="sha384-AQ3POAMqIhwS81FrUH95ekxqBZHeP5tG2JfEL3+7GuTtfRLWnrRh32UxwzM+//A9" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" integrity="sha384-TnlRYaR4JYz/lpaGuaiU61PjNberSA4vjLjtF+oRC/IkohkJqnWxw5EmDSOt1vA1" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js" integrity="sha384-3IYu+dnH2y9gX1s6p9F4D55XbEmZBfJ3D1Ylh8J6bfdqnJCOmDVSRTq1yhJsBY1H" crossorigin="anonymous"></script>
 <script src="js/firebase-init.js"></script>
 
 <script src="js/data.js"></script>

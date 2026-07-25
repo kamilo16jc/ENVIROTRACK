@@ -32,6 +32,27 @@ function assertAdmin(request) {
   return email;
 }
 
+// The roles an ADMIN assigns to real accounts. A self-registered account (e.g.
+// someone who hit the public sign-up endpoint) has NO role claim, so it fails
+// this check — which is exactly what blocks anonymous data access.
+const VALID_ROLES = ["Inspector", "Manager", "Administrator"];
+
+// Operations only administrators may perform (master-list / sampling-point
+// management + the monthly email). Mirrors the admin-only gating in the UI.
+const ADMIN_OPS = new Set([
+  "masterWrite", "masterPointsWrite", "masterPointsUpdate", "emailmonthly",
+]);
+
+// Effective role of the caller, or null if the account was not provisioned by
+// an admin. Root admins are always treated as Administrator.
+function roleOf(request) {
+  if (!request.auth) return null;
+  const email = (request.auth.token.email || "").toLowerCase();
+  if (ROOT_ADMINS.includes(email)) return "Administrator";
+  const role = request.auth.token.role;
+  return VALID_ROLES.includes(role) ? role : null;
+}
+
 const REGION = "us-central1";
 
 // List all users (email, name, role, active status, dates).
@@ -149,10 +170,26 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must sign in.");
   }
+  // Being signed in is NOT enough: the account must have an admin-assigned role.
+  // This blocks self-registered accounts from reading/writing any SharePoint data.
+  const role = roleOf(request);
+  if (!role) {
+    throw new HttpsError(
+      "permission-denied",
+      "This account is not provisioned for data access."
+    );
+  }
   const { op, body } = request.data || {};
   const envKey = FLOW_ENV[op];
   if (!envKey) {
     throw new HttpsError("invalid-argument", "Unknown operation: " + op);
+  }
+  // Sensitive operations require the Administrator role.
+  if (ADMIN_OPS.has(op) && role !== "Administrator") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only administrators can perform this operation."
+    );
   }
   const url = process.env[envKey];
   if (!url) {
