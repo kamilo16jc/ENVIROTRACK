@@ -401,9 +401,9 @@ function loadRetests() {
           ? '<span style="color:var(--red);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Failed — new round generated</span>'
           : '<span style="color:var(--green);font-weight:600"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'+(r.closedOnGenerate?'Retests all negative':'Negative / OK')+'</span>';
         return `<tr>
-        <td style="font-weight:700">${r.sample}</td>
-        <td><span class="badge badge-gray">${r.planta}</span></td>
-        <td>${r.area}</td>
+        <td style="font-weight:700">${esc(r.sample)}</td>
+        <td><span class="badge badge-gray">${esc(r.planta)}</span></td>
+        <td>${esc(r.area)}</td>
         <td style="font-size:12px">${r.originalDate}</td>
         <td style="font-size:12px">${r.resolvedDate}</td>
         <td style="text-align:center"><span class="badge ${esc_?'badge-red':'badge-green'}">${r.retestNum||'—'}</span></td>
