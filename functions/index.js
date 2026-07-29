@@ -158,6 +158,7 @@ const FLOW_ENV = {
   masterPointsWrite:  "FLOW_MASTERPOINTS_WRITE",
   masterPointsUpdate: "FLOW_MASTERPOINTS_UPDATE",
   labform:            "FLOW_LABFORM",
+  templateRead:       "FLOW_TEMPLATE_READ",
   savepdf:            "FLOW_SAVEPDF",
   submissionsRead:    "FLOW_SUBMISSIONS_READ",
   emailmonthly:       "FLOW_EMAIL_MONTHLY",
@@ -215,9 +216,9 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (!res.ok) {
     throw new HttpsError("internal", "Flow returned HTTP " + res.status);
   }
-  // photoContent returns the raw base64 of the image (not JSON). Unwrap a
-  // surrounding quote if the flow returned it as a JSON string.
-  if (op === "photoContent") {
+  // photoContent / templateRead return the raw base64 of a file (not JSON).
+  // Unwrap a surrounding quote if the flow returned it as a JSON string.
+  if (op === "photoContent" || op === "templateRead") {
     let c = text || "";
     if (c[0] === '"') { try { c = JSON.parse(c); } catch (e) {} }
     return { content: c };

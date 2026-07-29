@@ -13,14 +13,25 @@
 
 const _LAB_PAT_COL = { ecoli: 'M', listeria: 'N', salmonella: 'O', saureus: 'P' };
 
-let _labTplBuf = null;   // cached template bytes (fetched once)
+let _labTplBuf = null;   // cached template bytes (fetched once per session)
+// The template LIVES IN SHAREPOINT (private) — never in the public repo. It is
+// fetched through the role-gated proxy (op 'templateRead' → Get file content →
+// base64), same pattern as photoContent. Uses the plain SharePoint connector
+// (NOT Office Scripts), so no throttling. Cached in memory after the first pull.
 async function _loadLabTemplate() {
   if (!_labTplBuf) {
-    const resp = await fetch('assets/lab-template.xlsx', { cache: 'force-cache' });
-    if (!resp.ok) throw new Error('Lab template not found at assets/lab-template.xlsx (HTTP ' + resp.status + ')');
-    _labTplBuf = await resp.arrayBuffer();
+    const r = await _spPost('templateRead', {});
+    const b64 = (r && (r.content || (typeof r === 'string' ? r : ''))) || '';
+    if (!b64) throw new Error('Lab template unavailable from SharePoint');
+    _labTplBuf = _b64ToArrayBuffer(String(b64));
   }
   return _labTplBuf.slice(0);   // ExcelJS consumes the buffer → hand out a copy
+}
+function _b64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
 function _abToBase64(ab) {
