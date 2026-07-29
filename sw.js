@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v65';
+const CACHE_NAME = 'envirotrack-v66';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
@@ -13,6 +13,7 @@ const ASSETS = [
   './js/data.js',
   './js/storage.js',
   './js/sync.js',
+  './js/labfill.js',
   './js/labform.js',
   './js/submissions.js',
   './js/auth.js',
@@ -31,7 +32,8 @@ const ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'
 ];
 
 // Install — cache all assets
