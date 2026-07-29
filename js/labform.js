@@ -91,9 +91,14 @@ async function submitLabForm(sendToLab) {
   if (!p.rows.length) { toast('The tests have no pathogens selected', 'error'); return; }
   if (sendToLab && !confirm('Send the lab form for ' + p.building + ' to the laboratory? This will email them.')) return;
 
+  // Fill the lab template client-side (ExcelJS) → the flow only saves + emails it
+  // (no throttled Office Scripts). Falls back to rowsJson if the fill fails.
+  let contentBase64 = '';
+  try { contentBase64 = await buildLabFormB64(p.building, p.collectionDate, p.rows); }
+  catch (e) { console.warn('[labform] client fill failed, sending rows only:', e); }
   const body = Object.assign(
     { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
-      rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
+      rowsJson: JSON.stringify(p.rows), contentBase64: contentBase64, sendToLab: !!sendToLab },
     submissionMeta('Generator', String(TESTS.map(t => t.sample).join(', ')), '', sendToLab)
   );
   const btn = document.getElementById(sendToLab ? 'btnLabSend' : 'btnLabFill');
@@ -130,9 +135,12 @@ async function submitRetestLabForm(retestId, sendToLab, opts) {
   if (!p.rows.length) { if (!opts.silent) toast('This retest has no pathogen to test', 'error'); return; }
   if (sendToLab && !opts.skipConfirm &&
       !confirm('Send Retest #' + rn + ' lab form for sample ' + rec.sample + ' to the laboratory? This will email them.')) return;
+  let contentBase64 = '';
+  try { contentBase64 = await buildLabFormB64(p.building, p.collectionDate, p.rows); }
+  catch (e) { console.warn('[labform] retest client fill failed, sending rows only:', e); }
   const body = Object.assign(
     { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
-      rowsJson: JSON.stringify(p.rows), sendToLab: !!sendToLab },
+      rowsJson: JSON.stringify(p.rows), contentBase64: contentBase64, sendToLab: !!sendToLab },
     submissionMeta('Retest', String(rec.sample), rn, sendToLab)
   );
   // Show the in-flight spinner on the row (single sends; bulk runs silent).
