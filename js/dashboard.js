@@ -28,10 +28,16 @@ function refreshDashboard() {
       const txt=w.pos>0?w.pos+' Positive(s)':w.pend>0?'Pending':'Complete';
       return '<tr><td><span class="badge badge-gray">'+w.planta+'</span></td><td>'+w.fecha+'</td><td style="text-align:center;font-weight:600">'+w.count+'</td><td style="text-align:center">'+(w.pos>0?'<span class="badge badge-red">'+w.pos+'</span>':'<span style="color:var(--gray-200)">–</span>')+'</td><td><span class="badge '+cls+'">'+txt+'</span></td><td style="color:var(--gray-500)">'+esc(w.by)+'</td></tr>';
     }).join('');
+  // Coverage = distinct MASTER points tested (dedup by sample, excludes retests)
+  // — SAME definition as "MASTER Coverage by Building" so both cards match.
+  // `records` = total test rows (volume) shown as extra context, not the bar.
+  const _testedPts = new Set(hist.filter(h=>!h.retestNum).map(h=>h.planta+'|'+h.sample));
   document.getElementById('plantStats').innerHTML=['1945','1935','1931E','1931W'].map(p=>{
-    const total=getActiveMaster(p).length, tested=hist.filter(h=>h.planta===p).length;
-    const pct=total>0?Math.min(100,Math.round(tested/total*100)):0;
-    return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:600">Plant '+p+'</span><span style="font-size:12px;color:var(--gray-500)">'+total+' points</span></div><div class="cov-track"><div class="cov-fill cov-'+p+'" style="--w:'+pct+'%"></div></div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">'+tested+' tests recorded</div></div>';
+    const master=getActiveMaster(p), total=master.length;
+    const tested=master.filter(pt=>_testedPts.has(p+'|'+pt.sample)).length;
+    const records=hist.filter(h=>h.planta===p).length;
+    const pct=total>0?Math.round(tested/total*100):0;
+    return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:600">Plant '+p+'</span><span style="font-size:12px;color:var(--gray-500)">'+total+' points</span></div><div class="cov-track"><div class="cov-fill cov-'+p+'" style="--w:'+pct+'%"></div></div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">'+tested+' of '+total+' points tested · '+records+' tests recorded</div></div>';
   }).join('');
   const resolved=GRV(), rids=new Set(resolved.map(r=>r.originalId));
   // Cases still in follow-up (mirrors the Retests view's "active" set):
