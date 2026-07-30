@@ -259,35 +259,91 @@ function doLogin_dynamic() {
     .catch(e => { err.textContent = fbAuthError(e); });
 }
 
-// Show the splash, run every startup pull to completion (with a safety timeout
-// so a slow/offline SharePoint can't hang the login), then populate the views
-// and reveal the app.
+// Startup sync jobs. `critical:true` = the app's core data; if one of these
+// truly FAILS we do NOT let the user in with stale cache — we show a Retry.
+// Photos are secondary (a failure there shouldn't block access to records).
+const BOOT_JOBS = [
+  { name: 'Sampling points', fn: () => syncPullMasterPoints(), critical: true  },
+  { name: 'Records',         fn: () => syncPullRecords(),      critical: true  },
+  { name: 'Retest cases',    fn: () => syncPullResolved(),     critical: true  },
+  { name: 'Lab submissions', fn: () => syncPullSubmissions(),  critical: false },
+  { name: 'Photos',          fn: () => syncPullPhotos(),       critical: false },
+];
+// per-job status: 'pending' | 'ok' (fresh data) | 'skip' (offline/pending writes → cache is intentional) | 'error'
+let _bootStatus = [];
+
+// Show the splash and ACTUALLY verify each pull succeeded before entering.
+// A pull that throws counts as a real failure (retried); one that returns
+// false is an intentional offline "skip" (cache is correct → allowed in).
 async function bootSyncThenEnter() {
   const splash = document.getElementById('loadingSplash');
   const fill = document.getElementById('lsFill'), txt = document.getElementById('lsText');
+  const spin = splash && splash.querySelector('.ls-spin');
+  const errBox = document.getElementById('lsError');
   if (splash) splash.classList.add('show');
-  const setProg = (done, total) => {
-    if (fill) fill.style.width = Math.round(done / total * 100) + '%';
-    if (txt)  txt.textContent = done >= total ? 'Almost ready…' : 'Syncing latest data… (' + done + '/' + total + ')';
+  if (errBox) errBox.style.display = 'none';
+  if (spin) spin.style.display = 'inline-block';
+
+  _bootStatus = BOOT_JOBS.map(() => 'pending');
+  const okCount = () => _bootStatus.filter(s => s === 'ok' || s === 'skip').length;
+  const setProg = note => {
+    const n = okCount();
+    if (fill) fill.style.width = Math.round(n / BOOT_JOBS.length * 100) + '%';
+    if (txt)  txt.textContent = note || (n >= BOOT_JOBS.length ? 'Almost ready…' : 'Syncing latest data… (' + n + '/' + BOOT_JOBS.length + ')');
   };
 
-  const jobs = [ syncPullMasterPoints, syncPullRecords, syncPullResolved, syncPullSubmissions, syncPullPhotos ];
-  let done = 0; setProg(0, jobs.length);
-  const track = fn => Promise.resolve().then(fn).catch(() => {}).finally(() => setProg(++done, jobs.length));
-  const all = Promise.all(jobs.map(track));
-  // Safety net: never block entry more than ~18s (offline / flow down → use cache)
-  await Promise.race([ all, new Promise(r => setTimeout(r, 18000)) ]);
+  // Run one pull with a hard 15s cap → 'ok' | 'skip' | 'error'.
+  const runOne = fn => {
+    const p = Promise.resolve().then(fn).then(r => (r === false ? 'skip' : 'ok')).catch(() => 'error');
+    const to = new Promise(res => setTimeout(() => res('error'), 15000));
+    return Promise.race([p, to]);
+  };
+  // Run every job that isn't 'ok' yet (retries re-run skips/errors).
+  const attemptAll = async () => {
+    setProg();
+    await Promise.all(BOOT_JOBS.map(async (j, i) => {
+      if (_bootStatus[i] === 'ok') return;
+      _bootStatus[i] = await runOne(j.fn);
+      setProg();
+    }));
+  };
 
-  // Populate every view once, with the freshly-synced data
+  await attemptAll();
+  // Retry the ones that ERRORED (not skips) up to twice, with backoff.
+  for (let r = 0; r < 2; r++) {
+    if (!BOOT_JOBS.some((j, i) => _bootStatus[i] === 'error')) break;
+    setProg('Retrying… (' + (r + 1) + ')');
+    await new Promise(res => setTimeout(res, 1200 * (r + 1)));
+    await attemptAll();
+  }
+
+  // A CRITICAL job still failing = don't silently enter with stale data.
+  const failed = BOOT_JOBS.filter((j, i) => j.critical && _bootStatus[i] === 'error');
+  if (failed.length) {
+    if (spin) spin.style.display = 'none';
+    if (txt)  txt.textContent = '';
+    const msg = document.getElementById('lsErrMsg');
+    if (msg) msg.textContent = 'Couldn’t load: ' + failed.map(j => j.name).join(', ') +
+      '. Your connection or SharePoint may be down — the data would be out of date.';
+    if (errBox) errBox.style.display = 'block';
+    return;   // stay on the splash; user chooses Retry or Enter with cached data
+  }
+  finishBootEnter();
+}
+
+// Populate views and reveal the app (also the "Enter with cached data" path).
+function finishBootEnter() {
+  const splash = document.getElementById('loadingSplash');
   try { refreshDashboard(); searchHistory(); loadRetests();
         if (typeof loadSubmissions === 'function') loadSubmissions();
         if (typeof updateNotifBadge === 'function') updateNotifBadge(); } catch (e) {}
   if (typeof startLiveSync === 'function') startLiveSync();
   resetSessionTimer();
-
   if (splash) splash.classList.remove('show');
   document.getElementById('appScreen').classList.add('active');
 }
+function retryBoot()   { bootSyncThenEnter(); }
+function enterAnyway() { finishBootEnter(); }
 
 function loadUsersTable() {
   const tbody = document.getElementById('usersTable');
