@@ -292,33 +292,38 @@ async function bootSyncThenEnter() {
     if (txt)  txt.textContent = note || (n >= BOOT_JOBS.length ? 'Almost ready…' : 'Syncing latest data… (' + n + '/' + BOOT_JOBS.length + ')');
   };
 
-  // Run one pull with a hard 15s cap → 'ok' | 'skip' | 'error'.
+  // Run one pull → 'ok' | 'skip' | 'error' | 'timeout'. Timeout is GENEROUS (40s):
+  // the big reads (Sampling points ~700 rows + Records) run in parallel and can
+  // take 15-25s, and they DO succeed — a short cap marked them as failed even
+  // though the data actually loaded (that was the false-error bug).
   const runOne = fn => {
     const p = Promise.resolve().then(fn).then(r => (r === false ? 'skip' : 'ok')).catch(() => 'error');
-    const to = new Promise(res => setTimeout(() => res('error'), 15000));
+    const to = new Promise(res => setTimeout(() => res('timeout'), 40000));
     return Promise.race([p, to]);
   };
   // Run every job that isn't 'ok' yet (retries re-run skips/errors).
   const attemptAll = async () => {
     setProg();
     await Promise.all(BOOT_JOBS.map(async (j, i) => {
-      if (_bootStatus[i] === 'ok') return;
+      // First pass runs everything (all 'pending'). Retry skips 'ok' and 'timeout'
+      // (re-running a 40s hang would just hang again) → only re-runs fast failures.
+      if (_bootStatus[i] === 'ok' || _bootStatus[i] === 'timeout') return;
       _bootStatus[i] = await runOne(j.fn);
       setProg();
     }));
   };
 
   await attemptAll();
-  // Retry the ones that ERRORED (not skips) up to twice, with backoff.
-  for (let r = 0; r < 2; r++) {
-    if (!BOOT_JOBS.some((j, i) => _bootStatus[i] === 'error')) break;
-    setProg('Retrying… (' + (r + 1) + ')');
-    await new Promise(res => setTimeout(res, 1200 * (r + 1)));
+  // Retry only the ones that ERRORED FAST (real throws) — retrying a 40s timeout
+  // would just hang again. One quick retry is enough for a transient blip.
+  if (BOOT_JOBS.some((j, i) => _bootStatus[i] === 'error')) {
+    setProg('Retrying…');
+    await new Promise(res => setTimeout(res, 1500));
     await attemptAll();
   }
 
-  // A CRITICAL job still failing = don't silently enter with stale data.
-  const failed = BOOT_JOBS.filter((j, i) => j.critical && _bootStatus[i] === 'error');
+  // A CRITICAL job still failing (real error OR still hung past 40s) = don't enter silently.
+  const failed = BOOT_JOBS.filter((j, i) => j.critical && (_bootStatus[i] === 'error' || _bootStatus[i] === 'timeout'));
   if (failed.length) {
     if (spin) spin.style.display = 'none';
     if (txt)  txt.textContent = '';
