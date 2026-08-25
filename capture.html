@@ -68,7 +68,12 @@
   const LBL = qs.get('label') || '';          // human label, e.g. "Retest #1 · Sample 148"
   if (LBL) { document.getElementById('ctxLabel').textContent = LBL;
              document.getElementById('ctxSub').textContent = 'Evidence for: ' + LBL; }
-  if (UP) document.getElementById('linkNote').style.display = 'none';
+  // Diagnostic: show where this page will upload (helps confirm the QR carries
+  // the new CORS endpoint, not the old flow URL).
+  if (UP) {
+    let host = UP; try { host = new URL(UP).host; } catch (e) {}
+    document.getElementById('linkNote').textContent = 'Upload target: ' + host;
+  }
 
   const fileEl = document.getElementById('file');
   const prev = document.getElementById('preview');
@@ -134,7 +139,9 @@
         sendBtn.disabled = false; sendBtn.innerHTML = prevHtml;
       }
     } catch (e) {
-      msg.textContent = 'Network error — try again.'; msg.className='msg err';
+      let host = ''; try { host = new URL(UP).host; } catch (_) {}
+      msg.textContent = 'Network error to ' + host + ' — ' + (e && e.message ? e.message : 'blocked') + '. Try again.';
+      msg.className = 'msg err';
       sendBtn.disabled = false; sendBtn.innerHTML = prevHtml;
     }
   });
