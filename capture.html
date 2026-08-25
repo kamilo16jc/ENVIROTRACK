@@ -7,7 +7,7 @@
      this page may POST. Only Power Automate hosts are allowed — a tampered link
      (?url=https://evil.example) cannot exfiltrate the photo. If your flow uses a
      different host, add it to connect-src below. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://*.logic.azure.com https://*.azure-apihub.net; object-src 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://*.logic.azure.com https://*.azure-apihub.net https://*.cloudfunctions.net https://*.run.app; object-src 'none'; base-uri 'self'">
 <title>EnviroTrack — Attach Photo</title>
 <style>
   :root{--navy:#16243d;--violet:#6d40be;--green:#1A7A3A;--red:#C0392B}
