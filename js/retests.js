@@ -341,7 +341,9 @@ function loadRetests() {
         return `<div class="rt-retest">
           ${check}
           <span class="rt-rn">${esc(rt.retestNum)}</span>
-          <span class="rt-date">${rt.fecha}</span>
+          ${isPending
+            ? `<span class="rt-date rt-date-edit" onclick="openRescheduleModal(${rt.id})" title="Reschedule — change this retest's date"><svg class="ln" width="12" height="12" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${rt.fecha}</span>`
+            : `<span class="rt-date">${rt.fecha}</span>`}
           <span class="rt-status">${resBadge}${dueBadge}${labBadge}</span>
           <span class="rt-spacer"></span>
           <div class="rt-actions">
@@ -549,6 +551,44 @@ function openPhotoLightbox(i) {
   lb.classList.add('open');
 }
 function closePhotoLightbox() { document.getElementById('photoLightbox').classList.remove('open'); }
+
+// ── Reschedule a retest (change its scheduled date) ───────────────
+let RESCHED_ID = null;
+function openRescheduleModal(id) {
+  const rec = GH().find(r => r.id === id);
+  if (!rec) return;
+  RESCHED_ID = id;
+  document.getElementById('rescheduleInfo').innerHTML =
+    '<strong>' + esc(rec.retestNum || 'Retest') + '</strong> · Sample ' + rec.sample + ' — ' + esc(rec.planta) +
+    '<br><span style="color:var(--gray-500)">Current date:</span> <strong>' + rec.fecha + '</strong>';
+  const inp = document.getElementById('rescheduleDate');
+  inp.value = rec.fecha;
+  document.getElementById('rescheduleModal').classList.add('open');
+  setTimeout(() => inp.focus(), 50);
+}
+function closeRescheduleModal() {
+  document.getElementById('rescheduleModal').classList.remove('open');
+  RESCHED_ID = null;
+}
+function confirmReschedule() {
+  if (RESCHED_ID == null) return;
+  const newDate = document.getElementById('rescheduleDate').value;
+  if (!newDate) { toast('Choose a date', 'error'); return; }
+  const hist = GH(), rec = hist.find(r => r.id === RESCHED_ID);
+  if (!rec) { closeRescheduleModal(); return; }
+  if (newDate === rec.fecha) { closeRescheduleModal(); return; }
+  const old = rec.fecha;
+  rec.fecha = newDate;
+  SH(hist);
+  // Mirror to SharePoint (the recordsUpdate flow must map `fecha`→Date, else the
+  // next pull would revert it — same pattern as resultDate).
+  syncSafe(() => syncUpdateRecord(rec), 'reschedule retest');
+  closeRescheduleModal();
+  loadRetests();
+  if (typeof searchHistory === 'function') searchHistory();
+  if (typeof refreshDashboard === 'function') refreshDashboard();
+  toast('Retest moved from ' + old + ' to ' + newDate, 'success');
+}
 function buildPhotoQR() {
   const box = document.getElementById('phQR'); if (!box) return;
   box.innerHTML = 'Loading QR…';
