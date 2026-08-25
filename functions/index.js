@@ -6,7 +6,7 @@
 //  and is deployed later, independently.)
 // ═══════════════════════════════════════════════════════════════
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -196,11 +196,12 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (!url) {
     throw new HttpsError("failed-precondition", "Flow URL not configured for " + op);
   }
-  // photoUploadUrl: the signed-in desktop needs the raw upload URL to embed in
-  // the QR (the phone posts directly, without Firebase auth). Return it here
-  // instead of calling the flow — keeps the URL out of the public client code.
+  // photoUploadUrl: the QR embeds the URL the phone will POST to. The phone has no
+  // Firebase auth and the raw Power Automate URL has no CORS headers, so a browser
+  // POST is blocked. Return the CORS-enabled `photoUpload` function instead (it
+  // forwards to the flow server-side, keeping the flow URL hidden too).
   if (op === "photoUploadUrl") {
-    return { url: url };
+    return { url: "https://" + REGION + "-envirotrack-5173f.cloudfunctions.net/photoUpload" };
   }
   let res;
   try {
@@ -224,4 +225,27 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     return { content: c };
   }
   return text ? JSON.parse(text) : null;
+});
+
+// ── Public photo upload (CORS) ─────────────────────────────────────
+// The phone (capture.html, scanned from the retest QR) has no Firebase auth and
+// the raw Power Automate upload URL returns no CORS headers → a browser POST is
+// blocked ("Network error"). This CORS-enabled endpoint receives the photo and
+// forwards it to the flow server-side (the flow URL stays hidden). Unauthenticated
+// by design (anyone with the QR can add a photo), same trust model as before.
+exports.photoUpload = onRequest({ region: REGION, cors: true }, async (req, res) => {
+  if (req.method !== "POST") { res.status(405).json({ ok: false, error: "POST only" }); return; }
+  const url = process.env.FLOW_PHOTO_UPLOAD;
+  if (!url) { res.status(500).json({ ok: false, error: "not configured" }); return; }
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+    });
+    if (r.ok) { res.status(200).json({ ok: true }); }
+    else { res.status(502).json({ ok: false, status: r.status }); }
+  } catch (e) {
+    res.status(502).json({ ok: false, error: "upstream" });
+  }
 });
