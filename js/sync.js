@@ -166,6 +166,9 @@ function recordToSP(r) {
 function recordUpdateToSP(r) {
   return {
     id: r.id,
+    // The scheduled/collection date. Sent so a reschedule persists; the flow must
+    // map `fecha`→Date. Never empty (Date columns reject '' — breaks Update item).
+    fecha: r.fecha || todayLocal(),
     resultado: r.resultado || '',
     // The SharePoint ResultDate is a Date column: sending '' (or null/omitted)
     // makes the flow's "Update item" fail SILENTLY — it returns 202 but persists
