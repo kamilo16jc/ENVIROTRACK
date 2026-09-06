@@ -592,11 +592,17 @@ function confirmReschedule() {
 function buildPhotoQR() {
   const box = document.getElementById('phQR'); if (!box) return;
   box.innerHTML = 'Loading QR…';
-  Promise.resolve((typeof getPhotoUploadUrl === 'function') ? getPhotoUploadUrl() : '').then(url => {
-    if (!url) { box.innerHTML = '<span style="padding:10px;text-align:center">Upload URL unavailable</span>'; return; }
+  // Mint a fresh short-lived token for THIS retest → the QR expires (~15 min) and
+  // only a signed-in user can produce one. capture.html sends it with the upload.
+  Promise.all([
+    (typeof getPhotoUploadUrl === 'function') ? getPhotoUploadUrl() : Promise.resolve(''),
+    _spPost('photoToken', { retestId: _photoRetestId }).then(r => (r && r.token) || '').catch(() => '')
+  ]).then(([url, token]) => {
+    if (!url || !token) { box.innerHTML = '<span style="padding:10px;text-align:center">Upload unavailable</span>'; return; }
     const base = location.origin + location.pathname.replace(/[^/]*$/, '');   // app folder (…/ENVIROTRACK/)
     const capture = base + 'capture.html?url=' + encodeURIComponent(url) +
-      '&ref=' + encodeURIComponent(_photoRetestId) + '&label=' + encodeURIComponent(_photoLabel);
+      '&ref=' + encodeURIComponent(_photoRetestId) + '&label=' + encodeURIComponent(_photoLabel) +
+      '&token=' + encodeURIComponent(token);
     box.innerHTML = '';
     try { new QRCode(box, { text: capture, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M }); }
     catch (e) { box.innerHTML = '<span style="padding:10px">QR library not loaded</span>'; }

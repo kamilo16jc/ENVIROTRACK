@@ -66,6 +66,7 @@
   const UP  = qs.get('url')   || '';          // upload endpoint (from the QR)
   const REF = qs.get('ref')   || '';          // what this photo is attached to
   const LBL = qs.get('label') || '';          // human label, e.g. "Retest #1 · Sample 148"
+  const TOKEN = qs.get('token') || '';        // signed, short-lived upload token
   if (LBL) { document.getElementById('ctxLabel').textContent = LBL;
              document.getElementById('ctxSub').textContent = 'Evidence for: ' + LBL; }
   // Diagnostic: show where this page will upload (helps confirm the QR carries
@@ -125,7 +126,7 @@
       const stamp = new Date();
       const body = {
         retestId: REF,
-        fileName: 'photo_' + REF.replace(/[^0-9A-Za-z]/g,'') + '_' + stamp.getTime() + '.jpg',
+        token: TOKEN,
         contentBase64: dataUrl.split('base64,')[1],
         label: LBL,
         uploadedAt: stamp.toISOString()

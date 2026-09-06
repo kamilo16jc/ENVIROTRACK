@@ -8,8 +8,40 @@
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
+
+// ── Photo upload tokens ────────────────────────────────────────────
+// The phone (capture.html) has no Firebase auth, so the upload endpoint is
+// public. To stop anyone from posting files to SharePoint, a signed-in user
+// mints a SHORT-LIVED token scoped to one retest; the QR carries it and the
+// upload function verifies it (signature + expiry + retestId). HMAC secret in
+// functions/.env (PHOTO_TOKEN_SECRET).
+function signPhotoToken(retestId, ttlMs) {
+  const secret = process.env.PHOTO_TOKEN_SECRET;
+  if (!secret) throw new HttpsError("failed-precondition", "Photo tokens not configured.");
+  const exp = Date.now() + (ttlMs || 15 * 60 * 1000);   // 15 min
+  const payload = Buffer.from(JSON.stringify({ r: String(retestId), e: exp })).toString("base64url");
+  const sig = crypto.createHmac("sha256", secret).update(payload).digest("base64url");
+  return payload + "." + sig;
+}
+function verifyPhotoToken(token, retestId) {
+  try {
+    const secret = process.env.PHOTO_TOKEN_SECRET;
+    if (!secret || !token) return false;
+    const parts = String(token).split(".");
+    if (parts.length !== 2) return false;
+    const expected = crypto.createHmac("sha256", secret).update(parts[0]).digest("base64url");
+    const a = Buffer.from(parts[1]);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;   // bad signature
+    const data = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+    if (!data || data.e < Date.now()) return false;                            // expired
+    if (String(data.r) !== String(retestId)) return false;                     // wrong retest
+    return true;
+  } catch (e) { return false; }
+}
 
 // ── Admin allowlist (bootstrap) ────────────────────────────────────
 // These emails can ALWAYS manage users, so there is always at least one
@@ -181,6 +213,13 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     );
   }
   const { op, body } = request.data || {};
+  // photoToken: mint a short-lived, retest-scoped upload token for the QR. Only
+  // a signed-in, provisioned user (checked above) can get one.
+  if (op === "photoToken") {
+    const rid = String((body && body.retestId) || "");
+    if (!rid) throw new HttpsError("invalid-argument", "Missing retestId");
+    return { token: signPhotoToken(rid) };
+  }
   const envKey = FLOW_ENV[op];
   if (!envKey) {
     throw new HttpsError("invalid-argument", "Unknown operation: " + op);
@@ -232,16 +271,43 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
 // the raw Power Automate upload URL returns no CORS headers → a browser POST is
 // blocked ("Network error"). This CORS-enabled endpoint receives the photo and
 // forwards it to the flow server-side (the flow URL stays hidden). Unauthenticated
-// by design (anyone with the QR can add a photo), same trust model as before.
+// The phone posts here with a signed, short-lived, retest-scoped token (minted
+// by a signed-in user via op 'photoToken'). Four gates stop abuse: (1) valid
+// unexpired token, (2) must be a real image (JPEG/PNG magic bytes), (3) size cap,
+// (4) filename forced server-side (client can't set .exe/.html). Then forwards
+// to the flow (flow URL stays hidden).
 exports.photoUpload = onRequest({ region: REGION, cors: true }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).json({ ok: false, error: "POST only" }); return; }
+  const b = req.body || {};
+  const retestId = String(b.retestId || "");
+  // 1) Token: valid signature + not expired + scoped to THIS retest.
+  if (!verifyPhotoToken(b.token, retestId)) {
+    res.status(403).json({ ok: false, error: "invalid or expired upload token" }); return;
+  }
+  // 2) Real image only — JPEG (/9j/) or PNG (iVBORw0KGgo) in base64.
+  const b64 = String(b.contentBase64 || "");
+  if (!/^(\/9j\/|iVBORw0KGgo)/.test(b64)) {
+    res.status(400).json({ ok: false, error: "only JPEG/PNG images are accepted" }); return;
+  }
+  // 3) Size cap (~9 MB decoded).
+  if (b64.length > 12 * 1024 * 1024) {
+    res.status(413).json({ ok: false, error: "image too large" }); return;
+  }
+  // 4) Force a safe, server-generated filename (ignore whatever the client sent).
+  const safeName = "photo_" + retestId.replace(/[^0-9A-Za-z]/g, "") + "_" + Date.now() + ".jpg";
   const url = process.env.FLOW_PHOTO_UPLOAD;
   if (!url) { res.status(500).json({ ok: false, error: "not configured" }); return; }
   try {
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {}),
+      body: JSON.stringify({
+        retestId: retestId,
+        fileName: safeName,
+        contentBase64: b64,
+        label: String(b.label || "").slice(0, 200),
+        uploadedAt: b.uploadedAt || new Date().toISOString(),
+      }),
     });
     if (r.ok) { res.status(200).json({ ok: true }); }
     else { res.status(502).json({ ok: false, status: r.status }); }
