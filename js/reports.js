@@ -338,7 +338,11 @@ function exportReportPDF(opts) {
         pend=hist.filter(h=>h.resultado==='Pending').length,
         retests=hist.filter(h=>h.retestNum).length,
         posRate= total>0? +(pos/total*100).toFixed(1):0,
-        openPos=hist.filter(h=>h.resultado==='Positive'&&!h.retestNum).length;
+        // "Open" = original positives NOT yet resolved. A closed case keeps its
+        // record as 'Positive' (resolution lives in ResolvedRetests), so we must
+        // exclude the resolved ones — same rule as the SQF report & Retests view.
+        _rptResolvedIds=new Set((typeof GRV==='function'?GRV():[]).map(r=>r.originalId)),
+        openPos=hist.filter(h=>h.resultado==='Positive'&&!h.retestNum&&!_rptResolvedIds.has(h.id)).length;
 
   const bStats=plants.map(p=>{const ph=hist.filter(h=>h.planta===p);const pp=ph.filter(h=>h.resultado==='Positive').length;return {p,total:ph.length,pos:pp,rate:ph.length>0?pp/ph.length*100:0};});
   const worstB=bStats.filter(b=>b.total>0).sort((a,b)=>b.rate-a.rate)[0];
