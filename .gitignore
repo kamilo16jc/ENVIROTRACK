@@ -12,5 +12,3 @@ _migrate_master.js
 functions/.env
 .env
 
-# Floor plan images (privados — no al repo publico)
-assets/plan_*
