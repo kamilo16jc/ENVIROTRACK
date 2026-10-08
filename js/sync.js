@@ -145,17 +145,28 @@ function spToRecord(it) {
   };
 }
 
+// Coerce to an integer the SharePoint flow schema will accept. A cell edited in
+// the generator comes back as a STRING; the recordsWrite flow trigger types
+// id/sample/zone as integers and rejects a string with HTTP 400
+// (TriggerInputSchemaMismatch) — NO run is created, so the whole batch silently
+// fails to save. Keep the original value when it isn't numeric so the problem
+// stays visible rather than turning into null.
+function _spInt(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : v;
+}
+
 // app record → SharePoint payload (WRITE / create). Seals audit fields.
 function recordToSP(r) {
   return {
-    id: r.id, fecha: r.fecha, department: r.planta, by: r.by || '',
-    sample: r.sample, zone: r.zone, area: r.area || '', line: r.line || '',
+    id: _spInt(r.id), fecha: r.fecha, department: r.planta, by: r.by || '',
+    sample: _spInt(r.sample), zone: _spInt(r.zone), area: r.area || '', line: r.line || '',
     location: r.location || '',
     ecoli: r.ecoli ? 1 : 0, listeria: r.listeria ? 1 : 0,
     salmonella: r.salmonella ? 1 : 0, saureus: r.saureus ? 1 : 0,
     resultado: r.resultado || 'Pending', retestNum: r.retestNum || '',
     labNotes: r.labNotes || '', isRetest: !!r.isRetest,
-    originalId: r.originalId || 0, scheduled: !!r.scheduled,
+    originalId: _spInt(r.originalId) || 0, scheduled: !!r.scheduled,
     enteredByEmail: (CU && CU.email) || '',
     enteredByName:  (CU && CU.displayName) || '',
     enteredAt: new Date().toISOString()

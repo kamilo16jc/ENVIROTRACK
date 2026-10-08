@@ -247,7 +247,13 @@ function confirmOverride() {
   const reason = document.getElementById('ovReason').value.trim();
   if(!reason) { toast('A reason is required','error'); return; }
   const {idx,field,oldVal,newVal} = PENDO;
-  if(field==='zone') TESTS[idx][field] = parseInt(newVal);
+  // sample & zone are integer columns in SharePoint — keep them numbers so the
+  // recordsWrite flow schema accepts them (a string sample → HTTP 400, no save).
+  if(field==='zone' || field==='sample') {
+    const n = parseInt(newVal, 10);
+    if(!Number.isFinite(n)) { toast(field+' must be a number','error'); return; }
+    TESTS[idx][field] = n;
+  }
   else if(['ecoli','listeria','salmonella','saureus'].includes(field)) TESTS[idx][field] = newVal==='X'?1:0;
   else TESTS[idx][field] = newVal;
   TESTS[idx].modified = true;
