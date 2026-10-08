@@ -67,9 +67,6 @@
         <div class="lab-cell lab-cell-a"></div><div class="lab-cell lab-cell-b"></div><div class="lab-cell lab-cell-c"></div><div class="lab-cell lab-cell-d"></div>
         <span class="lab-speck lab-speck-a"></span><span class="lab-speck lab-speck-b"></span><span class="lab-speck lab-speck-c"></span><span class="lab-speck lab-speck-d"></span>
       </div>
-      <header class="lab-header">
-        <span class="lab-header-caption">Environmental Monitoring — Caputo Foods</span>
-      </header>
       <main class="lab-main">
         <section class="lab-panel" aria-labelledby="lab-title">
           <div class="lab-intro">
@@ -99,12 +96,6 @@
           </div>
         </section>
       </main>
-      <footer class="lab-footer">
-        <button type="button" class="lab-motion" id="lab-motion" aria-pressed="false" onclick="labToggleMotion()">
-          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-          <span id="lab-motion-label">Pause animations</span>
-        </button>
-      </footer>
     </div>
   </div>
 </div>
@@ -120,17 +111,6 @@
     btn.innerHTML = show
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
-  }
-  // Login: pause / resume the background animations.
-  function labToggleMotion() {
-    var root = document.getElementById('enviro-login-single-logo');
-    var btn = document.getElementById('lab-motion');
-    var paused = root.classList.toggle('is-paused');
-    btn.setAttribute('aria-pressed', String(paused));
-    document.getElementById('lab-motion-label').textContent = paused ? 'Resume animations' : 'Pause animations';
-    btn.querySelector('svg').outerHTML = paused
-      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
   }
 </script>
 
