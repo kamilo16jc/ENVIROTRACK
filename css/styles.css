@@ -266,3 +266,93 @@ tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 
 /* ── SESSION WARNING ───────────────────────────────────────── */
 #sessionWarning{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:white;padding:14px 24px;z-index:9998;align-items:center;justify-content:center;gap:20px;border-top:3px solid var(--yellow);box-shadow:0 -4px 20px rgba(0,0,0,.3);}
+
+/* ══════════════════════════════════════════════════════════════
+   LOGIN — laboratory backdrop + sign-in panel (scoped)
+   Forced to light mode to stay consistent with the rest of the app.
+   The logo is an <img> (brand colours preserved, not recoloured).
+   ══════════════════════════════════════════════════════════════ */
+#loginScreen.active{display:block;align-items:initial;justify-content:initial;background:none;padding:0;min-height:100vh;}
+html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-height:100svh;}
+#enviro-login-single-logo{
+  color-scheme:light;
+  --lab-bg:light-dark(#f4f7f1,#102019); --lab-surface:light-dark(#ffffff,#1c2c24);
+  --lab-text:light-dark(#263d32,#e8eee9); --lab-muted:light-dark(#758076,#a5b5aa);
+  --lab-border:light-dark(#e3e9df,#374a3d); --lab-input:light-dark(#fbfcfa,#203329);
+  --lab-green:light-dark(#3b684e,#b6d8b8); --lab-btn:light-dark(#345d46,#b6d8b8);
+  --lab-btntext:light-dark(#fff,#192a1e); --lab-soft:light-dark(#eef4e8,#314936);
+  --lab-sage:light-dark(#d8e7cc,#2d4933); --lab-cream:light-dark(#f3e8cd,#393b24);
+  --lab-cell:light-dark(#adc49b,#607d5e); --lab-shadow:light-dark(#3d562b0d,#00000026);
+  --lab-glass:light-dark(#ffffff66,#182b226b); --lab-rim:light-dark(#ffffffc7,#a3c6af30);
+  --lab-glass-line:light-dark(#71866426,#b6d8b829);
+  --lab-logo-dot:light-dark(#83a95c,#bfd68e);
+  font-family:'Segoe UI',Arial,sans-serif; color:var(--lab-text); width:100%;
+}
+#enviro-login-single-logo *{box-sizing:border-box;}
+#enviro-login-single-logo .lab-page{background:var(--lab-bg);position:relative;isolation:isolate;overflow:hidden;min-height:724px;padding:30px 36px 24px;display:flex;flex-direction:column;}
+#enviro-login-single-logo .lab-backdrop{position:absolute;inset:0;pointer-events:none;z-index:-1;overflow:hidden;background:radial-gradient(ellipse at 8% 58%,var(--lab-sage),transparent 48%),radial-gradient(ellipse at 96% 22%,var(--lab-cream),transparent 45%);}
+#enviro-login-single-logo .lab-haze{width:420px;height:420px;border-radius:50%;position:absolute;background:var(--lab-sage);opacity:.3;filter:blur(55px);right:-120px;bottom:-120px;animation:lab-haze-drift 32s ease-in-out infinite alternate;}
+#enviro-login-single-logo .lab-dish{position:absolute;width:238px;height:238px;border:1px solid var(--lab-cell);border-radius:50%;padding:13px;opacity:.34;left:-38px;top:196px;transform:rotate(-15deg);animation:lab-dish-drift 26s ease-in-out infinite alternate;}
+#enviro-login-single-logo .lab-dish-inner{border:1px solid var(--lab-cell);height:100%;position:relative;border-radius:50%;background:radial-gradient(circle at 30% 25%,var(--lab-soft),transparent 80%);}
+#enviro-login-single-logo .lab-colony{position:absolute;border:1px solid var(--lab-cell);border-radius:50%;background:color-mix(in srgb,var(--lab-cell) 13%,transparent);}
+#enviro-login-single-logo .lab-colony::after{content:'';position:absolute;inset:27%;border-radius:50%;background:var(--lab-cell);opacity:.2;}
+#enviro-login-single-logo .lab-colony:nth-child(1){width:37px;height:37px;top:40px;left:43px;}
+#enviro-login-single-logo .lab-colony:nth-child(2){width:21px;height:21px;top:124px;left:72px;}
+#enviro-login-single-logo .lab-colony:nth-child(3){width:48px;height:48px;top:83px;left:125px;}
+#enviro-login-single-logo .lab-colony:nth-child(4){width:12px;height:12px;top:52px;left:135px;}
+#enviro-login-single-logo .lab-colony:nth-child(5){width:15px;height:15px;top:159px;left:120px;}
+#enviro-login-single-logo .lab-cell{position:absolute;border:1px solid var(--lab-cell);background:color-mix(in srgb,var(--lab-soft) 45%,transparent);border-radius:50%;opacity:.35;animation:lab-cell-drift 23s ease-in-out infinite alternate;}
+#enviro-login-single-logo .lab-cell::before{content:'';position:absolute;inset:9%;border:1px solid var(--lab-cell);border-radius:inherit;opacity:.5;}
+#enviro-login-single-logo .lab-cell::after{content:'';position:absolute;width:17%;height:17%;border:1px solid var(--lab-cell);border-radius:50%;top:36%;left:41%;background:color-mix(in srgb,var(--lab-cell) 15%,transparent);}
+#enviro-login-single-logo .lab-cell-a{width:112px;height:112px;right:93px;top:138px;animation-delay:-8s;}
+#enviro-login-single-logo .lab-cell-b{width:53px;height:92px;right:37px;top:393px;border-radius:40px;transform:rotate(38deg);animation-name:lab-rod-drift;animation-duration:30s;}
+#enviro-login-single-logo .lab-cell-c{width:68px;height:68px;left:218px;bottom:106px;animation-delay:-14s;}
+#enviro-login-single-logo .lab-cell-d{width:34px;height:58px;left:195px;top:105px;border-radius:30px;transform:rotate(38deg);animation-name:lab-rod-drift;animation-delay:-11s;opacity:.25;}
+#enviro-login-single-logo .lab-speck{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--lab-cell);opacity:.5;animation:lab-cell-drift 19s ease-in-out infinite alternate;}
+#enviro-login-single-logo .lab-speck-a{top:28%;left:27%;animation-delay:-9s;}
+#enviro-login-single-logo .lab-speck-b{top:67%;right:22%;animation-delay:-2s;}
+#enviro-login-single-logo .lab-speck-c{bottom:15%;right:12%;width:3px;height:3px;}
+#enviro-login-single-logo .lab-speck-d{top:9%;left:54%;width:3px;height:3px;animation-delay:-14s;}
+#enviro-login-single-logo .lab-header{position:relative;display:flex;align-items:center;min-height:29px;gap:13px;padding-right:90px;}
+#enviro-login-single-logo .lab-client-logo{color:var(--lab-green);display:block;width:157px;max-width:100%;flex-shrink:0;}
+#enviro-login-single-logo .lab-client-logo img{width:100%;height:auto;display:block;}
+#enviro-login-single-logo .lab-client-logo-large{width:226px;margin-bottom:24px;}
+#enviro-login-single-logo .lab-header-caption{color:var(--lab-muted);font-size:11px;}
+#enviro-login-single-logo .lab-main{flex:1;position:relative;display:flex;justify-content:center;align-items:center;padding:48px 0 38px;}
+#enviro-login-single-logo .lab-panel{width:100%;max-width:724px;display:grid;grid-template-columns:43% 57%;border:1px solid var(--lab-rim);border-radius:23px;background:var(--lab-glass);backdrop-filter:blur(15px) saturate(115%);-webkit-backdrop-filter:blur(15px) saturate(115%);box-shadow:0 20px 65px var(--lab-shadow),inset 0 1px 0 var(--lab-rim);}
+#enviro-login-single-logo .lab-intro{padding:43px 34px 35px;border-right:1px solid var(--lab-glass-line);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-width:0;}
+#enviro-login-single-logo .lab-formside{padding:37px 36px 29px;min-width:0;}
+#enviro-login-single-logo .lab-formheading{font-size:14px;font-weight:500;margin:0 0 24px;color:var(--lab-text);}
+#enviro-login-single-logo h2{font-size:32px;font-weight:400;line-height:1.2;letter-spacing:-1.1px;color:var(--lab-text);margin:0;width:100%;text-align:center;}
+#enviro-login-single-logo .lab-field{margin-bottom:18px;}
+#enviro-login-single-logo .lab-formside label{display:block;color:var(--lab-text);font-size:12px;font-weight:500;margin-bottom:8px;}
+#enviro-login-single-logo .lab-formside input{width:100%;height:46px;font:400 14px 'Segoe UI',Arial,sans-serif;background:color-mix(in srgb,var(--lab-input) 53%,transparent);color:var(--lab-text);border:1px solid var(--lab-glass-line);border-radius:8px;padding:0 12px;}
+#enviro-login-single-logo .lab-formside input::placeholder{color:var(--lab-muted);opacity:.8;}
+#enviro-login-single-logo .lab-password{position:relative;}
+#enviro-login-single-logo .lab-password input{padding-right:46px;}
+#enviro-login-single-logo .lab-eye{position:absolute;top:1px;right:1px;height:44px;width:44px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--lab-muted);cursor:pointer;}
+#enviro-login-single-logo .lab-eye svg{width:16px;height:16px;}
+#enviro-login-single-logo .lab-enter{position:relative;isolation:isolate;overflow:hidden;width:100%;height:46px;border:0;border-radius:8px;background:var(--lab-btn);color:var(--lab-btntext);font:500 13px 'Segoe UI',Arial,sans-serif;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:filter .25s,transform .25s,box-shadow .25s;}
+#enviro-login-single-logo .lab-enter::before{content:'';position:absolute;pointer-events:none;inset:0 auto 0 -50%;width:40%;background:linear-gradient(110deg,transparent,color-mix(in srgb,var(--lab-btntext) 19%,transparent),transparent);animation:enviro-enter-shine 7s ease-in-out infinite;}
+#enviro-login-single-logo .lab-enter span{position:relative;}
+#enviro-login-single-logo .lab-enter:hover,#enviro-login-single-logo .lab-enter:focus-visible{filter:brightness(1.06);transform:translateY(-2px);box-shadow:0 7px 18px color-mix(in srgb,var(--lab-btn) 15%,transparent);}
+#enviro-login-single-logo .lab-enter:active{transform:translateY(0) scale(.985);}
+@keyframes enviro-enter-shine{0%,65%{transform:translateX(0) skewX(-16deg);}90%,100%{transform:translateX(420%) skewX(-16deg);}}
+#enviro-login-single-logo .lab-note{font-size:11px;color:var(--lab-muted);text-align:center;margin:22px 0 0;}
+#enviro-login-single-logo .lab-status{color:#c0392b;font-size:12px;font-weight:500;line-height:1.6;margin:13px 0 0;text-align:center;min-height:16px;}
+#enviro-login-single-logo .lab-status:empty{display:none;}
+#enviro-login-single-logo .lab-footer{position:relative;display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:11px;color:var(--lab-muted);}
+#enviro-login-single-logo .lab-motion{display:flex;align-items:center;gap:7px;color:var(--lab-muted);border:0;background:transparent;padding:8px 0;font:400 11px 'Segoe UI',Arial,sans-serif;cursor:pointer;}
+#enviro-login-single-logo .lab-motion svg{width:13px;height:13px;}
+#enviro-login-single-logo.is-paused .lab-backdrop *{animation-play-state:paused !important;}
+#enviro-login-single-logo.is-paused .lab-enter::before{animation-play-state:paused !important;}
+@keyframes lab-dish-drift{from{transform:translate(0,0) rotate(-15deg);}to{transform:translate(13px,-20px) rotate(-6deg);}}
+@keyframes lab-cell-drift{from{transform:translate(0,0);}to{transform:translate(12px,-20px);}}
+@keyframes lab-rod-drift{from{transform:translate(0,0) rotate(38deg);}to{transform:translate(-12px,17px) rotate(48deg);}}
+@keyframes lab-haze-drift{from{transform:translate(0,0);}to{transform:translate(-55px,-35px);}}
+@media(max-width:680px){#enviro-login-single-logo .lab-page{padding:26px 20px 18px;min-height:700px;}#enviro-login-single-logo .lab-dish{left:-130px;opacity:.25;}#enviro-login-single-logo .lab-cell-a{right:-46px;}#enviro-login-single-logo .lab-cell-c{left:30px;bottom:68px;}#enviro-login-single-logo .lab-cell-d{left:30px;top:100px;}#enviro-login-single-logo .lab-header-caption{display:none;}#enviro-login-single-logo .lab-cell-b{right:-20px;}#enviro-login-single-logo .lab-main{padding:46px 0 36px;}}
+@media(max-width:800px) and (min-width:601px){#enviro-login-single-logo .lab-intro{padding:34px 26px;}#enviro-login-single-logo .lab-formside{padding:32px 26px 26px;}#enviro-login-single-logo h2{font-size:29px;}}
+@media(max-width:600px){#enviro-login-single-logo .lab-panel{max-width:410px;grid-template-columns:minmax(0,1fr);padding:0;}#enviro-login-single-logo .lab-intro{padding:27px 27px 23px;border-right:0;border-bottom:1px solid var(--lab-glass-line);}#enviro-login-single-logo h2{max-width:none;font-size:25px;margin-bottom:8px;}#enviro-login-single-logo .lab-formside{padding:25px 27px 25px;}#enviro-login-single-logo .lab-formheading{margin-bottom:20px;}#enviro-login-single-logo .lab-client-logo-large{width:198px;margin-bottom:24px;}}
+@media(max-width:400px){#enviro-login-single-logo .lab-page{padding:23px 16px 17px;}#enviro-login-single-logo h2{font-size:24px;}#enviro-login-single-logo .lab-formside input{font-size:16px;}#enviro-login-single-logo .lab-footer{gap:9px;align-items:flex-start;}#enviro-login-single-logo .lab-header{padding-right:70px;}}
+@media(pointer:coarse){#enviro-login-single-logo .lab-motion{min-height:44px;}}
+@media(prefers-reduced-motion:reduce){#enviro-login-single-logo .lab-backdrop *{animation:none !important;}#enviro-login-single-logo .lab-enter{transition:none;}#enviro-login-single-logo .lab-enter::before{animation:none;display:none;}#enviro-login-single-logo .lab-enter:hover,#enviro-login-single-logo .lab-enter:focus-visible,#enviro-login-single-logo .lab-enter:active{transform:none;}}
