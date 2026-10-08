@@ -49,11 +49,30 @@ function flushOutbox() {
   _flushPromise = _doFlush().finally(() => { _flushPromise = null; });
   return _flushPromise;
 }
+// Integer columns in SharePoint. An entry queued by an OLDER build (before the
+// sample/zone coercion fix) can carry a STRING here — the flow trigger then
+// rejects the whole payload with HTTP 400 (TriggerInputSchemaMismatch) and,
+// since the flush stops on the first failure, the entire queue stalls forever.
+// Coerce these on the way out so a poisoned entry drains instead of blocking.
+const _INT_FIELDS = ['id', 'sample', 'zone', 'originalId'];
+function _sanitizeForSend(body) {
+  if (body && Array.isArray(body.items)) {
+    body.items.forEach(it => {
+      if (it && typeof it === 'object') {
+        _INT_FIELDS.forEach(f => { if (it[f] !== undefined && it[f] !== '') it[f] = _spInt(it[f]); });
+      }
+    });
+  }
+  return body;
+}
+
 async function _doFlush() {
   while (true) {
     const q = getOutbox();
     if (!q.length) { updateSyncBadge(); return true; }
     const entry = q[0];
+    _sanitizeForSend(entry.body);  // repair legacy string-in-int payloads in place
+    _setOutbox(q);                 // persist the cleaned payload before sending
     try {
       await _spPost(entry.op, entry.body);
     } catch (e) {
