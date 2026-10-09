@@ -233,26 +233,22 @@
   <!-- Sub-header: minimalist 3D controls -->
   <div class="subbar">
     <style>
-      .subbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:9px 24px;background:var(--white);border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:58px;z-index:190}
-      .hdr-btn{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--gray-600);
-        border:1px solid rgba(255,255,255,.6);background:linear-gradient(135deg,#ffffff,#eaf1e4);
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 rgba(40,61,49,.06),0 2px 4px rgba(40,61,49,.10),0 5px 12px rgba(40,61,49,.10);
-        transition:transform .14s ease,box-shadow .14s ease,color .14s ease}
-      .hdr-btn:hover{transform:translateY(-2px);color:var(--green);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 0 rgba(40,61,49,.08),0 4px 8px rgba(40,61,49,.14),0 12px 22px rgba(40,61,49,.16)}
+      .subbar{display:flex;align-items:center;gap:10px;padding:12px 32px;background:var(--white);border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:58px;z-index:190}
+      .subbar-title{margin-right:auto;font-size:20px;font-weight:700;letter-spacing:-.4px;color:var(--gray-900)}
+      .hdr-btn{width:36px;height:36px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--gray-600);
+        border:1px solid var(--gray-200);background:transparent;transition:background .14s ease,color .14s ease,border-color .14s ease}
+      .hdr-btn:hover{background:var(--green-light);color:var(--green);border-color:transparent}
       .hdr-btn.spin svg{animation:liveSpin .8s linear infinite}
-      .hdr-btn.logout:hover{color:var(--red)}
+      .hdr-btn.logout:hover{background:var(--red-light);color:var(--red)}
       @keyframes liveSpin{to{transform:rotate(360deg)}}
-      .hdr-avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;letter-spacing:.03em;cursor:default;user-select:none;
-        background:linear-gradient(135deg,#4f8468,#345d46);border:1px solid rgba(255,255,255,.28);
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 2px 5px rgba(42,76,57,.30),0 7px 16px rgba(42,76,57,.26);
-        transition:transform .14s ease,box-shadow .14s ease}
-      .hdr-avatar:hover{transform:translateY(-2px)}
+      .hdr-avatar{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;letter-spacing:.03em;cursor:default;user-select:none;background:var(--green)}
       .notif-count{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;background:var(--red);color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
       .notif-panel{position:absolute;top:48px;right:0;width:366px;max-height:462px;overflow-y:auto;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 14px 38px rgba(16,24,40,.18);z-index:500;display:none}
       .notif-panel.open{display:block}
       .notif-item{display:flex;gap:11px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--gray-100);transition:background .12s}
       .notif-item:hover{background:#eef2f8 !important}
     </style>
+    <div class="subbar-title" id="pageTitle">Dashboard</div>
     <button class="hdr-btn" id="liveRefreshBtn" onclick="liveManualRefresh()" title="Refresh data">
       <svg class="ln" width="16" height="16" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
