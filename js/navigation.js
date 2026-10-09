@@ -25,6 +25,12 @@ function showPage(p) {
   const navEl = document.getElementById('nav-'+p);
   if(navEl) navEl.classList.add('active');
 
+  // Reflect the current page name in the top bar.
+  const _titles = { dashboard:'Dashboard', history:'Test History', retests:'Retests',
+    submissions:'Lab Submissions', generator:'Generate Tests', reports:'Reports', settings:'Settings' };
+  const _pt = document.getElementById('pageTitle');
+  if(_pt && _titles[p]) _pt.textContent = _titles[p];
+
   // Highlight parent group button for dropdown items
   const groupMap = {
     'history': 'nav-records', 'retests': 'nav-records', 'submissions': 'nav-records',
