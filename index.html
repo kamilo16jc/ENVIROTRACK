@@ -28,28 +28,57 @@
 <body>
 <!-- LOADING SPLASH (shown after login while data syncs) -->
 <style>
-  #loadingSplash{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;
-    background:linear-gradient(135deg,#eaf4f4 0%,#e6ecf6 55%,#dde6f2 100%);color:#0B1F45;font-family:var(--font)}
+  #loadingSplash{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+    color-scheme:light;color:var(--navy);font-family:var(--font);background:#f4f7f1;isolation:isolate;overflow:hidden;
+    --lab-sage:#d8e7cc;--lab-cream:#f3e8cd;--lab-cell:#adc49b;--lab-soft:#eef4e8}
   #loadingSplash.show{display:flex}
-  .ls-logo{display:flex;align-items:center;gap:12px;font-size:22px;font-weight:800;letter-spacing:-.02em}
-  .ls-logo svg{width:34px;height:34px}
-  .ls-sub{font-size:13px;color:#5b6b86;margin-top:-4px}
-  .ls-bar{width:260px;height:6px;border-radius:6px;background:rgba(11,31,69,.12);overflow:hidden}
-  .ls-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#0F5F63,#8DC63F);transition:width .35s ease}
-  .ls-pct{font-size:12px;color:#6b7a93;letter-spacing:.03em}
-  .ls-spin{width:16px;height:16px;border:2px solid rgba(11,31,69,.18);border-top-color:#0F5F63;border-radius:50%;display:inline-block;animation:lsSpin .7s linear infinite;vertical-align:-3px;margin-right:7px}
-  @keyframes lsSpin{to{transform:rotate(360deg)}}
+  /* Lab backdrop — same animated scene as the login */
+  #loadingSplash .lab-backdrop{position:absolute;inset:0;pointer-events:none;z-index:-1;overflow:hidden;background:radial-gradient(ellipse at 8% 58%,var(--lab-sage),transparent 48%),radial-gradient(ellipse at 96% 22%,var(--lab-cream),transparent 45%)}
+  #loadingSplash .lab-haze{width:460px;height:460px;border-radius:50%;position:absolute;background:var(--lab-sage);opacity:.3;filter:blur(55px);right:-120px;bottom:-120px;animation:lab-haze-drift 32s ease-in-out infinite alternate}
+  #loadingSplash .lab-dish{position:absolute;width:238px;height:238px;border:1px solid var(--lab-cell);border-radius:50%;padding:13px;opacity:.34;left:-38px;top:30%;transform:rotate(-15deg);animation:lab-dish-drift 26s ease-in-out infinite alternate}
+  #loadingSplash .lab-dish-inner{border:1px solid var(--lab-cell);height:100%;position:relative;border-radius:50%;background:radial-gradient(circle at 30% 25%,var(--lab-soft),transparent 80%)}
+  #loadingSplash .lab-colony{position:absolute;border:1px solid var(--lab-cell);border-radius:50%;background:color-mix(in srgb,var(--lab-cell) 13%,transparent)}
+  #loadingSplash .lab-colony::after{content:'';position:absolute;inset:27%;border-radius:50%;background:var(--lab-cell);opacity:.2}
+  #loadingSplash .lab-colony:nth-child(1){width:37px;height:37px;top:40px;left:43px}
+  #loadingSplash .lab-colony:nth-child(2){width:21px;height:21px;top:124px;left:72px}
+  #loadingSplash .lab-colony:nth-child(3){width:48px;height:48px;top:83px;left:125px}
+  #loadingSplash .lab-colony:nth-child(4){width:12px;height:12px;top:52px;left:135px}
+  #loadingSplash .lab-colony:nth-child(5){width:15px;height:15px;top:159px;left:120px}
+  #loadingSplash .lab-cell{position:absolute;border:1px solid var(--lab-cell);background:color-mix(in srgb,var(--lab-soft) 45%,transparent);border-radius:50%;opacity:.35;animation:lab-cell-drift 23s ease-in-out infinite alternate}
+  #loadingSplash .lab-cell::before{content:'';position:absolute;inset:9%;border:1px solid var(--lab-cell);border-radius:inherit;opacity:.5}
+  #loadingSplash .lab-cell::after{content:'';position:absolute;width:17%;height:17%;border:1px solid var(--lab-cell);border-radius:50%;top:36%;left:41%;background:color-mix(in srgb,var(--lab-cell) 15%,transparent)}
+  #loadingSplash .lab-cell-a{width:112px;height:112px;right:12%;top:18%;animation-delay:-8s}
+  #loadingSplash .lab-cell-b{width:53px;height:92px;right:8%;bottom:14%;border-radius:40px;transform:rotate(38deg);animation-name:lab-rod-drift;animation-duration:30s}
+  #loadingSplash .lab-cell-c{width:68px;height:68px;left:16%;bottom:16%;animation-delay:-14s}
+  #loadingSplash .lab-cell-d{width:34px;height:58px;left:20%;top:16%;border-radius:30px;transform:rotate(38deg);animation-name:lab-rod-drift;animation-delay:-11s;opacity:.25}
+  #loadingSplash .lab-speck{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--lab-cell);opacity:.5;animation:lab-cell-drift 19s ease-in-out infinite alternate}
+  #loadingSplash .lab-speck-a{top:28%;left:27%;animation-delay:-9s}
+  #loadingSplash .lab-speck-b{top:67%;right:22%;animation-delay:-2s}
+  #loadingSplash .lab-speck-c{bottom:15%;right:12%;width:3px;height:3px}
+  #loadingSplash .lab-speck-d{top:9%;left:54%;width:3px;height:3px;animation-delay:-14s}
+  .ls-logo{display:flex;align-items:center;justify-content:center}
+  .ls-logo img{height:64px;width:auto;display:block}
+  /* Indeterminate loader (provided CSS) */
+  .enviro-loader{--loader-sage:#809d72;--loader-cream:#e8dfc5;--loader-track:#e4eadd;width:100%;max-width:320px}
+  .enviro-loader__track{position:relative;height:3px;overflow:hidden;border-radius:999px;background:var(--loader-track)}
+  .enviro-loader__track::after{content:'';position:absolute;inset:0 auto 0 0;width:30%;border-radius:inherit;background:linear-gradient(90deg,var(--loader-cream),var(--loader-sage) 65%,var(--loader-sage));animation:enviro-loader-travel 2.6s cubic-bezier(.4,0,.2,1) infinite}
+  @keyframes enviro-loader-travel{from{transform:translateX(-110%)}to{transform:translateX(350%)}}
+  @media(prefers-reduced-motion:reduce){.enviro-loader__track::after{animation:none;left:35%;transform:none}#loadingSplash .lab-backdrop *{animation:none !important}}
   #lsError{display:none;text-align:center;max-width:360px;margin-top:2px}
-  #lsErrMsg{font-size:13px;color:#b45309;font-weight:600;line-height:1.5;margin-bottom:16px}
+  #lsErrMsg{font-size:13px;color:#8c4a42;font-weight:600;line-height:1.5;margin-bottom:16px}
   .ls-btn{border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);margin:0 5px}
-  .ls-btn.primary{background:linear-gradient(135deg,#0F5F63,#16a34a);color:#fff}
-  .ls-btn.ghost{background:transparent;color:#5b6b86;border:1.5px solid rgba(11,31,69,.20)}
+  .ls-btn.primary{background:linear-gradient(135deg,#3f7357,#345d46);color:#fff}
+  .ls-btn.ghost{background:transparent;color:var(--gray-500);border:1.5px solid rgba(40,61,49,.20)}
 </style>
 <div id="loadingSplash">
-  <div class="ls-logo"><img src="img/logo.svg" alt="EnviroTrack" style="height:60px;width:auto;display:block"></div>
-  <div class="ls-sub">Environmental Monitoring — Caputo Foods</div>
-  <div class="ls-bar"><div class="ls-fill" id="lsFill"></div></div>
-  <div class="ls-pct"><span class="ls-spin"></span><span id="lsText">Syncing latest data…</span></div>
+  <div class="lab-backdrop" aria-hidden="true">
+    <div class="lab-haze"></div>
+    <div class="lab-dish"><div class="lab-dish-inner"><span class="lab-colony"></span><span class="lab-colony"></span><span class="lab-colony"></span><span class="lab-colony"></span><span class="lab-colony"></span></div></div>
+    <div class="lab-cell lab-cell-a"></div><div class="lab-cell lab-cell-b"></div><div class="lab-cell lab-cell-c"></div><div class="lab-cell lab-cell-d"></div>
+    <span class="lab-speck lab-speck-a"></span><span class="lab-speck lab-speck-b"></span><span class="lab-speck lab-speck-c"></span><span class="lab-speck lab-speck-d"></span>
+  </div>
+  <div class="ls-logo"><img src="img/logo.svg" alt="EnviroTrack"></div>
+  <div class="enviro-loader" role="status" aria-label="Loading"><div class="enviro-loader__track"></div></div>
   <div id="lsError">
     <div id="lsErrMsg"></div>
     <button class="ls-btn primary" onclick="retryBoot()">Retry</button>
