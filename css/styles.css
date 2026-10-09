@@ -382,7 +382,7 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 #enviro-dashboard-kpis .kg-pending .kg-dot{background:var(--kg-amber);}
 #enviro-dashboard-kpis .kg-value{grid-area:value;font-size:26px;line-height:1.1;font-weight:400;letter-spacing:-1px;margin-top:2px;font-variant-numeric:tabular-nums;color:var(--kg-ink);}
 #enviro-dashboard-kpis .kg-positive .kg-value{color:#a75a52;}
-#enviro-dashboard-kpis .kg-chart{grid-area:chart;width:58px;max-width:100%;align-self:center;margin:0;transition:transform .3s;}
+#enviro-dashboard-kpis .kg-chart{grid-area:chart;width:68px;max-width:100%;align-self:center;margin:0;transition:transform .3s;}
 #enviro-dashboard-kpis .kg-chart svg{display:block;width:100%;height:auto;overflow:visible;}
 #enviro-dashboard-kpis .kg-card.is-active .kg-chart{transform:scale(1.04);}
 #enviro-dashboard-kpis .kg-track{fill:none;stroke:var(--kg-track);stroke-width:7;}
