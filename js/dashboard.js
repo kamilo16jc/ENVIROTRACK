@@ -3,10 +3,15 @@
 // ═══════════════════════════════════════════════
 function refreshDashboard() {
   const hist=GH();
-  document.getElementById('st0').textContent=hist.length;
-  document.getElementById('st1').textContent=hist.filter(h=>h.resultado==='Negative').length;
-  document.getElementById('st2').textContent=hist.filter(h=>h.resultado==='Positive').length;
-  document.getElementById('st3').textContent=hist.filter(h=>h.resultado==='Pending').length;
+  const _tot=hist.length;
+  const _neg=hist.filter(h=>h.resultado==='Negative').length;
+  const _pos=hist.filter(h=>h.resultado==='Positive').length;
+  const _pend=hist.filter(h=>h.resultado==='Pending').length;
+  document.getElementById('st0').textContent=_tot;
+  document.getElementById('st1').textContent=_neg;
+  document.getElementById('st2').textContent=_pos;
+  document.getElementById('st3').textContent=_pend;
+  if(typeof kpiRender==='function') kpiRender(_tot,_neg,_pos,_pend);
   // Recent weeks — DERIVED from the records (grouped by plant+date) so it always
   // reflects SharePoint data. Retests are excluded (they aren't sampling weeks).
   const wb=document.getElementById('recentWeeks');

@@ -206,19 +206,19 @@
     <style>
       .subbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:9px 24px;background:var(--white);border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:58px;z-index:190}
       .hdr-btn{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--gray-600);
-        border:1px solid rgba(255,255,255,.6);background:linear-gradient(135deg,#ffffff,#e9edf3);
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 rgba(0,0,0,.06),0 2px 4px rgba(20,45,90,.10),0 5px 12px rgba(20,45,90,.10);
+        border:1px solid rgba(255,255,255,.6);background:linear-gradient(135deg,#ffffff,#eaf1e4);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 rgba(40,61,49,.06),0 2px 4px rgba(40,61,49,.10),0 5px 12px rgba(40,61,49,.10);
         transition:transform .14s ease,box-shadow .14s ease,color .14s ease}
-      .hdr-btn:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 0 rgba(0,0,0,.08),0 4px 8px rgba(20,45,90,.14),0 12px 22px rgba(20,45,90,.16)}
+      .hdr-btn:hover{transform:translateY(-2px);color:var(--green);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 0 rgba(40,61,49,.08),0 4px 8px rgba(40,61,49,.14),0 12px 22px rgba(40,61,49,.16)}
       .hdr-btn.spin svg{animation:liveSpin .8s linear infinite}
-      .hdr-btn.logout:hover{color:#C0392B}
+      .hdr-btn.logout:hover{color:var(--red)}
       @keyframes liveSpin{to{transform:rotate(360deg)}}
       .hdr-avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;letter-spacing:.03em;cursor:default;user-select:none;
-        background:linear-gradient(135deg,#8b5cf6,#6d28d9);border:1px solid rgba(255,255,255,.28);
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.22),0 2px 5px rgba(76,29,149,.30),0 7px 16px rgba(76,29,149,.28);
+        background:linear-gradient(135deg,#4f8468,#345d46);border:1px solid rgba(255,255,255,.28);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 2px 5px rgba(42,76,57,.30),0 7px 16px rgba(42,76,57,.26);
         transition:transform .14s ease,box-shadow .14s ease}
       .hdr-avatar:hover{transform:translateY(-2px)}
-      .notif-count{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;background:#C0392B;color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
+      .notif-count{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;background:var(--red);color:#fff;border-radius:9px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px #fff}
       .notif-panel{position:absolute;top:48px;right:0;width:366px;max-height:462px;overflow-y:auto;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 14px 38px rgba(16,24,40,.18);z-index:500;display:none}
       .notif-panel.open{display:block}
       .notif-item{display:flex;gap:11px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--gray-100);transition:background .12s}
@@ -250,11 +250,31 @@
         <div><h1>Dashboard</h1><p>Environmental monitoring program overview</p></div>
       </div>
       <div class="page-body">
-        <div class="stats-grid">
-          <div class="stat-card sc-blue"><svg class="ln stat-ico" width="26" height="26" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg><div class="stat-value" id="st0">0</div><div class="stat-label">Tests Recorded</div><div class="stat-sub">Historical total</div></div>
-          <div class="stat-card sc-green"><svg class="ln stat-ico" width="26" height="26" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div class="stat-value" id="st1">0</div><div class="stat-label">Negatives</div><div class="stat-sub">No contamination</div></div>
-          <div class="stat-card sc-red"><svg class="ln stat-ico" width="26" height="26" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="stat-value" id="st2">0</div><div class="stat-label">Positives</div><div class="stat-sub">Require retest</div></div>
-          <div class="stat-card sc-amber"><svg class="ln stat-ico" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><div class="stat-value" id="st3">0</div><div class="stat-label">Pending</div><div class="stat-sub">No result</div></div>
+        <div id="enviro-dashboard-kpis">
+          <p class="kg-meta">All-time test results</p>
+          <div class="kg-grid">
+            <button type="button" class="kg-card kg-total cursor-interaction" data-kind="total" aria-label="Total tests. Hover over the ring or click to explore the result breakdown.">
+              <span class="kg-label">Total tests</span><span class="kg-value" id="st0">0</span>
+              <span class="kg-chart"><svg viewBox="0 0 112 112" role="img" aria-label="Result breakdown"><circle class="kg-track" cx="56" cy="56" r="38"></circle><g class="kg-marks"></g><text class="kg-percent" x="56" y="61">100%</text></svg></span>
+              <span class="kg-detail">All results</span>
+            </button>
+            <button type="button" class="kg-card kg-negative cursor-interaction" data-kind="negative" aria-label="Negative tests" aria-pressed="false">
+              <span class="kg-label"><span class="kg-dot" aria-hidden="true"></span>Negative</span><span class="kg-value" id="st1">0</span>
+              <span class="kg-chart"><svg viewBox="0 0 112 112" role="img" aria-label="Negative share"><circle class="kg-track" cx="56" cy="56" r="38"></circle><g class="kg-marks"></g><text class="kg-percent" x="56" y="61">0%</text></svg></span>
+              <span class="kg-detail">of all tests</span>
+            </button>
+            <button type="button" class="kg-card kg-positive cursor-interaction" data-kind="positive" aria-label="Positive tests" aria-pressed="false">
+              <span class="kg-label"><span class="kg-dot" aria-hidden="true"></span>Positive</span><span class="kg-value" id="st2">0</span>
+              <span class="kg-chart"><svg viewBox="0 0 112 112" role="img" aria-label="Positive share"><circle class="kg-track" cx="56" cy="56" r="38"></circle><g class="kg-marks"></g><text class="kg-percent" x="56" y="61">0%</text></svg></span>
+              <span class="kg-detail">of all tests</span>
+            </button>
+            <button type="button" class="kg-card kg-pending cursor-interaction" data-kind="pending" aria-label="Pending tests" aria-pressed="false">
+              <span class="kg-label"><span class="kg-dot" aria-hidden="true"></span>Pending</span><span class="kg-value" id="st3">0</span>
+              <span class="kg-chart"><svg viewBox="0 0 112 112" role="img" aria-label="Pending share"><circle class="kg-track" cx="56" cy="56" r="38"></circle><g class="kg-marks"></g><text class="kg-percent" x="56" y="61">0%</text></svg></span>
+              <span class="kg-detail">of all tests</span>
+            </button>
+          </div>
+          <span class="kg-reader" id="kg-announcement" role="status" aria-live="polite"></span>
         </div>
         <div class="card">
           <div class="card-title"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Recent Weeks</div>
@@ -1173,6 +1193,7 @@
 <script src="js/retests.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/notifications.js"></script>
+<script src="js/kpis.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/reports.js"></script>
 <script src="js/settings.js"></script>
