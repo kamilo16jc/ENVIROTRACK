@@ -19,17 +19,21 @@ function labRowsNormal(tests) {
   return rows;
 }
 
-// Retest lab form → one row per FAILED pathogen; site = "<sample> (Retest N)".
-function labRowsRetest(rec, retestNum) {
+// Retest / vector lab form → one row per FAILED pathogen; site = "<sample> (Retest N)"
+// or "<sample|location> (Vector N)". kind defaults to 'Retest'.
+function labRowsRetest(rec, retestNum, kind) {
   const failed = (Array.isArray(rec.failedPathogens) && rec.failedPathogens.length)
     ? rec.failedPathogens
     : LAB_PATS.filter(p => rec[p]);
+  const where = rec.sample ? String(rec.sample) : (rec.location || 'Vector site');
   return failed.map(p => ({
     zone: rec.zone,
-    site: String(rec.sample) + ' (Retest ' + retestNum + ')',
+    site: where + ' (' + (kind || 'Retest') + ' ' + retestNum + ')',
     pathogen: p
   }));
 }
+// 'Vector' for vector-sampling records, 'Retest' otherwise.
+function labKindOf(rec) { return (typeof isVectorRec === 'function' && isVectorRec(rec)) ? 'Vector' : 'Retest'; }
 
 // ── File names ────────────────────────────────────────────────
 function _p2(n) { return String(n).padStart(2, '0'); }
@@ -51,13 +55,14 @@ function namePdfGenerator(dept, date) { return 'Swabs_' + labBuilding(dept) + '_
 // Same date format as the submission form (so the file-organizing automation
 // parses the month and files it), carries the retest number + sample for
 // pairing/uniqueness. (date param unused — stamp generated like the form.)
-function namePdfRetest(dept, date, sample, retestNum) {
-  return 'Retest #' + retestNum + ' - ' + labBuilding(dept) +
+function namePdfRetest(dept, date, sample, retestNum, kind) {
+  return (kind || 'Retest') + ' #' + retestNum + ' - ' + labBuilding(dept) +
          ' (sample ' + sample + ') - ' + _stamp(new Date());
 }
 // Submission Form Retest #1 - 1945 (sample 423) - 2026-07-08 17-05
-function nameSubmissionRetest(retestNum, dept, sample) {
-  return 'Submission Form Retest #' + retestNum + ' - ' + labBuilding(dept) +
+// (vector samples: "Submission Form Vector #1 - …")
+function nameSubmissionRetest(retestNum, dept, sample, kind) {
+  return 'Submission Form ' + (kind || 'Retest') + ' #' + retestNum + ' - ' + labBuilding(dept) +
          ' (sample ' + sample + ') - ' + _stamp(new Date());
 }
 
@@ -68,11 +73,11 @@ function labPayloadNormal(dept, date, tests) {
     fileName: nameSubmission(dept, date), rows: labRowsNormal(tests)
   };
 }
-function labPayloadRetest(rec, retestNum) {
+function labPayloadRetest(rec, retestNum, kind) {
   return {
     type: 'retest', building: labBuilding(rec.planta), collectionDate: rec.fecha,
-    fileName: nameSubmissionRetest(retestNum, rec.planta, rec.sample),
-    rows: labRowsRetest(rec, retestNum)
+    fileName: nameSubmissionRetest(retestNum, rec.planta, rec.sample, kind),
+    rows: labRowsRetest(rec, retestNum, kind)
   };
 }
 
@@ -131,17 +136,18 @@ async function submitRetestLabForm(retestId, sendToLab, opts) {
   const rec = GH().find(r => r.id === retestId);
   if (!rec) { toast('Retest not found', 'error'); return; }
   const rn = (String(rec.retestNum).match(/\d+/) || ['1'])[0]; // "Retest #2" → "2"
-  const p = labPayloadRetest(rec, rn);
-  if (!p.rows.length) { if (!opts.silent) toast('This retest has no pathogen to test', 'error'); return; }
+  const kind = labKindOf(rec);                                  // 'Retest' | 'Vector'
+  const p = labPayloadRetest(rec, rn, kind);
+  if (!p.rows.length) { if (!opts.silent) toast('This ' + kind.toLowerCase() + ' has no pathogen to test', 'error'); return; }
   if (sendToLab && !opts.skipConfirm &&
-      !confirm('Send Retest #' + rn + ' lab form for sample ' + rec.sample + ' to the laboratory? This will email them.')) return;
+      !confirm('Send ' + kind + ' #' + rn + ' lab form for sample ' + (rec.sample || rec.location) + ' to the laboratory? This will email them.')) return;
   let contentBase64 = '';
   try { contentBase64 = await buildLabFormB64(p.building, p.collectionDate, p.rows); }
   catch (e) { console.warn('[labform] retest client fill failed, sending rows only:', e); }
   const body = Object.assign(
     { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
       rowsJson: JSON.stringify(p.rows), contentBase64: contentBase64, sendToLab: !!sendToLab },
-    submissionMeta('Retest', String(rec.sample), rn, sendToLab)
+    submissionMeta('Retest', String(rec.sample), kind === 'Vector' ? 'V' + rn : rn, sendToLab)
   );
   // Show the in-flight spinner on the row (single sends; bulk runs silent).
   if (!opts.silent) {

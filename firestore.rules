@@ -1,0 +1,75 @@
+rules_version = '2';
+
+// EnviroTrack — Firestore security rules (Phase 1: records that used to live
+// only in each browser). Every signed-in user can read; who can write mirrors
+// the app: CAPAs on positives and lab-form status = any signed-in user (as
+// today); program records (EMP, training, program CAPAs, management reviews,
+// counters) = administrators only. The change log is append-only.
+// Every create/update must be stamped with the writer's email (_by).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && (request.auth.token.role == 'Administrator'
+        || request.auth.token.email in ['jagudelo@caputocheese.com']);
+    }
+    function stamped() { return request.resource.data._by == request.auth.token.email; }
+
+    match /capa/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && stamped();
+      allow delete: if isAdmin();
+    }
+    match /labStatus/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && stamped();
+      allow delete: if isAdmin();
+    }
+    match /programCapas/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if false;                 // CAPAs are never deleted
+    }
+    match /mgmtReviews/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if false;
+    }
+    match /emp/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if false;
+    }
+    match /training/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if isAdmin();             // removing a record releases its form
+    }
+    match /trainingForms/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if false;                 // numbers are never reused
+    }
+    match /empChangeLog/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin() && stamped();
+      allow update, delete: if false;         // audit trail is append-only
+    }
+    match /counters/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && request.resource.data.n is int
+        && (!exists(/databases/$(database)/documents/counters/$(id))
+            || request.resource.data.n > resource.data.n);   // only moves forward
+      allow delete: if false;
+    }
+
+    // Confidential content (facility map, CAPA template text) — not in the public repo
+    match /private/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

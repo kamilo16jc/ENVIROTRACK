@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v87';
+const CACHE_NAME = 'envirotrack-v88';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
@@ -19,17 +19,30 @@ const ASSETS = [
   './js/auth.js',
   './js/navigation.js',
   './js/generator.js',
+  './js/pointhistory.js',
   './js/kpis.js',
   './js/pdf.js',
   './js/history.js',
+  './js/labresults.js',
+  './js/capa.js',
   './js/retests.js',
   './js/admin.js',
+  './js/emp.js',
+  './js/training.js',
   './js/notifications.js',
   './js/live.js',
   './js/dashboard.js',
   './js/reports.js',
+  './js/reports-view.js',
+  './js/auditpack.js',
+  './js/capalog.js',
+  './js/mgmtreview.js',
+  './js/alerts.js',
+  './js/backup.js',
+  './js/store.js',
   './js/settings.js',
   './js/init.js',
+  './js/devlocal.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js',

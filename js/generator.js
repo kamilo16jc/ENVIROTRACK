@@ -30,7 +30,10 @@ async function generateTests() {
     }
   }
 
-  const pool     = getActiveMaster(planta);
+  // Sites under positive follow-up (retests pending / not scheduled) are not
+  // rotated into routine sampling — they are being retested.
+  const followUp = typeof sitesInFollowUp === 'function' ? sitesInFollowUp(planta) : new Set();
+  const pool     = getActiveMaster(planta).filter(p => !followUp.has(String(p.sample)));
   const hist     = GH();
   const plantH   = hist.filter(h => h.planta===planta && !h.retestNum);
 
@@ -93,12 +96,14 @@ async function generateTests() {
   );
 
   // ── Building-specific plans ────────────────────────────────────────
-  // 1935 / 1931E / 1931W: 7 samples → 12 tests. Zones 2 & 3 are "double"
-  // (primary + one secondary pathogen); zone 4 is "single" (primary only).
+  // Zone quotas per SOP 2.4.H (Rev. 22): 1935 = 2 Z2 + 5 Z3 + 1 Z4 (8 samples);
+  // 1931E / 1931W = 2 Z2 + 4 Z3 + 1 Z4 (7 samples). Random sites within each zone.
+  // Zones 2 & 3 are "double" (primary + one secondary pathogen); zone 4 is
+  // "single" (primary only). 1945 uses the line-first rotation below.
   const BUILDING_PLANS = {
-    '1935':  { primary:'listeria', zones:{2:3, 3:2, 4:2}, secondaries:{ecoli:3, salmonella:1, saureus:1} },
-    '1931E': { primary:'ecoli',    zones:{2:3, 3:2, 4:2}, secondaries:{listeria:3, salmonella:1, saureus:1} },
-    '1931W': { primary:'ecoli',    zones:{2:3, 3:2, 4:2}, secondaries:{listeria:3, salmonella:1, saureus:1} },
+    '1935':  { primary:'listeria', zones:{2:2, 3:5, 4:1}, secondaries:{ecoli:3, salmonella:1, saureus:1} },
+    '1931E': { primary:'ecoli',    zones:{2:2, 3:4, 4:1}, secondaries:{listeria:3, salmonella:1, saureus:1} },
+    '1931W': { primary:'ecoli',    zones:{2:2, 3:4, 4:1}, secondaries:{listeria:3, salmonella:1, saureus:1} },
   };
   const plan = BUILDING_PLANS[planta];
 
@@ -125,13 +130,40 @@ async function generateTests() {
     pickZone(1, plan.zones[3]);
     pickZone(2, plan.zones[4]);
   } else {
-    // Default (1945): 10 samples — zones 2 & 4 first, fill with zone 3
-    const n2 = Math.min(3, zf[0].length);
-    const n4 = Math.min(3, zf[2].length);
-    const n3 = Math.min(10-n2-n4, zf[1].length);
-    pick(zf[0], n2); pick(zf[2], n4); pick(zf[1], n3);
-    if(sel.length < 10) pick(available.filter(p=>!used.has(p.sample)), 10-sel.length);
-    if(sel.length < 10) pick(pool.filter(p=>!used.has(p.sample)), 10-sel.length);
+    // ── 1945: line-first rotation (SOP 2.4.H) ──────────────────────────
+    // Two production lines per week: one gets 5 tests (2 Zone 2 + 3 Zone 3),
+    // the other 4 (2 Zone 2 + 2 Zone 3), plus 1 Zone 4 = 10. Lines rotate so
+    // every line is covered over the cycle and each gets its Zone 2 swabs.
+    const EXCL = new Set(['N/A', '8', '']);              // '8' is a mislabel in 1945
+    const lzp = (L, z) => pool.filter(p => String(p.line) === L && p.zone === z);
+    // Rotation set = production lines/areas with enough Zone 2 & Zone 3 points.
+    const rotLines = [...new Set(pool.map(p => String(p.line)))]
+      .filter(L => !EXCL.has(L) && lzp(L, 2).length >= 2 && lzp(L, 3).length >= 2);
+    // Pick the 2 least-recently-sampled lines (never-sampled first).
+    const lineLastWeek = {};
+    plantH.forEach(h => { const L = String(h.line); if (EXCL.has(L)) return;
+      const w = isoWeek(h.fecha); if (!lineLastWeek[L] || w > lineLastWeek[L]) lineLastWeek[L] = w; });
+    const two = rotLines
+      .map(L => ({ L, last: lineLastWeek[L] || '0000-W00' }))
+      .sort((a, b) => a.last < b.last ? -1 : a.last > b.last ? 1 : Math.random() - .5)
+      .slice(0, 2).map(o => o.L);
+    // The line with more available Zone 3 takes the 5 tests (it needs 3 Zone 3).
+    let la = two[0], lb = two[1];
+    if (lb && lzp(lb, 3).length > lzp(la, 3).length) { const t = la; la = lb; lb = t; }
+    // Pick n points of a zone from one line: fresh (anti-repetition) first, then fill.
+    const pickLine = (L, z, n) => {
+      const before = sel.length;
+      pick(lzp(L, z).filter(p => !recentExcluded.has(p.sample)), n);
+      if (sel.length - before < n) pick(lzp(L, z), n - (sel.length - before));
+    };
+    if (la) { pickLine(la, 2, 2); pickLine(la, 3, 3); }   // 5 tests
+    if (lb) { pickLine(lb, 2, 2); pickLine(lb, 3, 2); }   // 4 tests
+    // 1 Zone 4 from the distant-area pool (offices, restrooms, N/A Zone 4, etc.).
+    const b4 = sel.length; pick(freshByZone[2], 1);
+    if (sel.length - b4 < 1) pick(fullByZone[2], 1);
+    // Backup fill to reach 10 if a line/zone ran short.
+    if (sel.length < 10) pick(available.filter(p => !used.has(p.sample)), 10 - sel.length);
+    if (sel.length < 10) pick(pool.filter(p => !used.has(p.sample)), 10 - sel.length);
   }
 
   // ── Assign pathogens ───────────────────────────────────────────────
@@ -150,12 +182,12 @@ async function generateTests() {
       return {...s, ...flags, modified:false};
     });
   } else {
-    const po = [...Array(Math.max(10,sel.length)).keys()].sort(()=>Math.random()-.5);
-    TESTS = sel.map((s,i) => {
-      const pi = po[i] % PATS.length;
-      return {...s, ecoli:PATS[pi][0], listeria:PATS[pi][1],
-              salmonella:PATS[pi][2], saureus:PATS[pi][3], modified:false};
-    });
+    // 1945 pathogens (SOP 2.4.H): every site tests L. mono; plus 3 E. coli,
+    // 1 Salmonella, 1 S. aureus distributed across distinct random sites.
+    TESTS = sel.map(s => ({ ...s, ecoli: 0, listeria: 1, salmonella: 0, saureus: 0, modified: false }));
+    const extras = ['ecoli', 'ecoli', 'ecoli', 'salmonella', 'saureus'];
+    const idxs = [...TESTS.keys()].sort(() => Math.random() - .5);
+    extras.forEach((pat, k) => { if (idxs[k] !== undefined) TESTS[idxs[k]][pat] = 1; });
   }
 
   OVRS=[]; RTITEMS=[];
@@ -180,7 +212,8 @@ async function generateTests() {
   toast(
     sel.length+' samples · '+totalPathTests+' tests · '+
     totalExcluded+' samples excluded ('+excluded4wks+' wks) · '+
-    availPct+'% of available pool',
+    availPct+'% of available pool'+
+    (followUp.size ? ' · '+followUp.size+' site'+(followUp.size===1?'':'s')+' in positive follow-up skipped' : ''),
     'success'
   );
   } finally { genHideLoading(); }
@@ -210,7 +243,7 @@ function renderTests() {
   document.getElementById('genTableBody').innerHTML = TESTS.map((t,i) => `
     <tr class="${t.modified?'modified':''}">
       <td style="color:var(--gray-400);font-size:11px;font-weight:600;text-align:center">${i+1}</td>
-      <td><input type="text" value="${esc(t.sample)}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)">
+      <td style="white-space:nowrap"><input type="text" value="${esc(t.sample)}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)"><button class="gen-hist" onclick="genPointHistory(${i})" title="Sampling history of this point" aria-label="Sampling history"><svg class="ln" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
           ${t.modified?'<span class="ob"><svg class="ln" width="11" height="11" viewBox="0 0 24 24" style="vertical-align:-1px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>':''}</td>
       <td><select onchange="chg(${i},'zone',this.value,this)" style="width:65px">
           <option ${t.zone==2?'selected':''}>2</option>

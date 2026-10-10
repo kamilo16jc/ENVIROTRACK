@@ -2,6 +2,7 @@
 // DASHBOARD
 // ═══════════════════════════════════════════════
 function refreshDashboard() {
+  if (typeof renderDashboardAlerts === 'function') { try { renderDashboardAlerts(); } catch (e) { console.warn('[alerts]', e); } }
   const hist=GH();
   const _tot=hist.length;
   const _neg=hist.filter(h=>h.resultado==='Negative').length;
@@ -50,14 +51,19 @@ function refreshDashboard() {
   //   (2) any case with a retest still PENDING (round in progress).
   // A positive retest inside a fully-resolved cascade (no pending children) is
   // NOT active — that's what kept the migrated 206 out. De-duped by sample+plant.
-  const rootsWithRetests=new Set(hist.filter(h=>h.retestNum&&h.originalId).map(h=>h.originalId));
+  const rootsWithRetests=new Set(hist.filter(h=>h.retestNum&&h.originalId&&!isVectorRec(h)).map(h=>h.originalId));
   const cases=new Map();
-  hist.filter(h=>h.resultado==='Positive'&&!h.retestNum&&!rids.has(h.id)&&!rootsWithRetests.has(h.id))
+  // same rule as the Retests view: originals, positive vector sites and escalated
+  // retests (the last two only from the SQF program start — keeps migrated data out)
+  const progStart=typeof SQF_PROGRAM_START!=='undefined'?SQF_PROGRAM_START:'';
+  hist.filter(h=>h.resultado==='Positive'&&(!h.retestNum||h.fecha>=progStart)&&!rids.has(h.id)&&!rootsWithRetests.has(h.id))
       .forEach(h=>cases.set(h.planta+'|'+h.sample,{sample:h.sample,planta:h.planta,fecha:h.fecha}));
-  hist.filter(h=>h.retestNum&&h.resultado==='Pending')
+  hist.filter(h=>h.retestNum&&!isVectorRec(h)&&h.resultado==='Pending')
       .forEach(h=>{const k=h.planta+'|'+h.sample; if(!cases.has(k)) cases.set(k,{sample:h.sample,planta:h.planta,fecha:h.fecha});});
+  hist.filter(h=>typeof labIsPresumptive==='function'&&labIsPresumptive(h))
+      .forEach(h=>{const k=h.planta+'|'+h.sample; if(!cases.has(k)) cases.set(k,{sample:h.sample,planta:h.planta,fecha:h.fecha,pres:true});});
   const activePos=[...cases.values()];
   document.getElementById('pendingRetests').innerHTML=activePos.length===0
     ?'<p style="color:var(--gray-500);font-size:13px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>No pending retests</p>'
-    :activePos.slice(0,5).map(h=>'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-100)"><span style="font-weight:700;color:var(--red);font-size:14px">#'+h.sample+'</span><span style="font-size:12px;color:var(--gray-500)">'+h.planta+' — '+h.fecha+'</span><button class="btn btn-primary btn-sm" onclick="showPage(\'retests\')" style="margin-left:auto">Ver \u2192</button></div>').join('');
+    :activePos.slice(0,5).map(h=>'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-100)"><span style="font-weight:700;color:'+(h.pres?'var(--yellow)':'var(--red)')+';font-size:14px">#'+h.sample+'</span>'+(h.pres?'<span style="font-size:11px;font-weight:600;color:var(--yellow)">Presumptive</span>':'')+'<span style="font-size:12px;color:var(--gray-500)">'+h.planta+' — '+h.fecha+'</span><button class="btn btn-primary btn-sm" onclick="showPage(\'retests\')" style="margin-left:auto">View \u2192</button></div>').join('');
 }

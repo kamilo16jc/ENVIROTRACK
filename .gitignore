@@ -12,3 +12,10 @@ _migrate_master.js
 functions/.env
 .env
 
+# Confidential content (facility map, CAPA template text) — served from
+# Firestore `private/*` to signed-in users only. NEVER commit.
+private-local/
+facility-map.html
+
+# Firebase emulator logs
+*-debug.log

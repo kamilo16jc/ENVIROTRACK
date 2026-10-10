@@ -27,14 +27,18 @@ function showPage(p) {
 
   // Reflect the current page name in the top bar.
   const _titles = { dashboard:'Dashboard', history:'Test History', retests:'Retests',
-    submissions:'Lab Submissions', generator:'Generate Tests', reports:'Reports', settings:'Settings' };
+    submissions:'Lab Submissions', generator:'Generate Tests', reports:'Reports',
+    facilitymap:'Facility Map', settings:'Settings' };
   const _pt = document.getElementById('pageTitle');
   if(_pt && _titles[p]) _pt.textContent = _titles[p];
+
+  // Lazy-load the facility map iframe the first time it's opened.
+  if(p==='facilitymap') loadFacilityMap();
 
   // Highlight parent group button for dropdown items
   const groupMap = {
     'history': 'nav-records', 'retests': 'nav-records', 'submissions': 'nav-records',
-    'generator': 'nav-testing', 'reports': 'nav-testing',
+    'generator': 'nav-testing', 'reports': 'nav-testing', 'facilitymap': 'nav-testing',
     'settings': 'nav-settings'
   };
   if(groupMap[p]) {
@@ -72,6 +76,24 @@ window.addEventListener('beforeunload', function (e) {
   if (_genUnsaved && TESTS && TESTS.length) { e.preventDefault(); e.returnValue = ''; }
 });
 
+// Top-bar hamburger menu (holds Refresh / Notifications / Log out).
+function toggleNavMenu(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('navMenu'); if (m) m.classList.toggle('open');
+  const p = document.getElementById('notifPanel'); if (p) p.classList.remove('open');
+}
+function closeNavMenu() {
+  const m = document.getElementById('navMenu'); if (m) m.classList.remove('open');
+}
+// Click outside the user area closes the menu and the notifications panel.
+document.addEventListener('click', function (e) {
+  const inUser = e.target.closest && e.target.closest('.nav-user');
+  if (!inUser) {
+    closeNavMenu();
+    const p = document.getElementById('notifPanel'); if (p) p.classList.remove('open');
+  }
+});
+
 function updateNotifDot() {
   const hist     = GH();
   const resolved = GRV();
@@ -80,3 +102,17 @@ function updateNotifDot() {
   const dot = document.getElementById('notifDot');
   if(dot) dot.classList.toggle('show', active.length > 0);
 }
+
+// The facility map is confidential: it is served from Firestore
+// (private/facilityMap, signed-in users only), never from the public site.
+async function loadFacilityMap() {
+  const f = document.getElementById('facilityMapFrame');
+  if (!f || f.dataset.loaded === '1') return;
+  f.dataset.loaded = '1';
+  let doc = null;
+  try { doc = typeof storePrivate === 'function' ? await storePrivate('facilityMap') : null; } catch (e) {}
+  if (doc && doc.html) { f.srcdoc = doc.html; return; }
+  f.dataset.loaded = '';
+  f.srcdoc = '<p style="font-family:Arial,sans-serif;color:#65715f;padding:28px">The facility map is available after signing in. Try again in a moment.</p>';
+}
+

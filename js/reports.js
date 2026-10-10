@@ -51,6 +51,12 @@ function positivePathogens(h) {
 }
 
 function buildReports() {
+  // New "Environmental insights" view (real data). When its markup is present
+  // we render it and skip the legacy Chart.js canvases (which were replaced).
+  if (document.getElementById('enviro-reports')) {
+    try { renderReportsView(); } catch (e) { console.warn('[reports] renderReportsView', e); }
+    return;
+  }
   destroyCharts();
   if(window.Chart) Chart.defaults.animation = false; // render instantly → clean PDF capture
   const hist = getFilteredHistory();
@@ -625,17 +631,17 @@ async function saveMonthlyReportToSharePoint() {
 // SQF COMPLIANCE
 // ═══════════════════════════════════════════════
 const SQF_MIN_TESTS  = 10;   // min tests per plant per week (default / 1945)
-// Weekly SAMPLE minimum per building. The 7-sample / 12-test buildings
-// (1935, 1931E, 1931W) require 7 samples/week; 1945 keeps 10.
-const BUILDING_MIN_SAMPLES = { '1945':10, '1935':7, '1931E':7, '1931W':7 };
+// Weekly SAMPLE minimum per building, per SOP 2.4.H (Rev. 22):
+// 1945 = 10, 1935 = 8, 1931E / 1931W = 7.
+const BUILDING_MIN_SAMPLES = { '1945':10, '1935':8, '1931E':7, '1931W':7 };
 function minSamplesFor(plant, fallback) {
   return BUILDING_MIN_SAMPLES[plant] || fallback || SQF_MIN_TESTS;
 }
 // The environmental program went fully live in the last two weeks of June 2026.
-// Weeks before this (Monday 2026-06-15) came from onboarding/migration data
+// Weeks before this (Monday 2026-06-22) came from onboarding/migration data
 // (e.g. 1945 had records while 1935/1931E/1931W were not yet in use) and would
 // show as false "incomplete weeks" — they are excluded from SQF compliance.
-const SQF_PROGRAM_START = '2026-06-15';
+const SQF_PROGRAM_START = '2026-06-22';   // go-live week of Jun 15 had no sampling
 
 function switchRepTab(tab) {
   ['stats','sqf'].forEach(t => {
@@ -755,20 +761,11 @@ function buildSQF() {
 
   // Quick stats
   document.getElementById('sqfQuickStats').innerHTML = [
-    {v:hist.filter(h=>!h.retestNum).length, l:'Total Tests', sc:'sc-blue',
-      ico:'<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>'},
-    {v:positives.length, l:'Positives', sc:'sc-red',
-      ico:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'},
-    {v:openPositives.length, l:'Unresolved', sc:openPositives.length>0?'sc-red':'sc-green',
-      ico:'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'},
-    {v:coverageRate+'%', l:'Master Coverage', sc:coverageRate>=80?'sc-green':'sc-amber',
-      ico:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'},
-  ].map(s=>`
-    <div class="stat-card ${s.sc}" style="flex:1;min-width:150px">
-      <svg class="ln stat-ico" width="24" height="24" viewBox="0 0 24 24">${s.ico}</svg>
-      <div class="stat-value">${s.v}</div>
-      <div class="stat-label">${s.l}</div>
-    </div>`).join('');
+    {v:hist.filter(h=>!h.retestNum).length, l:'Total Tests', c:'var(--gray-900)'},
+    {v:positives.length, l:'Positives', c:positives.length?'var(--red)':'var(--gray-900)'},
+    {v:openPositives.length, l:'Unresolved', c:openPositives.length?'var(--red)':'var(--green)'},
+    {v:coverageRate+'%', l:'Master Coverage', c:coverageRate>=80?'var(--green)':'var(--yellow)'},
+  ].map(s=>`<div class="sqf-kpi"><div class="k">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join('');
 
   // ── Requirements table ────────────────────────────────────────────────
   const pct = (n,d) => d>0 ? Math.round(n/d*100) : 100;
@@ -779,7 +776,7 @@ function buildSQF() {
   };
 
   const reqs = [
-    { req:'Sampling frequency', desc:(plant==='all'?'Min. samples/week per building (7 for 1935/1931E/1931W · 10 for 1945)':`Minimum ${minSamplesFor(plant, minTests)} samples per week`),
+    { req:'Sampling frequency', desc:(plant==='all'?'Min. samples/week per building (10 for 1945 · 8 for 1935 · 7 for 1931E/1931W)':`Minimum ${minSamplesFor(plant, minTests)} samples per week`),
       meta:totalWeeks+' weeks', logrado:compliantFreq+' weeks',
       ...pill(pct(compliantFreq,totalWeeks)) },
     { req:'Zone 2 Coverage', desc:'At least 1 point from Zone 2 per week',

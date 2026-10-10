@@ -113,7 +113,8 @@ function updateNotifBadge() {
   if (!el) return;
   let seen = getNotifSeen();
   if (!seen) { seen = new Date().toISOString(); setNotifSeen(seen); }  // first run: nothing unread
-  const unread = buildNotifications().filter(n => n.ts > seen).length;
+  // unread activity + action items that are red (they stay until resolved)
+  const unread = buildNotifications().filter(n => n.ts > seen).length + (typeof alertsRedCount === 'function' ? alertsRedCount() : 0);
   el.textContent = unread > 9 ? '9+' : String(unread);
   el.style.display = unread > 0 ? 'flex' : 'none';
 }
@@ -124,11 +125,12 @@ function renderNotifPanel() {
   const list = buildNotifications();
   const seen = getNotifSeen();
   const meEmail = (CU && CU.email || '').toLowerCase();
+  const top = typeof alertsPanelHtml === 'function' ? alertsPanelHtml() : '';
   if (!list.length) {
-    body.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--gray-400);font-size:13px">No activity yet</div>';
+    body.innerHTML = top + '<div style="padding:36px 20px;text-align:center;color:var(--gray-400);font-size:13px">No activity yet</div>';
     return;
   }
-  body.innerHTML = list.slice(0, 40).map(n => {
+  body.innerHTML = top + list.slice(0, 40).map(n => {
     const unread = seen ? (n.ts > seen) : true;
     const color  = NOTIF_COLOR[n.tone] || '#6B7280';
     const who    = n.actor ? ((n.actorEmail && n.actorEmail.toLowerCase() === meEmail) ? 'You' : n.actor) : '';

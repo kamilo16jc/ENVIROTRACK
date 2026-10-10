@@ -12,7 +12,8 @@ function searchHistory() {
   if(sample) hist = hist.filter(h=>String(h.sample).includes(sample));
   if(desde)  hist = hist.filter(h=>h.fecha>=desde);
   if(hasta)  hist = hist.filter(h=>h.fecha<=hasta);
-  if(result) hist = hist.filter(h=>h.resultado===result);
+  if(result==='Presumptive') hist = hist.filter(labIsPresumptive);
+  else if(result) hist = hist.filter(h=>h.resultado===result);
   hist.sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.id-a.id);
   document.getElementById('resultCount').textContent = hist.length;
   const canEdit = (typeof canEditRecords === 'function') && canEditRecords();
@@ -30,7 +31,7 @@ function searchHistory() {
     let action;
     if(h.resultado==='Negative') {
       action = '<span style="font-size:12px;color:var(--green);display:inline-flex;align-items:center;gap:5px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>OK</span>';
-    } else if(h.resultado==='Positive' && GH().some(r => r.originalId===h.id && r.retestNum)) {
+    } else if(h.resultado==='Positive' && GH().some(r => r.originalId===h.id && r.retestNum && !isVectorRec(r))) {
       action = '<span style="font-size:11px;color:var(--gray-400);display:inline-flex;align-items:center;gap:5px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Retests done</span>';
     } else {
       action = '<button class="rt-btn accent ico" onclick="openFailModal('+h.id+')" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>';
@@ -49,7 +50,7 @@ function searchHistory() {
       <td class="center">${h.listeria?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td class="center">${h.salmonella?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td class="center">${h.saureus?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
-      <td><span class="badge badge-${h.resultado==='Positive'?'red':h.resultado==='Negative'?'green':'yellow'}" style="font-size:11px">${h.resultado==='Positive'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>':h.resultado==='Negative'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14 14"/></svg>'}${h.resultado}</span>
+      <td>${labIsPresumptive(h) ? '<span class="badge badge-yellow" style="font-size:11px"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Presumptive</span><div style="font-size:10px;color:var(--yellow);font-weight:600;margin-top:1px">'+esc(h.failedPathogensLabel||'')+'</div>' : `<span class="badge badge-${h.resultado==='Positive'?'red':h.resultado==='Negative'?'green':'yellow'}" style="font-size:11px">${h.resultado==='Positive'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>':h.resultado==='Negative'?'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'<svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14 14"/></svg>'}${h.resultado}</span>`}
           ${h.resultado==='Positive'&&h.failedPathogensLabel?'<div style="font-size:10px;color:var(--red);font-weight:600;margin-top:1px">'+esc(h.failedPathogensLabel)+'</div>':''}
           ${h.labNotes?'<div style="font-size:10px;color:var(--gray-400);margin-top:1px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(h.labNotes)+'">'+esc(h.labNotes)+'</div>':''}</td>
       <td class="center">${h.retestNum?'<span class="badge badge-red" style="font-size:10px">'+h.retestNum+'</span>':dash}</td>

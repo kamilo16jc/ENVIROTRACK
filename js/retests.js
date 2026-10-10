@@ -7,123 +7,49 @@ function openFailModal(id) {
   const h = GH().find(r=>r.id===id);
   if(!h) return;
   FAILID=id; FAILRES=null;
-
-  const patMap = {ecoli:'E.Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S.Aureus'};
-  const testedPats = Object.entries(patMap).filter(([k]) => h[k]);
-  const patsLabel = testedPats.map(([,n])=>n).join(', ');
-
+  const tested = labTestsOf(h).map(k => LAB_TESTS[k].label).join(', ');
   document.getElementById('failInfo').innerHTML =
-    '<strong>Sample #'+h.sample+'</strong> — '+esc(h.planta)+
-    '<br><strong>Area:</strong> '+esc(h.area)+' &nbsp;·&nbsp; <strong>Zone:</strong> '+h.zone+
-    '<br><strong>Location:</strong> '+esc(h.location)+
-    '<br><strong>Pathogens tested:</strong> <span style="font-weight:700;color:var(--navy)">'+esc(patsLabel)+'</span>'+
-    ' &nbsp;·&nbsp; <strong>Date:</strong> '+h.fecha;
-
-  // Build per-pathogen checkboxes
-  document.getElementById('pathoCheckboxes').innerHTML = testedPats.map(([key,name]) =>
-    '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 12px;'+
-    'background:white;border-radius:6px;border:1.5px solid var(--gray-200);transition:all .15s" id="lbl-'+key+'">'+
-    '<input type="checkbox" id="chk-'+key+'" onchange="onPathoCheck()" '+
-    'style="width:16px;height:16px;accent-color:var(--red);cursor:pointer">'+
-    '<span style="font-size:13px;font-weight:600">'+name+'</span>'+
-    '<span style="font-size:11px;color:var(--gray-400);margin-left:auto">positive</span></label>'
-  ).join('');
-
-  document.getElementById('pathoResultSection').style.display = 'none';
-  document.getElementById('resultBadge').style.display = 'none';
-  document.getElementById('failNotes').value = h.labNotes||'';
-  document.getElementById('btnConfirmFail').disabled = true;
-  document.getElementById('btnNeg').style.opacity = '1';
-  document.getElementById('btnPos').style.opacity = '1';
+    '<strong>'+(h.sample ? 'Sample #'+h.sample : esc(h.location||'Site'))+'</strong> · '+esc(h.planta)+(h.retestNum ? ' · '+esc(h.retestNum) : '')+
+    '<br>'+esc(h.area||'')+(h.location ? ' — '+esc(h.location) : '')+' · Zone '+(h.zone||'—')+' · Collected '+h.fecha+
+    '<br>Tests ordered: <strong>'+esc(tested)+'</strong>';
+  // Pre-fill with what is already on record (editing a result), else blank.
+  const prev = getLabResults(h);
+  LABRES = prev ? JSON.parse(JSON.stringify(prev)) : {};
+  document.getElementById('labResultRows').innerHTML = labModalRows(h);
+  document.getElementById('failNotes').value = labParse(h.labNotes).notes;
   document.getElementById('failModal').classList.add('open');
+  labRefresh();
 }
 
-function updatePathoResult(key) {
-  const chk = document.getElementById('chk-'+key);
-  const lbl = document.getElementById('lbl-'+key);
-  if(chk && lbl) {
-    lbl.style.borderColor = chk.checked ? 'var(--red)' : 'var(--gray-200)';
-    lbl.style.background  = chk.checked ? 'var(--red-light)' : 'white';
-  }
-}
-
-
-function setResult(r) {
-  FAILRES = r;
-  const pathoSection = document.getElementById('pathoResultSection');
-  const b = document.getElementById('resultBadge');
-
-  if(r === 'Positive') {
-    pathoSection.style.display = 'block';
-    b.style.display = 'none';
-    document.getElementById('btnConfirmFail').disabled = true;
-  } else {
-    pathoSection.style.display = 'none';
-    document.querySelectorAll('#pathoCheckboxes input[type=checkbox]').forEach(c => {
-      c.checked = false;
-      const lbl = document.getElementById('lbl-'+c.id.replace('chk-',''));
-      if(lbl) { lbl.style.borderColor='var(--gray-200)'; lbl.style.background='white'; }
-    });
-    b.style.display = 'block';
-    b.style.background = '#d1fae5'; b.style.color = '#059669';
-    b.textContent = 'NEGATIVE — No contamination detected';
-    document.getElementById('btnConfirmFail').disabled = false;
-  }
-  document.getElementById('btnNeg').style.opacity = r==='Negative' ? '1' : '0.4';
-  document.getElementById('btnPos').style.opacity = r==='Positive' ? '1' : '0.4';
-}
-
-
-function onPathoCheck() {
-  const anyChecked = [...document.querySelectorAll('#pathoCheckboxes input[type=checkbox]')].some(c=>c.checked);
-  document.getElementById('btnConfirmFail').disabled = !anyChecked;
-  // Update badge
-  const b = document.getElementById('resultBadge');
-  if(anyChecked) {
-    const checked = [...document.querySelectorAll('#pathoCheckboxes input[type=checkbox]')]
-      .filter(c=>c.checked).map(c=>c.id.replace('chk-',''));
-    const names = {ecoli:'E.Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S.Aureus'};
-    const nameList = checked.map(k=>names[k]).join(', ');
-    b.style.display='block';
-    b.style.background='#fee2e2'; b.style.color='#dc2626';
-    b.textContent='POSITIVE: '+nameList+' — A retest will be generated';
-  } else {
-    b.style.display='none';
-  }
-}
-
-function closeFailModal() { document.getElementById('failModal').classList.remove('open'); FAILID=null; FAILRES=null; }
+function closeFailModal() { document.getElementById('failModal').classList.remove('open'); FAILID=null; FAILRES=null; LABRES={}; }
 
 function confirmResult() {
   if(!FAILID||!FAILRES) return;
   const hist=GH(), idx=hist.findIndex(r=>r.id===FAILID);
   if(idx<0) return;
 
-  hist[idx].resultado = FAILRES;
-  hist[idx].labNotes  = document.getElementById('failNotes').value.trim();
-  hist[idx].resultDate = todayLocal();
+  if(!labComplete(hist[idx])) { toast('Enter a result for every test','error'); return; }
+  applyLabResults(hist[idx], LABRES, document.getElementById('failNotes').value);
+
+  if(FAILRES==='Presumptive') {
+    SH(hist);
+    syncSafe(() => syncUpdateRecord(hist[idx]), 'update result');
+    closeFailModal();
+    searchHistory(); loadRetests(); refreshDashboard();
+    toast((hist[idx].sample ? 'Sample #'+hist[idx].sample : 'Site')+' PRESUMPTIVE: '+hist[idx].failedPathogensLabel.replace(/ \(presumptive\)/g,'')+' — monitored until the lab confirms', 'info');
+    return;
+  }
 
   if(FAILRES==='Positive') {
-    // Collect which specific pathogens failed
-    const patKeys = ['ecoli','listeria','salmonella','saureus'];
-    const failedPats = patKeys.filter(k => {
-      const chk = document.getElementById('chk-'+k);
-      return chk && chk.checked;
-    });
-    hist[idx].failedPathogens = failedPats; // e.g. ['listeria']
-    hist[idx].failedPathogensLabel = failedPats.map(k =>
-      ({ecoli:'E.Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S.Aureus'})[k]
-    ).join(', ');
-
     // A positive test — original OR a retest — escalates: it spawns its own
     // fresh round of 3 retests, unless it already spawned one.
-    const alreadySpawned = hist.some(h => h.originalId === hist[idx].id && h.retestNum);
+    const alreadySpawned = hist.some(h => h.originalId === hist[idx].id && h.retestNum && !isVectorRec(h));
     if(!alreadySpawned) {
       SH(hist);
       syncSafe(() => syncUpdateRecord(hist[idx]), 'update result');
       closeFailModal();
       searchHistory(); loadRetests(); refreshDashboard();
-      toast('Sample #'+hist[idx].sample+' POSITIVE ('+hist[idx].failedPathogensLabel+') — Schedule the 3 retests', 'error');
+      toast((isVectorRec(hist[idx]) ? hist[idx].retestNum+' site' : 'Sample #'+hist[idx].sample)+' POSITIVE ('+hist[idx].failedPathogensLabel+') — Schedule the 3 retests at this site', 'error');
       openRetestDateModal(hist[idx].id);
       return;
     }
@@ -136,7 +62,8 @@ function confirmResult() {
   // If this is a retest that came back Negative, check whether all 3 are done
   if (FAILRES === 'Negative' && hist[idx].retestNum && hist[idx].originalId) {
     const origId     = hist[idx].originalId;
-    const allRetests = GH().filter(r => r.originalId === origId && r.retestNum);
+    // Closure = 3 negatives at the ORIGINAL site; vector samples never count.
+    const allRetests = GH().filter(r => r.originalId === origId && r.retestNum && !isVectorRec(r));
     const allDone    = allRetests.length === 3 && allRetests.every(r => r.resultado === 'Negative');
     if (allDone) {
       searchHistory(); loadRetests(); refreshDashboard();
@@ -164,7 +91,7 @@ function _labKey(rec) { return String(rec.id); }
 function _labStore() { try { return JSON.parse(localStorage.getItem(LAB_STATUS_KEY) || '{}'); } catch (e) { return {}; } }
 function setLabStatusFlag(rec, status) {
   const st = _labStore(); st[_labKey(rec)] = { status: status, at: new Date().toISOString() };
-  localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st));
+  localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st)); if (typeof storeSaved === 'function') storeSaved(LAB_STATUS_KEY);
 }
 function getLabStatusFlag(rec) { const e = _labStore()[_labKey(rec)]; return e ? e.status : ''; }
 
@@ -188,7 +115,7 @@ function migrateLabStatusKeys() {
     }
     delete st[key]; changed = true;
   });
-  if (changed) localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st));
+  if (changed) { localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st)); if (typeof storeSaved === 'function') storeSaved(LAB_STATUS_KEY); }
   localStorage.setItem('cap_labsent_mig', '1');
 }
 
@@ -232,12 +159,17 @@ function loadRetests() {
   // a safety net so a positive whose resolved anchor is missing does NOT
   // resurface as "Generate retests" and let the user create duplicate rounds.
   const rootsWithRetests = new Set(
-    hist.filter(h => h.retestNum && h.originalId).map(h => h.originalId)
+    hist.filter(h => h.retestNum && h.originalId && !isVectorRec(h)).map(h => h.originalId)
   );
 
   // Original positives without retests generated yet
+  // Any positive needs its own round of 3 retests: the original test, a
+  // positive VECTOR site (a new positive location) and a positive retest
+  // (escalation). Retests/vectors only count from the SQF program start so
+  // legacy data from before go-live does not resurface.
+  const progStart = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
   const pos = hist.filter(h =>
-    h.resultado === 'Positive' && !h.retestNum &&
+    h.resultado === 'Positive' && (!h.retestNum || h.fecha >= progStart) &&
     !rids.has(h.id) && !rootsWithRetests.has(h.id)
   );
 
@@ -271,7 +203,9 @@ function loadRetests() {
     return myRetests.length > 0 && myRetests.some(h => h.resultado === 'Pending');
   });
 
-  const totalActive = pos.length + activeGroups.length;
+  // Presumptive results awaiting the lab's confirmation (monitored)
+  const presumptive = hist.filter(labIsPresumptive);
+  const totalActive = pos.length + activeGroups.length + presumptive.length;
   document.getElementById('retestActiveCount').textContent = totalActive;
 
   const listEl = document.getElementById('retestsList');
@@ -283,83 +217,102 @@ function loadRetests() {
     const today = todayLocal();
     const allPhotos = (typeof getPhotos === 'function') ? getPhotos() : [];
 
-    // Group A: positives that still need their retests scheduled
-    pos.forEach(orig => {
-      const pats = [orig.ecoli?'E.Coli':'',orig.listeria?'Listeria':'',orig.salmonella?'Salmonella':'',orig.saureus?'S.Aureus':''].filter(Boolean).join(', ');
+    // One retest / vector row (shared by both card types)
+    const rowOf = rt => {
+      const res = rt.resultado;
+      const isVec = isVectorRec(rt);
+      const isDone = res === 'Negative';
+      const isPending = res === 'Pending';
+      const nPhotos = allPhotos.filter(p => String(p.retestId) === String(rt.id)).length;
+      const lab = retestLabStatus(rt);
+      // Three process dots: Sent to lab → Result recorded → Passed.
+      // Each turns green only once that step is complete.
+      const _dot = (done, label) => '<span class="rt-step' + (done ? ' done' : '') + '" title="' + label + '"></span>';
+      const resBadge = _dot(lab === 'sent', 'Sent to lab');
+      const dueBadge = _dot(!isPending, 'Result recorded');
+      const labBadge = _dot(res === 'Negative', 'Passed · retest complete');
+      const check = isPending
+        ? `<input type="checkbox" class="rt-check" data-id="${rt.id}" onchange="updateRetestBulkBar()" title="Select to bulk-confirm Negative">`
+        : '<span style="width:16px;flex:none"></span>';
+      return `<div class="rt-retest">
+        ${check}
+        <span class="rt-rn">${esc(rt.retestNum)}${isVec ? `<span class="rt-vec-site">${rt.sample ? '#' + rt.sample : esc(rt.location || '')} · Z${rt.zone || '?'}</span>` : ''}</span>
+        ${isPending
+          ? `<span class="rt-date rt-date-edit" onclick="openRescheduleModal(${rt.id})" title="Reschedule — change this retest's date"><svg class="ln" width="12" height="12" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${rt.fecha}</span>`
+          : `<span class="rt-date">${rt.fecha}</span>`}
+        <span class="rt-status">${resBadge}${dueBadge}${labBadge}</span>
+        <span class="rt-spacer"></span>
+        <div class="rt-actions">
+          <button class="rt-btn ico" onclick="exportRetestPDF(${rt.id})" title="Download retest PDF"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+          <button class="rt-btn ico${nPhotos?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos${nPhotos?' ('+nPhotos+')':''}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>${nPhotos?'<span class="rt-count">'+nPhotos+'</span>':''}</button>
+          ${_retestSending.has(rt.id)
+            ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
+            : `<button class="rt-btn ico" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
+          ${canSend?`<button class="rt-btn send ico ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="${lab==='sent'?'Sent to lab':'Send to lab'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>`:''}
+          ${!isDone?`<button class="rt-btn accent ico" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>`:''}`}
+        </div>
+      </div>`;
+    };
+    // Group P: presumptive results — monitored until the lab confirms
+    presumptive.forEach(p => {
       cards.push(`<div class="rt-case">
         <div class="rt-case-head">
           <div>
-            <span class="rt-sample">Sample ${orig.sample}</span><span class="rt-bldg">${esc(orig.planta)}</span>
-            <div class="rt-sub">${esc(orig.area||'')}${orig.location?' · '+esc(orig.location):''} · Positive ${orig.fecha}${pats?' · '+esc(pats):''}</div>
+            <span class="rt-sample">${p.sample ? 'Sample ' + p.sample : esc(p.location || 'Site')}</span><span class="rt-bldg">${esc(p.planta)}</span>
+            <div class="rt-sub">${p.retestNum ? esc(p.retestNum) + ' · ' : ''}${esc(p.area||'')}${p.location?' · '+esc(p.location):''} · Collected ${p.fecha} · ${esc(p.failedPathogensLabel || 'Presumptive')}</div>
           </div>
-          <span class="rt-tag warn">Needs retests</span>
+          <span class="rt-tag" style="color:var(--yellow);background:var(--yellow-light)">Presumptive</span>
         </div>
         <div class="rt-retest">
-          <span class="rt-rn" style="color:var(--gray-500);font-weight:500">Not scheduled yet</span>
+          <span class="rt-rn" style="color:var(--gray-500);font-weight:500">Awaiting lab confirmation</span>
           <span class="rt-spacer"></span>
           <div class="rt-actions">
-            <button class="rt-btn accent" onclick="openRetestDateModal(${orig.id})"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule retests</button>
+            <button class="rt-btn accent" onclick="openFailModal(${p.id})"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Record confirmation</button>
           </div>
         </div>
       </div>`);
     });
 
+    // Group A: positives that still need their retests scheduled
+    pos.forEach(orig => {
+      const pats = orig.failedPathogensLabel || [orig.ecoli?'E.Coli':'',orig.listeria?'Listeria':'',orig.salmonella?'Salmonella':'',orig.saureus?'S.Aureus':''].filter(Boolean).join(', ');
+      const isVecSite = isVectorRec(orig);
+      const vectors = hist.filter(h => h.originalId === orig.id && isVectorRec(h));
+      cards.push(`<div class="rt-case">
+        <div class="rt-case-head">
+          <div>
+            <span class="rt-sample">${orig.sample ? 'Sample ' + orig.sample : esc(orig.location || 'Vector site')}</span><span class="rt-bldg">${esc(orig.planta)}</span>
+            <div class="rt-sub">${orig.retestNum ? esc(orig.retestNum) + (isVecSite ? ' site' : ' positive') + ' · ' : ''}${esc(orig.area||'')}${orig.location?' · '+esc(orig.location):''} · Positive ${orig.fecha}${pats?' · '+esc(pats):''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><span class="rt-tag warn">Needs retests</span>${caseToolsHtml(orig.id, orig.planta, orig.sample)}</div>
+        </div>
+        <div class="rt-retest">
+          <span class="rt-rn" style="color:var(--gray-500);font-weight:500">Retests not scheduled yet</span>
+          <span class="rt-spacer"></span>
+          <div class="rt-actions">
+            <button class="rt-btn accent" onclick="openRetestDateModal(${orig.id})"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule retests</button>
+          </div>
+        </div>
+        ${vectors.length ? '<div class="rt-vec-head">Vector sampling — source investigation (' + vectors.length + '/' + VECTOR_MAX + ')</div>' + vectors.map(rowOf).join('') : ''}
+      </div>`);
+    });
+
     // Group B: active retests (original already closed) — one card per case
     activeGroups.forEach(g => {
-      const retests = hist.filter(h => h.originalId === g.originalId && h.retestNum)
-                          .sort((a,b) => a.retestNum.localeCompare(b.retestNum));
-      if (!retests.length) return;
+      const caseRecs = hist.filter(h => h.originalId === g.originalId && h.retestNum);
+      if (!caseRecs.length) return;
+      const _rn = h => parseInt(String(h.retestNum).replace(/\D/g, ''), 10) || 0;
+      const retests = caseRecs.filter(h => !isVectorRec(h)).sort((a,b) => a.retestNum.localeCompare(b.retestNum));
+      const vectors = caseRecs.filter(isVectorRec).sort((a,b) => _rn(a) - _rn(b));
       const orig = hist.find(h => h.id === g.originalId) || {};
       const pats = orig.failedPathogensLabel ||
         (g.notes || '').replace(/^Positive:\s*/, '').replace(/\.\s*3 retests.*/i, '').trim();
 
-      const rowsHtml = retests.map(rt => {
-        const res = rt.resultado;
-        const isDone = res === 'Negative';
-        const isPending = res === 'Pending';
-        const nPhotos = allPhotos.filter(p => String(p.retestId) === String(rt.id)).length;
-        const lab = retestLabStatus(rt);
-        // Status letter badges: result · due · lab. Text lives in the top legend + tooltips.
-        const resBadge = res === 'Negative'
-          ? '<span class="rt-badge green" title="Negative">✓</span>'
-          : res === 'Positive'
-          ? '<span class="rt-badge red" title="Positive">✗</span>'
-          : '<span class="rt-badge amber" title="Pending result">P</span>';
-        const dueBadge = (isPending && rt.fecha < today)
-          ? '<span class="rt-badge red" title="Overdue">O</span>'
-          : (isPending && rt.fecha === today)
-          ? '<span class="rt-badge amber" title="Due today">D</span>'
-          : '<span class="rt-badge muted" title="On schedule">·</span>';
-        const labBadge = lab === 'sent'
-          ? '<span class="rt-badge green" title="Sent to lab">S</span>'
-          : lab === 'filled'
-          ? '<span class="rt-badge amber" title="Form ready">F</span>'
-          : '<span class="rt-badge muted" title="Not sent to lab">S</span>';
-        const check = isPending
-          ? `<input type="checkbox" class="rt-check" data-id="${rt.id}" onchange="updateRetestBulkBar()" title="Select to bulk-confirm Negative">`
-          : '<span style="width:16px;flex:none"></span>';
-        return `<div class="rt-retest">
-          ${check}
-          <span class="rt-rn">${esc(rt.retestNum)}</span>
-          ${isPending
-            ? `<span class="rt-date rt-date-edit" onclick="openRescheduleModal(${rt.id})" title="Reschedule — change this retest's date"><svg class="ln" width="12" height="12" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${rt.fecha}</span>`
-            : `<span class="rt-date">${rt.fecha}</span>`}
-          <span class="rt-status">${resBadge}${dueBadge}${labBadge}</span>
-          <span class="rt-spacer"></span>
-          <div class="rt-actions">
-            <button class="rt-btn ico" onclick="exportRetestPDF(${rt.id})" title="Download retest PDF"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
-            <button class="rt-btn ico${nPhotos?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos${nPhotos?' ('+nPhotos+')':''}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>${nPhotos?'<span class="rt-count">'+nPhotos+'</span>':''}</button>
-            ${_retestSending.has(rt.id)
-              ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
-              : `<button class="rt-btn ico" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
-            ${canSend?`<button class="rt-btn send ico ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="${lab==='sent'?'Sent to lab':'Send to lab'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>`:''}
-            ${!isDone?`<button class="rt-btn accent ico" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>`:''}`}
-          </div>
-        </div>`;
-      }).join('');
+      const rowsHtml = retests.map(rowOf).join('') +
+        (vectors.length ? '<div class="rt-vec-head">Vector sampling — source investigation (' + vectors.length + '/' + VECTOR_MAX + ')</div>' + vectors.map(rowOf).join('') : '');
 
-      const pendingUnsent = retests.filter(rt => rt.resultado === 'Pending' && retestLabStatus(rt) !== 'sent').length;
-      const anyOverdue = retests.some(rt => rt.resultado === 'Pending' && rt.fecha < today);
+      const pendingUnsent = caseRecs.filter(rt => rt.resultado === 'Pending' && retestLabStatus(rt) !== 'sent').length;
+      const anyOverdue = caseRecs.some(rt => rt.resultado === 'Pending' && rt.fecha < today);
       const caseTag = anyOverdue
         ? '<span class="rt-tag" style="color:#fff;background:var(--red)">Overdue</span>'
         : '<span class="rt-tag warn">In follow-up</span>';
@@ -372,7 +325,7 @@ function loadRetests() {
             <span class="rt-sample">Sample ${g.sample}</span><span class="rt-bldg">${esc(g.planta)}</span>
             <div class="rt-sub">${esc(g.area||'')}${g.location?' · '+esc(g.location):''} · Positive ${g.originalDate}${pats?' · '+esc(pats):''}</div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${caseTag}${sendAllBtn}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${caseTag}${caseToolsHtml(g.originalId, g.planta, g.sample)}${sendAllBtn}</div>
         </div>
         ${rowsHtml}
       </div>`);
@@ -388,7 +341,7 @@ function loadRetests() {
     if (!r.closedOnGenerate) return { show:true, escalated:false };
     const my = hist.filter(h => h.originalId === r.originalId && h.retestNum);
     const hasPending   = my.some(h => h.resultado === 'Pending');
-    const hasEscalated = my.some(h => h.resultado === 'Positive');
+    const hasEscalated = my.some(h => h.resultado === 'Positive' && !isVectorRec(h));   // a positive vector opens its own case; it doesn't fail this round
     // Resolved only once NO retest is pending — consistent with activeGroups, so
     // a round is either active (has pending) or resolved (none), never both.
     return { show: !hasPending, escalated: hasEscalated };
@@ -434,8 +387,10 @@ function _markRecordsNegative(ids) {
   ids.forEach(id => {
     const r = hist.find(x => x.id === id);
     if (r && r.resultado !== 'Negative') {
-      r.resultado = 'Negative'; r.resultDate = today;
-      r.failedPathogens = []; r.failedPathogensLabel = '';
+      // Negative for every ordered test: "Negative" for pathogen screens,
+      // "<10 CFU/sponge" for the E. coli / S. aureus counts.
+      applyLabResults(r, labDefaultNegative(r));
+      r.resultDate = today;
       changed.push(r);
     }
   });
