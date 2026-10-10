@@ -61,6 +61,31 @@ const STORE_MAP = {
   }
 };
 
+// Primary data — Firestore is the source of truth, SharePoint gets a copy from
+// the spMirror Cloud Functions. Read through listeners into the same caches
+// the app always used; written explicitly by the fs* helpers below (never
+// diffed / bulk-migrated from the browser).
+const _num = v => (v === '' || v == null) ? v : (Number.isFinite(Number(v)) ? Number(v) : v);
+Object.assign(STORE_MAP, {
+  cap_h: {
+    cols: ['records'], primary: true,
+    fromDocs: c => _vals(c.records).map(r => Object.assign({}, r, { id: _num(r.id), sample: _num(r.sample), zone: _num(r.zone), originalId: _num(r.originalId) || 0 }))
+      .filter(r => r.id).sort((a, b) => a.id - b.id)
+  },
+  cap_rv: {
+    cols: ['resolved'], primary: true,
+    fromDocs: c => _vals(c.resolved).sort((a, b) => String(a.resolvedDate).localeCompare(String(b.resolvedDate)))
+  },
+  cap_submissions: {
+    cols: ['submissions'], primary: true,
+    fromDocs: c => _vals(c.submissions).sort((a, b) => String(a.submittedAt).localeCompare(String(b.submittedAt)))
+  },
+  cap_masterpoints: {
+    cols: ['masterPoints'], primary: true,
+    fromDocs: c => _vals(c.masterPoints).map(p => Object.assign({}, p, { sample: _num(p.sample), zone: _num(p.zone) }))
+  }
+});
+
 const STORE = { on: false, db: null, unsub: [], data: {}, ready: {}, migrated: false };
 const _clean = o => JSON.parse(JSON.stringify(o));                       // drops undefined
 const _strip = d => { const x = Object.assign({}, d); delete x._by; delete x._at; return x; };
@@ -111,6 +136,7 @@ function _storeFirstSync() {
   if (localStorage.getItem(flag) === '1') return;
   const pre = (() => { try { return JSON.parse(localStorage.getItem('cap_store_preload') || '{}'); } catch (e) { return {}; } })();
   Object.keys(STORE_MAP).forEach(key => {
+    if (STORE_MAP[key].primary) return;
     const local = pre[key]; if (local == null) return;
     const remote = _readLocal(key);
     const merged = typeof _mergeKey === 'function' ? _mergeKey(key, remote, local) : local;
@@ -127,7 +153,7 @@ function _storeFirstSync() {
 function storePreload() {
   if (localStorage.getItem('cap_store_uploaded') === '1' || localStorage.getItem('cap_store_preload')) return;
   const pre = {};
-  Object.keys(STORE_MAP).forEach(k => { const v = _readLocal(k); if (v != null) pre[k] = v; });
+  Object.keys(STORE_MAP).forEach(k => { if (STORE_MAP[k].primary) return; const v = _readLocal(k); if (v != null) pre[k] = v; });
   localStorage.setItem('cap_store_preload', JSON.stringify(pre));
 }
 
@@ -137,10 +163,10 @@ function storePreload() {
 const STORE_APPEND_ONLY = new Set(['empChangeLog']);
 
 function storeSaved(key) {
-  if (!STORE.on || !STORE_MAP[key]) return Promise.resolve();
+  if (!STORE.on || !STORE_MAP[key] || STORE_MAP[key].primary) return Promise.resolve();
   const m = STORE_MAP[key];
   const want = m.toDocs(_readLocal(key));
-  const by = (typeof CU !== 'undefined' && CU && CU.email) || '';
+  const by = (typeof fbAuth !== 'undefined' && fbAuth.currentUser && fbAuth.currentUser.email) || (typeof CU !== 'undefined' && CU && CU.email) || '';
   const ts = firebase.firestore.FieldValue.serverTimestamp();
   const commits = [];
   // One batch per collection, so a rejected write in one collection never
@@ -168,6 +194,86 @@ function storeSaved(key) {
   });
 }
 
+// Resolves when the first server snapshot of these collections has arrived
+// (false after `ms` — the caller keeps working with the cached copy).
+function storeWhenReady(cols, ms) {
+  return new Promise(res => {
+    const t0 = Date.now();
+    (function wait() {
+      if (STORE.on && cols.every(c => STORE.ready[c])) return res(true);
+      if (Date.now() - t0 > (ms || 15000)) return res(false);
+      setTimeout(wait, 100);
+    })();
+  });
+}
+
+// ── Writes to the primary collections ──────────────────────────
+const RECORD_FIELDS = ['id', 'fecha', 'planta', 'by', 'sample', 'zone', 'area', 'line', 'location', 'ecoli', 'listeria', 'salmonella', 'saureus',
+  'resultado', 'retestNum', 'labNotes', 'resultDate', 'failedPathogens', 'failedPathogensLabel', 'labResults', 'isRetest', 'originalId', 'scheduled',
+  'enteredByEmail', 'enteredByName', 'enteredAt'];
+const _recDoc = r => { const o = {}; RECORD_FIELDS.forEach(k => { if (r[k] !== undefined && r[k] !== null) o[k] = r[k]; }); return _clean(o); };
+// The rules compare _by with the token's email, so use the Firebase session's.
+const _fsWho = () => (typeof fbAuth !== 'undefined' && fbAuth.currentUser && fbAuth.currentUser.email) || (CU && CU.email) || '';
+const _fsStamp = () => ({ _by: _fsWho(), _at: firebase.firestore.FieldValue.serverTimestamp() });
+const _sameRec = (a, b) => a.fecha === b.fecha && a.planta === b.planta && String(a.sample) === String(b.sample) && String(a.retestNum || '') === String(b.retestNum || '');
+
+// Reserve `n` consecutive test ids on the server (counters/records).
+async function _allocIds(n, floor) {
+  const ref = STORE.db.collection('counters').doc('records');
+  return STORE.db.runTransaction(async tx => {
+    const d = await tx.get(ref);
+    const start = Math.max(d.exists ? (d.data().n || 0) : 0, floor || 0) + 1;
+    tx.set(ref, Object.assign({ n: start + n - 1 }, _fsStamp()));
+    return start;
+  });
+}
+
+// New tests / retests / vector samples. Ids come from the server counter so
+// two devices saving at once never collide; if the local id differs, the
+// cached copy is renumbered. Offline → local ids, queued by Firestore.
+async function fsCreateRecords(recs) {
+  if (!recs || !recs.length) return;
+  const now = new Date().toISOString();
+  recs.forEach(r => { r.enteredByEmail = r.enteredByEmail || (CU && CU.email) || ''; r.enteredByName = r.enteredByName || (CU && CU.displayName) || ''; r.enteredAt = r.enteredAt || now; });
+  try {
+    const start = await _allocIds(recs.length, Math.min(...recs.map(r => Number(r.id) || 0)) - 1);
+    const remap = {};
+    recs.forEach((r, i) => { if (r.id !== start + i) { remap[r.id] = { to: start + i, rec: Object.assign({}, r) }; r.id = start + i; } });
+    if (Object.keys(remap).length) {
+      const h = GH();
+      h.forEach(x => { const m = remap[x.id]; if (m && _sameRec(x, m.rec)) x.id = m.to; });
+      SH(h);
+    }
+  } catch (e) { console.warn('[store] id counter unavailable — using local ids', e && e.code); }
+  const b = STORE.db.batch();
+  recs.forEach(r => b.set(STORE.db.collection('records').doc(String(r.id)), Object.assign(_recDoc(r), _fsStamp())));
+  await b.commit();
+}
+async function fsUpdateRecord(rec) {
+  if (!rec || !rec.id) return;
+  await STORE.db.collection('records').doc(String(rec.id)).set(Object.assign(_recDoc(rec), _fsStamp()));
+}
+async function fsAddResolved(items) {
+  const b = STORE.db.batch(), now = new Date().toISOString();
+  (items || []).forEach((r, i) => {
+    const doc = _clean(Object.assign({}, r, { enteredByEmail: r.enteredByEmail || (CU && CU.email) || '', enteredByName: r.enteredByName || (CU && CU.displayName) || '', enteredAt: r.enteredAt || now }));
+    b.set(STORE.db.collection('resolved').doc(r.originalId + '_' + Date.now() + '_' + i), Object.assign(doc, _fsStamp()));
+  });
+  await b.commit();
+}
+async function fsSetPoint(p) {
+  const doc = _clean({ plant: p.plant || p.planta, sample: Number(p.sample), zone: Number(p.zone), area: p.area || '', line: p.line || '', location: p.location || '', active: p.active !== false,
+    enteredByEmail: p.enteredByEmail || (CU && CU.email) || '', enteredByName: p.enteredByName || (CU && CU.displayName) || '', enteredAt: p.enteredAt || new Date().toISOString() });
+  await STORE.db.collection('masterPoints').doc(doc.plant + '_' + doc.sample).set(Object.assign(doc, _fsStamp()));
+}
+// Lab-form log entry (the labform flow writes the SharePoint copy itself).
+async function fsAddSubmission(s) {
+  if (!STORE.on) return;
+  const doc = _clean({ building: s.building || '', sample: String(s.sample || ''), type: s.type || 'Generator', retestNum: String(s.retestNum || ''), status: s.status || 'Generated',
+    fileName: s.fileName || '', collectionDate: s.collectionDate || '', submittedByEmail: s.submittedByEmail || '', submittedByName: s.submittedByName || '', submittedAt: s.submittedAt || new Date().toISOString() });
+  await STORE.db.collection('submissions').add(Object.assign(doc, _fsStamp()));
+}
+
 // ── Server-side consecutive numbers ────────────────────────────
 // prefix e.g. 'TRN-2026' → 'TRN-2026-004'. `floor` = highest number already
 // in use (legacy records), so the counter never hands out a used number.
@@ -177,7 +283,7 @@ async function storeNextNumber(prefix, floor) {
   const n = await STORE.db.runTransaction(async tx => {
     const doc = await tx.get(ref);
     const next = Math.max(doc.exists ? (doc.data().n || 0) : 0, floor || 0) + 1;
-    tx.set(ref, { n: next, _by: (CU && CU.email) || '', _at: firebase.firestore.FieldValue.serverTimestamp() });
+    tx.set(ref, Object.assign({ n: next }, _fsStamp()));
     return next;
   });
   return prefix + '-' + String(n).padStart(3, '0');

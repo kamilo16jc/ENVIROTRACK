@@ -315,3 +315,6 @@ exports.photoUpload = onRequest({ region: REGION, cors: true }, async (req, res)
     res.status(502).json({ ok: false, error: "upstream" });
   }
 });
+
+// Firestore <-> SharePoint mirror + import (see spmirror.js)
+Object.assign(exports, require("./spmirror"));
