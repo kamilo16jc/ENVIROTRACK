@@ -15,9 +15,9 @@ function getActiveMaster(plant) {
 
 // ── Tab switcher ──────────────────────────────
 function switchCfgTab(tab) {
-  ['users','master'].forEach(t => {
-    document.getElementById('cfgPanel-'+t).style.display = t===tab ? 'block' : 'none';
-    const btn = document.getElementById('tab-'+t);
+  ['users','master','emp'].forEach(t => {
+    const panel = document.getElementById('cfgPanel-'+t); if(panel) panel.style.display = t===tab ? 'block' : 'none';
+    const btn = document.getElementById('tab-'+t); if(!btn) return;
     if(t===tab) {
       btn.style.borderBottom='2px solid var(--red)';
       btn.style.color='var(--red)'; btn.style.fontWeight='600';
@@ -28,9 +28,26 @@ function switchCfgTab(tab) {
   });
   if(tab==='master') loadMasterTable();
   if(tab==='users')  loadUsersTable();
+  if(tab==='emp' && typeof renderEMPConfig==='function') renderEMPConfig();
 }
 
 // ── Master Table ──────────────────────────────
+// Data-quality check for a MASTER point — what an auditor (or the 1945
+// line rotation) would trip over. Returns the reason, or '' when OK.
+const MASTER_1945_BAD_LINES = new Set(['8']);   // 1945 has no Line 8
+function masterIssue(p) {
+  if (p.active === false) return '';
+  const L = String(p.line == null ? '' : p.line).trim();
+  const noLine = !L || /^n\/?a$/i.test(L);
+  if (p.plant === '1945') {
+    if (MASTER_1945_BAD_LINES.has(L)) return 'Line ' + L + ' does not exist in 1945';
+    if ((p.zone === 2 || p.zone === 3) && noLine) return 'Zone ' + p.zone + ' point without a line — not used by the line rotation';
+  } else if (!noLine) {
+    return 'Line "' + L + '" in a building without production lines';
+  }
+  return '';
+}
+
 function loadMasterTable() {
   const plant  = document.getElementById('masterFilterPlant').value;
   const zone   = document.getElementById('masterFilterZone').value;
@@ -43,6 +60,10 @@ function loadMasterTable() {
     (p.location||'').toLowerCase().includes(search) ||
     String(p.sample).includes(search)
   );
+  const issues = getMasterPoints().filter(p => p.plant === plant && masterIssue(p)).length;
+  const note = document.getElementById('masterIssueNote');
+  if (note) note.textContent = issues ? issues + (issues === 1 ? ' point needs review' : ' points need review') : '';
+  if ((document.getElementById('masterFilterIssue') || {}).value === 'review') all = all.filter(masterIssue);
   all.sort((a,b) => a.sample - b.sample);
 
   document.getElementById('masterCount').textContent =
@@ -64,7 +85,7 @@ function loadMasterTable() {
       <td style="font-weight:700;font-size:14px">${p.sample}</td>
       <td style="text-align:center">${p.zone}</td>
       <td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.area)}">${esc(p.area)}</td>
-      <td>${esc(p.line||'N/A')}</td>
+      <td>${esc(p.line||'N/A')}${masterIssue(p) ? '<div style="font-size:11px;font-weight:600;color:var(--yellow);margin-top:2px;max-width:220px;white-space:normal">'+esc(masterIssue(p))+'</div>' : ''}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.location)}">${esc(p.location)}</td>
       <td>${stBadge}</td>
       <td>

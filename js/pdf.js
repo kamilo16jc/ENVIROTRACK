@@ -1,8 +1,14 @@
 // ═══════════════════════════════════════════════
+// Printed forms are flat: white, grays and black text only —
+// the Caputo logo is the one exception and keeps its colors.
+// ═══════════════════════════════════════════════
+function pdfLogo() { return LOGO; }
+
+// ═══════════════════════════════════════════════
 // PDF — MAIN WEEKLY FORM
 // ═══════════════════════════════════════════════
 function pdfHeader(doc,planta,sqf,W,margin) {
-  try{doc.addImage(LOGO,'JPEG',margin,5,34,17);}catch(e){}
+  try{doc.addImage(pdfLogo(),'JPEG',margin,5,34,17);}catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
   doc.text('SQF # '+sqf+': '+planta+' Sample Collection Form',W/2,10,{align:'center'});
   doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
@@ -84,9 +90,9 @@ function exportRetestPDF(id) {
   // Get the original positive record
   const orig = h.originalId ? hist.find(r => r.id===h.originalId) : null;
 
-  // Retest number from the retest record itself
-  const rnStr = h.retestNum ? h.retestNum.replace('Retest #','').trim() : '1';
-  const rn = parseInt(rnStr) || 1;
+  // Retest / vector number from the record itself ("Retest #2" / "Vector #2" → 2)
+  const rn = parseInt(String(h.retestNum || '').replace(/\D/g, ''), 10) || 1;
+  const kind = (typeof labKindOf === 'function') ? labKindOf(h) : 'Retest';   // 'Retest' | 'Vector'
 
   // Key dates and info
   const retestDate  = new Date(h.fecha+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -103,35 +109,31 @@ function exportRetestPDF(id) {
 
   // ── Sub-header: Retest title ──────────────────────────────────────────
   const y = 32.5;
-  doc.setFillColor(247,249,252);
-  doc.rect(0,y,W,22,'F');
-  doc.setDrawColor(215,222,232); doc.setLineWidth(0.3);
-  doc.line(0,y+22,W,y+22);
+  doc.setDrawColor(190,190,190); doc.setLineWidth(0.3);
+  doc.line(M,y+20,W-M,y+20);
 
-  // Red badge with retest number
-  doc.setFillColor(192,57,43);
-  doc.roundedRect(M,y+3,36,9,2,2,'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(255,255,255);
-  doc.text('RETEST #'+rn, M+18, y+9, {align:'center'});
+  // Retest / vector number — plain text
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
+  doc.text(kind.toUpperCase()+' #'+rn, M, y+8);
 
   // Title
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(26,35,50);
-  doc.text('Environmental Monitoring — Retest Collection Form', M+40, y+8);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
+  doc.text('Environmental Monitoring — '+(kind==='Vector'?'Vector Sampling':'Retest')+' Collection Form', M+40, y+8);
 
   // Original positive info row
-  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(130,140,155);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110,110,110);
   doc.text('Original positive:', M+40, y+14.5);
-  doc.setFont('helvetica','bold'); doc.setTextColor(192,57,43);
+  doc.setFont('helvetica','bold'); doc.setTextColor(0,0,0);
   doc.text(origDate+'  |  Failed: '+failedBact, M+40+doc.getTextWidth('Original positive: '), y+14.5);
 
   // Retest date (right side)
-  doc.setFont('helvetica','normal'); doc.setTextColor(120,130,145);
-  doc.text('Retest date:', W-M-90, y+8);
-  doc.setFont('helvetica','bold'); doc.setTextColor(26,35,50);
-  doc.text(retestDate, W-M-90+doc.getTextWidth('Retest date: '), y+8);
-  doc.setFont('helvetica','normal'); doc.setTextColor(120,130,145);
+  doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110);
+  doc.text(kind+' date:', W-M-90, y+8);
+  doc.setFont('helvetica','bold'); doc.setTextColor(0,0,0);
+  doc.text(retestDate, W-M-90+doc.getTextWidth(kind+' date: '), y+8);
+  doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110);
   doc.text('Collected by:', W-M-90, y+14.5);
-  doc.setFont('helvetica','bold'); doc.setTextColor(26,35,50);
+  doc.setFont('helvetica','bold'); doc.setTextColor(0,0,0);
   doc.text('_______________________', W-M-90+doc.getTextWidth('Collected by: '), y+14.5);
 
   // ── Table ─────────────────────────────────────────────────────────────
@@ -144,41 +146,112 @@ function exportRetestPDF(id) {
   pdfDocControl(doc, tableEnd+4, M);
   pdfFooter(doc, W, M);
 
-  const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn);
+  const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn, kind);
   doc.save(pdfName + '.pdf');
   syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
-  toast('✅ Retest #'+rn+' PDF exported for Sample #'+h.sample,'success');
+  toast('✅ '+kind+' #'+rn+' PDF exported for Sample #'+(h.sample||h.location),'success');
 }
 
 // ═══════════════════════════════════════════════
 // PDF — HISTORY EXPORT
 // ═══════════════════════════════════════════════
 function exportHistoryPDF() {
-  let hist = GH();
-  hist = hist.filter(h => {
-    const p=document.getElementById('fPlant').value, s=document.getElementById('fSample').value.trim(),
-          d=document.getElementById('fFrom').value,  u=document.getElementById('fTo').value,
-          r=document.getElementById('fResult').value;
-    return (!p||h.planta===p) && (!s||String(h.sample).includes(s)) &&
-           (!d||h.fecha>=d) && (!u||h.fecha<=u) && (!r||h.resultado===r);
+  const f = id => (document.getElementById(id) || {}).value || '';
+  const p = f('fPlant'), smp = f('fSample').trim(), d = f('fFrom'), u = f('fTo'), r = f('fResult');
+  const hist = GH().filter(h =>
+    (!p || h.planta === p) && (!smp || String(h.sample).includes(smp)) &&
+    (!d || h.fecha >= d) && (!u || h.fecha <= u) && (!r || h.resultado === r))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || String(a.planta).localeCompare(String(b.planta)) || (a.sample || 0) - (b.sample || 0));
+  if (!hist.length) { toast('No data to export', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+  const W = 279.4, PH = doc.internal.pageSize.getHeight(), M = 10;
+  const INK = [0, 0, 0], MUT = [110, 110, 110], LINE = [200, 200, 200], HEAD = [242, 242, 242];
+  const fmt = iso => { const x = new Date(iso + 'T12:00:00'); return isNaN(x) ? (iso || '') : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const now = new Date();
+  const stamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const who = (typeof CU !== 'undefined' && CU && (CU.displayName || CU.email)) || '';
+
+  // ── Header ──
+  try { doc.addImage(pdfLogo(), 'JPEG', M, 7, 30, 15); } catch (e) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
+  doc.text('Environmental Test History', M + 36, 14);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT);
+  doc.text('Caputo Foods - Environmental Monitoring Program (SQF 2.4.H)', M + 36, 19.5);
+  doc.setFontSize(8);
+  doc.text('Generated ' + stamp, W - M, 13, { align: 'right' });
+  if (who) doc.text('by ' + who, W - M, 17.5, { align: 'right' });
+  doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.line(M, 25, W - M, 25);
+
+  // ── Filters + summary ──
+  const period = d || u ? (d ? fmt(d) : 'Start') + ' - ' + (u ? fmt(u) : 'Today') : 'All dates';
+  const filters = [['Building', p || 'All'], ['Sample', smp || 'All'], ['Period', period], ['Result', r || 'All']];
+  let x = M;
+  doc.setFontSize(8);
+  filters.forEach(([k, v]) => {
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUT); doc.text(k + ':', x, 31);
+    const kw = doc.getTextWidth(k + ': ');
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK); doc.text(v, x + kw, 31);
+    x += kw + doc.getTextWidth(v) + 9;
   });
-  hist.sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if(!hist.length) { toast('No data to export','error'); return; }
-  const {jsPDF} = window.jspdf;
-  const doc = new jsPDF({orientation:'landscape',unit:'mm',format:'letter'});
-  const W=279.4;
-  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
-  doc.text('CAPUTO FOODS — Environmental Test History',W/2,13,{align:'center'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8);
-  doc.text('Generated: '+new Date().toLocaleDateString('en-US'),W/2,19,{align:'center'});
+  const cnt = k => hist.filter(h => h.resultado === k).length;
+  const stats = [['Records', hist.length], ['Negative', cnt('Negative')], ['Positive', cnt('Positive')], ['Pending', cnt('Pending')]];
+  const bw = 26, bx0 = W - M - stats.length * (bw + 3) + 3;
+  stats.forEach(([k, v], i) => {
+    const bx = bx0 + i * (bw + 3);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.rect(bx, 28, bw, 11);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(v), bx + 3, 34);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...MUT); doc.text(k.toUpperCase(), bx + 3, 37.5);
+  });
+
+  // ── Table ──
+  const MARK = '\u0001';   // pathogen tested → drawn as a filled dot
+  // retestNum may be "Retest #2", "Vector #1" or just "2"
+  const typeOf = h => { const rn = String(h.retestNum || '').trim();
+    if (!rn) return h.isRetest ? 'Retest' : 'Routine';
+    return /^\d+$/.test(rn) ? 'Retest #' + rn : rn; };
   doc.autoTable({
-    head:[['Date','Building','Sample#','Zone','Area','Location','E.C','List','Salm','S.A','Result','Retest']],
-    body:hist.map(h=>[h.fecha,h.planta,h.sample,h.zone,h.area.substring(0,25),h.location.substring(0,35),h.ecoli?'X':'',h.listeria?'X':'',h.salmonella?'X':'',h.saureus?'X':'',h.resultado,h.retestNum||'']),
-    startY:23, margin:{left:8,right:8},
-    styles:{fontSize:7,cellPadding:2,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.15},
-    headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',fontSize:7,lineColor:[0,0,0],lineWidth:0.15},
-    columnStyles:{0:{cellWidth:20},1:{cellWidth:17},2:{cellWidth:15,halign:'center'},3:{cellWidth:10,halign:'center'},4:{cellWidth:38},5:{cellWidth:55},6:{cellWidth:9,halign:'center'},7:{cellWidth:9,halign:'center'},8:{cellWidth:10,halign:'center'},9:{cellWidth:9,halign:'center'},10:{cellWidth:22},11:{cellWidth:18}}
+    startY: 43, margin: { left: M, right: M, top: 14, bottom: 14 },
+    head: [['Date', 'Bldg', 'Sample', 'Zone', 'Area', 'Line', 'Location', 'E. coli', 'Listeria', 'Salm.', 'S. aureus', 'Result', 'Type']],
+    body: hist.map(h => [fmt(h.fecha), h.planta, h.sample ? '#' + h.sample : '—', h.zone || '—', h.area || '', h.line || '',
+      h.location || '', h.ecoli ? MARK : '', h.listeria ? MARK : '', h.salmonella ? MARK : '', h.saureus ? MARK : '',
+      h.resultado || 'Pending', typeOf(h)]),
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 7.6, cellPadding: { top: 2, bottom: 2, left: 2, right: 2 }, textColor: INK, lineColor: LINE, lineWidth: 0.2, valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: HEAD, textColor: INK, fontStyle: 'bold', fontSize: 7.4, valign: 'middle' },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    columnStyles: {
+      0: { cellWidth: 22 }, 1: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
+      3: { cellWidth: 11, halign: 'center' }, 4: { cellWidth: 30 }, 5: { cellWidth: 20 }, 6: { cellWidth: 'auto' },
+      7: { cellWidth: 14, halign: 'center' }, 8: { cellWidth: 14, halign: 'center' }, 9: { cellWidth: 12, halign: 'center' }, 10: { cellWidth: 17, halign: 'center' },
+      11: { cellWidth: 19, halign: 'center' }, 12: { cellWidth: 21, halign: 'center' }
+    },
+    didParseCell: c => {
+      if (c.section === 'head' && c.column.index >= 1 && c.column.index !== 4 && c.column.index !== 5 && c.column.index !== 6) c.cell.styles.halign = 'center';
+      if (c.section !== 'body') return;
+      if (c.cell.raw === MARK) c.cell.text = [''];
+      if (c.column.index === 11 && c.cell.raw === 'Positive') c.cell.styles.fontStyle = 'bold';
+      if (c.column.index === 11 && c.cell.raw === 'Pending') c.cell.styles.textColor = MUT;
+      if (c.column.index === 12 && c.cell.raw === 'Routine') c.cell.styles.textColor = MUT;
+    },
+    didDrawCell: c => {
+      if (c.section === 'body' && c.cell.raw === MARK) {
+        doc.setFillColor(...INK); doc.circle(c.cell.x + c.cell.width / 2, c.cell.y + c.cell.height / 2, 1.1, 'F');
+      }
+    }
   });
-  doc.save('Caputo_Historial_'+todayLocal()+'.pdf');
-  toast('✅ PDF exported','success');
+
+  // ── Footer on every page ──
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, PH - 9, W - M, PH - 9);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
+    doc.text('Caputo Foods - Environmental Test History - Confidential', M, PH - 5);
+    doc.text('Page ' + i + ' of ' + pages, W - M, PH - 5, { align: 'right' });
+  }
+
+  doc.save('Test History ' + todayLocal() + '.pdf');
+  toast('PDF exported — ' + hist.length + ' record' + (hist.length === 1 ? '' : 's'), 'success');
 }

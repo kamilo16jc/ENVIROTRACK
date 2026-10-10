@@ -18,6 +18,14 @@ firebase.initializeApp(firebaseConfig);
 const fbAuth = firebase.auth();
 const fbFunctions = firebase.app().functions("us-central1");
 
+// Firestore (backend for CAPAs, EMP, training, reviews — see js/store.js).
+// Offline cache on, shared across tabs. On localhost, ?emu points Auth and
+// Firestore at the local emulators (firebase emulators:start).
+const FB_EMU = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]emu\b/.test(location.search);
+const fbDb = firebase.firestore ? firebase.firestore() : null;
+if (FB_EMU && fbDb) { fbDb.useEmulator('127.0.0.1', 8080); fbAuth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true }); }
+if (fbDb) fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
 // NON-persistent session: closing the tab signs the user out.
 // Ideal for shared plant PCs (forces login every time).
 fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(() => {});

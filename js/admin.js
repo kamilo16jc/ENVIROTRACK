@@ -67,7 +67,7 @@ function openAdminEdit(id) {
   const failed = Array.isArray(h.failedPathogens) ? h.failedPathogens : [];
   document.getElementById('aePathoCheckboxes').innerHTML = testedPats.map(([key,name]) =>
     '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 12px;' +
-    'background:white;border-radius:6px;border:1.5px solid var(--gray-200)" id="aelbl-' + key + '">' +
+    'border-radius:6px" id="aelbl-' + key + '">' +
     '<input type="checkbox" id="aechk-' + key + '" onchange="onAdminPathoCheck()" ' +
     (failed.includes(key) ? 'checked ' : '') +
     'style="width:16px;height:16px;accent-color:var(--red);cursor:pointer">' +
@@ -95,11 +95,11 @@ function setAdminResult(r) {
     pathoSection.style.display = 'none';
     if (r === 'Negative') {
       b.style.display = 'block';
-      b.style.background = '#d1fae5'; b.style.color = '#059669';
+      b.style.background = 'none'; b.style.padding = '0'; b.style.color = 'var(--green)';
       b.textContent = 'NEGATIVE — test closed as OK';
     } else { // Pending (re-open)
       b.style.display = 'block';
-      b.style.background = '#fef3c7'; b.style.color = '#b45309';
+      b.style.background = 'none'; b.style.padding = '0'; b.style.color = 'var(--yellow)';
       b.textContent = 'RE-OPEN — back to Pending, awaiting lab result';
     }
     document.getElementById('btnAeSave').disabled = false;
@@ -113,18 +113,18 @@ function onAdminPathoCheck() {
   const boxes = [...document.querySelectorAll('#aePathoCheckboxes input[type=checkbox]')];
   boxes.forEach(c => {
     const lbl = document.getElementById('aelbl-' + c.id.replace('aechk-',''));
-    if (lbl) { lbl.style.borderColor = c.checked ? 'var(--red)' : 'var(--gray-200)'; lbl.style.background = c.checked ? 'var(--red-light)' : 'white'; }
+    if (lbl) { lbl.style.color = c.checked ? 'var(--red)' : ''; }
   });
   const checked = boxes.filter(c => c.checked).map(c => c.id.replace('aechk-',''));
   document.getElementById('btnAeSave').disabled = checked.length === 0;
   const b = document.getElementById('aeBadge');
   if (checked.length) {
     b.style.display = 'block';
-    b.style.background = '#fee2e2'; b.style.color = '#dc2626';
+    b.style.background = 'none'; b.style.padding = '0'; b.style.color = 'var(--red)';
     b.textContent = 'POSITIVE: ' + checked.map(k => AE_PATS[k]).join(', ');
   } else {
     b.style.display = 'block';
-    b.style.background = '#fee2e2'; b.style.color = '#dc2626';
+    b.style.background = 'none'; b.style.padding = '0'; b.style.color = 'var(--red)';
     b.textContent = 'Select at least one positive pathogen';
   }
 }
@@ -161,15 +161,13 @@ function confirmAdminEdit() {
       rec.failedPathogensLabel = failed.map(k => AE_PATS[k]).join(', ');
       rec.resultDate = todayLocal();
     } else if (AERES === 'Negative') {
-      rec.resultado = 'Negative';
-      rec.failedPathogens = [];
-      rec.failedPathogensLabel = '';
-      rec.resultDate = todayLocal();
+      applyLabResults(rec, labDefaultNegative(rec), labParse(newNotes).notes);
     } else { // Pending — re-open a wrongly-finalized test
       rec.resultado = 'Pending';
       rec.failedPathogens = [];
       rec.failedPathogensLabel = '';
       rec.resultDate = '';
+      rec.labResults = null; rec.labNotes = labParse(newNotes).notes;
     }
   }
 

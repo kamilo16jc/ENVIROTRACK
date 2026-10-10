@@ -48,8 +48,10 @@ function loadSubmissions() {
     const badge = isSent
       ? '<span class="badge badge-green"><svg class="ln ico-inline" width="11" height="11" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2z"/></svg>Sent to lab</span>'
       : '<span class="badge badge-gray"><svg class="ln ico-inline" width="11" height="11" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Generated</span>';
+    // Vector-sampling forms are logged as type Retest with retestNum "V<n>".
+    const isVec = /^V\d/i.test(String(r.retestNum || ''));
     const typeLabel = r.type === 'Retest'
-      ? 'Retest' + (r.retestNum ? ' #' + r.retestNum : '')
+      ? (isVec ? 'Vector #' + String(r.retestNum).replace(/\D/g, '') : 'Retest' + (r.retestNum ? ' #' + r.retestNum : ''))
       : 'Generator';
     const who = isSent
       ? (esc(r.submittedByName || r.submittedByEmail || '—'))
