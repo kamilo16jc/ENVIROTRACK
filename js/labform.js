@@ -111,6 +111,7 @@ async function submitLabForm(sendToLab) {
     if (btn) btn.disabled = true;   // icon-only: dim while busy, keep the icon
     toast(sendToLab ? 'Sending to lab…' : 'Filling lab form…', 'info');
     await _spPost('labform', body);
+    if (typeof fsAddSubmission === 'function') fsAddSubmission(body).catch(e => console.warn('[labform] submission log', e));
     toast(sendToLab ? 'Lab form sent to the laboratory' : 'Lab form filled and archived', 'success');
     if (btn) btn.classList.add('done');   // turn the icon green
     if (typeof refreshSubmissions === 'function') refreshSubmissions();
@@ -157,6 +158,7 @@ async function submitRetestLabForm(retestId, sendToLab, opts) {
   try {
     if (!opts.silent) toast(sendToLab ? 'Sending retest to lab…' : 'Filling retest form…', 'info');
     await _spPost('labform', body);
+    if (typeof fsAddSubmission === 'function') fsAddSubmission(body).catch(e => console.warn('[labform] submission log', e));
     // Mark sent/filled in the DURABLE store (survives Records pulls → no green
     // flicker). Only set AFTER the request completes = confirmed it fired.
     if (typeof setLabStatusFlag === 'function') setLabStatusFlag(rec, sendToLab ? 'sent' : 'filled');

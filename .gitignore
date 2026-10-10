@@ -19,3 +19,7 @@ facility-map.html
 
 # Firebase emulator logs
 *-debug.log
+
+# Emulator-only env overrides (mock flow URLs)
+functions/.env.local
+.env.*

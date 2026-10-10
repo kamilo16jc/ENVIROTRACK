@@ -9,6 +9,12 @@
 
 const SYNC_ENABLED = true;
 
+// Firestore is the primary store once the session is up (js/store.js): reads
+// come from live listeners and writes go to Firestore; the spMirror Cloud
+// Functions copy every change to SharePoint. The SharePoint paths below stay
+// as the fallback (no session yet / local dev).
+const FS_PRIMARY = () => typeof storeActive === 'function' && storeActive();
+
 // ── Low-level call → Cloud Function proxy ──────────────────────
 // Sends { op, body } to spProxy, which resolves the secret flow URL,
 // POSTs to SharePoint, and returns the flow's JSON response.
@@ -233,6 +239,7 @@ function resolvedToSP(r) {
 // Guarded: flush pending writes FIRST; if any remain unsynced, skip the
 // overwrite so un-pushed local changes are never clobbered.
 async function syncPullRecords() {
+  if (FS_PRIMARY()) return storeWhenReady(['records']);
   if (!SYNC_ENABLED) return false;
   if (!(await flushOutbox())) { console.warn('[sync] pull Records skipped — pending local writes'); return false; }
   const data = await _spPost('recordsRead', {});
@@ -250,18 +257,21 @@ async function syncPullRecords() {
 // snapshot taken now, so audit fields (who/when) reflect the action time even
 // if it flushes later. Never throws — pending state is shown via the badge.
 function syncPushRecords(recs) {
+  if (FS_PRIMARY()) return fsCreateRecords(recs);
   if (!SYNC_ENABLED || !recs || !recs.length) return Promise.resolve();
   outboxAdd('recordsWrite', { list: 'Records', action: 'create', items: recs.map(recordToSP) });
   return flushOutbox();
 }
 
 function syncUpdateRecord(rec) {
+  if (FS_PRIMARY()) return fsUpdateRecord(rec);
   if (!SYNC_ENABLED || !rec) return Promise.resolve();
   outboxAdd('recordsUpdate', { list: 'Records', action: 'update', items: [recordUpdateToSP(rec)] });
   return flushOutbox();
 }
 
 function syncPushResolved(resolvedItems) {
+  if (FS_PRIMARY()) return fsAddResolved(resolvedItems);
   if (!SYNC_ENABLED || !resolvedItems || !resolvedItems.length) return Promise.resolve();
   outboxAdd('resolvedWrite', { list: 'ResolvedRetests', action: 'create', items: resolvedItems.map(resolvedToSP) });
   return flushOutbox();
@@ -291,6 +301,7 @@ function spToResolved(it) {
 // them: on the next login the anchoring entries vanish, closed positives
 // resurface as "Generate retests", and their retests become orphaned.
 async function syncPullResolved() {
+  if (FS_PRIMARY()) return storeWhenReady(['resolved']);
   if (!SYNC_ENABLED) return false;
   if (!(await flushOutbox())) { console.warn('[sync] pull Resolved skipped — pending local writes'); return false; }
   const data = await _spPost('resolvedRead', {});
@@ -323,6 +334,7 @@ function spToSubmission(it) {
 
 // Pull all Submissions → local cache (cap_submissions). Returns true on success.
 async function syncPullSubmissions() {
+  if (FS_PRIMARY()) return storeWhenReady(['submissions']);
   if (!SYNC_ENABLED) return false;
   const data = await _spPost('submissionsRead', {});
   const rows = Array.isArray(data) ? data : (data && data.value) || [];
@@ -401,6 +413,7 @@ function pointToSP(p, isCreate) {
 
 // Pull the whole catalog → local cache (cap_masterpoints).
 async function syncPullMasterPoints() {
+  if (FS_PRIMARY()) return storeWhenReady(['masterPoints']);
   if (!SYNC_ENABLED) return false;
   if (!(await flushOutbox())) { console.warn('[sync] pull MasterPoints skipped — pending local writes'); return false; }
   const data = await _spPost('masterPointsRead', {});
@@ -413,12 +426,14 @@ async function syncPullMasterPoints() {
 const getMasterPoints = () => JSON.parse(localStorage.getItem('cap_masterpoints') || '[]');
 
 function syncPushPoint(point) {      // create a new point
+  if (FS_PRIMARY()) return fsSetPoint(point);
   if (!SYNC_ENABLED || !point) return Promise.resolve();
   outboxAdd('masterPointsWrite', { list: 'MasterPoints', action: 'create', items: [pointToSP(point, true)] });
   return flushOutbox();
 }
 
 function syncUpdatePoint(point) {    // update by department + sample (edit / activate / deactivate)
+  if (FS_PRIMARY()) return fsSetPoint(point);
   if (!SYNC_ENABLED || !point) return Promise.resolve();
   outboxAdd('masterPointsUpdate', { list: 'MasterPoints', action: 'update', items: [pointToSP(point, false)] });
   return flushOutbox();
@@ -430,6 +445,7 @@ function syncSafe(promiseFactory, label) {
     .then(promiseFactory)
     .catch(err => {
       console.warn('[sync] ' + (label || '') + ' failed:', err);
-      toast('Saved locally — SharePoint sync failed', 'error');
+      toast(FS_PRIMARY() ? (err && err.code === 'permission-denied' ? 'Your account cannot change this record' : 'Saved on this device — will sync when online')
+                         : 'Saved locally — SharePoint sync failed', 'error');
     });
 }

@@ -1,75 +1,105 @@
 rules_version = '2';
 
-// EnviroTrack — Firestore security rules (Phase 1: records that used to live
-// only in each browser). Every signed-in user can read; who can write mirrors
-// the app: CAPAs on positives and lab-form status = any signed-in user (as
-// today); program records (EMP, training, program CAPAs, management reviews,
-// counters) = administrators only. The change log is append-only.
-// Every create/update must be stamped with the writer's email (_by).
+// EnviroTrack — Firestore security rules.
+// Firestore is the primary database; SharePoint receives a copy from the
+// spMirror Cloud Functions (server-side, they bypass these rules).
+//
+// Access requires an account PROVISIONED by an admin (role claim Inspector /
+// Manager / Administrator) — a self-registered Firebase account has no role
+// and gets nothing, same as the SharePoint proxy. Every create/update must be
+// stamped with the writer's email (_by).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function isAdmin() {
-      return signedIn() && (request.auth.token.role == 'Administrator'
-        || request.auth.token.email in ['jagudelo@caputocheese.com']);
+    function isRoot() { return signedIn() && request.auth.token.email in ['jagudelo@caputocheese.com']; }
+    function provisioned() {
+      return isRoot() || (signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator']);
     }
+    function isAdmin() { return isRoot() || (signedIn() && request.auth.token.get('role', '') == 'Administrator'); }
     function stamped() { return request.resource.data._by == request.auth.token.email; }
 
+    // ── Core data (was SharePoint-only) ─────────────────────────
+    match /records/{id} {
+      allow read: if provisioned();
+      allow create, update: if provisioned() && stamped();
+      allow delete: if false;
+    }
+    match /resolved/{id} {
+      allow read: if provisioned();
+      allow create, update: if provisioned() && stamped();
+      allow delete: if false;
+    }
+    match /submissions/{id} {
+      allow read: if provisioned();
+      allow create: if provisioned() && stamped();
+      allow update, delete: if false;
+    }
+    match /masterPoints/{id} {
+      allow read: if provisioned();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if false;
+    }
+
+    // ── Program records ─────────────────────────────────────────
     match /capa/{id} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && stamped();
+      allow read: if provisioned();
+      allow create, update: if provisioned() && stamped();
       allow delete: if isAdmin();
     }
     match /labStatus/{id} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && stamped();
+      allow read: if provisioned();
+      allow create, update: if provisioned() && stamped();
       allow delete: if isAdmin();
     }
     match /programCapas/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create, update: if isAdmin() && stamped();
       allow delete: if false;                 // CAPAs are never deleted
     }
     match /mgmtReviews/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create, update: if isAdmin() && stamped();
       allow delete: if false;
     }
     match /emp/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create, update: if isAdmin() && stamped();
       allow delete: if false;
     }
     match /training/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create, update: if isAdmin() && stamped();
       allow delete: if isAdmin();             // removing a record releases its form
     }
     match /trainingForms/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create, update: if isAdmin() && stamped();
       allow delete: if false;                 // numbers are never reused
     }
     match /empChangeLog/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow create: if isAdmin() && stamped();
       allow update, delete: if false;         // audit trail is append-only
     }
+
+    // Consecutive numbers. `records` (test ids) can be advanced by any
+    // provisioned user; the rest (TRN-, CAPA-) by administrators only.
     match /counters/{id} {
-      allow read: if signedIn();
-      allow create, update: if isAdmin() && request.resource.data.n is int
-        && (!exists(/databases/$(database)/documents/counters/$(id))
-            || request.resource.data.n > resource.data.n);   // only moves forward
+      allow read: if provisioned();
+      allow create, update: if (isAdmin() || (id == 'records' && provisioned()))
+        && request.resource.data.n is int
+        && (resource == null || request.resource.data.n > resource.data.n);   // only moves forward
       allow delete: if false;
     }
 
     // Confidential content (facility map, CAPA template text) — not in the public repo
     match /private/{id} {
-      allow read: if signedIn();
+      allow read: if provisioned();
       allow write: if isAdmin();
     }
 
+    // spMirror (SharePoint copy bookkeeping) and anything else: server only.
     match /{document=**} { allow read, write: if false; }
   }
 }
