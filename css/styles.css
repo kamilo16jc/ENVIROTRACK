@@ -667,3 +667,26 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 /* Filters run only when the magnifier is clicked */
 .filter-search{width:38px;height:38px;padding:0;justify-content:center;flex:none}
 .filter-search svg{margin:0}
+
+/* Sampling map (plan + placement) */
+.mp-modal{width:min(1040px,96vw);max-height:94vh;overflow-y:auto}
+.mp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.mp-head h3{margin:0;font-size:18px;display:flex;align-items:center;gap:8px}
+.mp-tools{display:flex;gap:6px}
+.mp-tools .emp-edit{font-size:16px;font-weight:700}
+.mp-plan{height:min(62vh,620px);border:1px solid var(--gray-200);border-radius:10px;background:#fbfcf9;overflow:hidden;touch-action:none}
+.mp-svg{width:100%;height:100%;display:block;cursor:crosshair;user-select:none}
+.mp-bldg{fill:#f1f4ee;stroke:#56685a}
+.mp-a{stroke:#c9d2c4}
+.mp-area{fill:#f7f9f4}.mp-corr{fill:#ffffff}.mp-line{fill:#e7efe0}.mp-eq{fill:#dfe6da}.mp-rack{fill:#ece6d6}.mp-out{fill:#eef0ec}
+.mp-a.mp-hi{fill:#cfe3c2;stroke:#3b684e}
+.mp-a:hover{fill:#e3ecdb}
+.mp-door{stroke:#fbfcf9}
+.mp-labels text{fill:#7a8775;pointer-events:none;font-family:var(--font)}
+.mp-mark text{font-family:var(--font);font-weight:700;pointer-events:none}
+.mp-status{font-size:12.5px;color:var(--gray-700);margin-top:8px;min-height:18px}
+.mp-mini{height:190px;border:1px solid var(--gray-200);border-radius:9px;overflow:hidden;background:#fbfcf9;margin-bottom:14px}
+.mp-mini .mp-svg{cursor:default}
+.gen-pin{color:var(--gray-300)}
+.gen-pin.on{color:var(--green)}
+.mp-pinbtn.on{color:var(--green);border-color:var(--green)}

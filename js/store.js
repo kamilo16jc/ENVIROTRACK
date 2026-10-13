@@ -263,6 +263,7 @@ async function fsAddResolved(items) {
 }
 async function fsSetPoint(p) {
   const doc = _clean({ plant: p.plant || p.planta, sample: Number(p.sample), zone: Number(p.zone), area: p.area || '', line: p.line || '', location: p.location || '', active: p.active !== false,
+    mapX: p.mapX, mapZ: p.mapZ, mapArea: p.mapArea, mapAreaName: p.mapAreaName, mapBuilding: p.mapBuilding,
     enteredByEmail: p.enteredByEmail || (CU && CU.email) || '', enteredByName: p.enteredByName || (CU && CU.displayName) || '', enteredAt: p.enteredAt || new Date().toISOString() });
   await STORE.db.collection('masterPoints').doc(doc.plant + '_' + doc.sample).set(Object.assign(doc, _fsStamp()));
 }

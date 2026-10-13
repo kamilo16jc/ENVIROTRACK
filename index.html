@@ -382,6 +382,7 @@
               .gen-ico.done:hover:not(:disabled){transform:translateY(-2px) scale(1.1)}
             </style>
             <div style="display:flex;gap:6px;margin-left:auto;align-self:flex-end">
+              <button class="gen-ico" onclick="exportTestsMapPDF()" id="btnMap" disabled title="Download sampling map"><svg class="ln" viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></button>
               <button class="gen-ico" onclick="exportPDF()" id="btnPDF" disabled title="Export PDF"><svg class="ln" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
               <button class="gen-ico" onclick="saveWeek()" id="btnSave" disabled title="Save week to history"><svg class="ln" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
               <button class="gen-ico" onclick="submitLabForm(false)" id="btnLabFill" disabled title="Fill lab form"><svg class="ln" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></button>
@@ -865,6 +866,7 @@
                 <select id="masterFilterIssue" style="min-width:150px">
                   <option value="">All points</option>
                   <option value="review">Needs review</option>
+                  <option value="nomap">Not on map</option>
                 </select>
               </div>
               <div class="filter-field">
@@ -1163,6 +1165,7 @@
 <div class="modal-overlay" id="trainModal"><div class="modal" style="width:480px;max-width:94vw;max-height:90vh;overflow-y:auto" id="trainModalBody"></div></div>
 <div class="modal-overlay" id="backupModal"><div class="modal" style="width:520px;max-width:95vw;max-height:92vh;overflow-y:auto" id="backupModalBody"></div></div>
 <div class="modal-overlay" id="mrModal"><div class="modal" style="width:720px;max-width:95vw;max-height:92vh;overflow-y:auto" id="mrModalBody"></div></div>
+<div class="modal-overlay" id="mapPlaceModal" onclick="if(event.target===this)closePlaceOnMap()"><div class="modal mp-modal" id="mapPlaceBody"></div></div>
 <div class="modal-overlay" id="pointHistModal" onclick="if(event.target===this)closePointHistory()"><div class="modal" style="width:680px;max-width:95vw;max-height:90vh;overflow-y:auto" id="pointHistBody"></div></div>
 
 
@@ -1193,6 +1196,7 @@
 <script src="js/navigation.js"></script>
 <script src="js/generator.js"></script>
 <script src="js/pointhistory.js"></script>
+<script src="js/mapplot.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/history.js"></script>
 <script src="js/labresults.js"></script>

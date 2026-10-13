@@ -10,7 +10,7 @@ async function generateTests() {
   TESTS = []; OVRS = []; RTITEMS = [];
   document.getElementById('genTableBody').innerHTML = '';
   document.getElementById('genTableCard').style.display = 'none';
-  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => { const b=document.getElementById(id); if(b) b.disabled=true; });
+  ['btnPDF','btnSave','btnLabFill','btnLabSend','btnMap'].forEach(id => { const b=document.getElementById(id); if(b) b.disabled=true; });
   genShowLoading(planta);
   try {
 
@@ -197,7 +197,7 @@ async function generateTests() {
   document.getElementById('overrideCard').style.display='none';
   document.getElementById('retestSection').style.display='none';
   // Fresh tests → enable the action buttons and clear any previous "done" (green) state.
-  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => {
+  ['btnPDF','btnSave','btnLabFill','btnLabSend','btnMap'].forEach(id => {
     const b = document.getElementById(id); if (b) { b.disabled = false; b.classList.remove('done'); }
   });
   setGenUnsaved(true);   // these tests are not in the history until saved
@@ -230,7 +230,7 @@ function clearGenView() {
   TESTS = []; OVRS = []; RTITEMS = [];
   const b = document.getElementById('genTableBody'); if (b) b.innerHTML = '';
   const c = document.getElementById('genTableCard'); if (c) c.style.display = 'none';
-  ['btnPDF','btnSave','btnLabFill','btnLabSend'].forEach(id => { const x=document.getElementById(id); if(x) x.disabled=true; });
+  ['btnPDF','btnSave','btnLabFill','btnLabSend','btnMap'].forEach(id => { const x=document.getElementById(id); if(x) x.disabled=true; });
   genHideLoading();
 }
 // Changing the building drops the stale tests and auto-loads the new one.
@@ -243,7 +243,7 @@ function renderTests() {
   document.getElementById('genTableBody').innerHTML = TESTS.map((t,i) => `
     <tr class="${t.modified?'modified':''}">
       <td style="color:var(--gray-400);font-size:11px;font-weight:600;text-align:center">${i+1}</td>
-      <td style="white-space:nowrap"><input type="text" value="${esc(t.sample)}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)"><button class="gen-hist" onclick="genPointHistory(${i})" title="Sampling history of this point" aria-label="Sampling history"><svg class="ln" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+      <td style="white-space:nowrap"><input type="text" value="${esc(t.sample)}" style="width:65px;font-weight:700" onchange="chg(${i},'sample',this.value,this)"><button class="gen-hist" onclick="genPointHistory(${i})" title="Sampling history of this point" aria-label="Sampling history"><svg class="ln" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>${genPinBtn(t)}
           ${t.modified?'<span class="ob"><svg class="ln" width="11" height="11" viewBox="0 0 24 24" style="vertical-align:-1px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>':''}</td>
       <td><select onchange="chg(${i},'zone',this.value,this)" style="width:65px">
           <option ${t.zone==2?'selected':''}>2</option>
@@ -399,3 +399,14 @@ function saveWeek(opts) {
   refreshDashboard(); searchHistory();
   return true;
 }
+
+// Map pin next to each generated test: green = placed on the plan, gray = not yet.
+function genPinBtn(t) {
+  const plant = (document.getElementById('genPlant') || {}).value || '';
+  const mp = getMasterPoints().find(p => p.plant === plant && Number(p.sample) === Number(t.sample));
+  if (!mp) return '';
+  const on = mp.mapX != null;
+  return '<button class="gen-hist gen-pin' + (on ? ' on' : '') + '" onclick="openPlaceOnMap(\'' + plant + '\',' + Number(t.sample) + ')" title="' +
+    (on ? 'On the map' + (mp.mapAreaName ? ': ' + esc(mp.mapAreaName) : '') : 'Not on the map yet — click to place it') + '" aria-label="Map location"><svg class="ln" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>';
+}
+

@@ -110,11 +110,13 @@ function openPointHistory(planta, sample, fallback) {
     '<div class="ph-strip">' + strip + '</div>' +
     '<div class="ph-legend"><span><i class="ph-wk on"></i>Routine</span><span><i class="ph-wk rt"></i>Retest / vector</span><span><i class="ph-wk pos"></i>Positive</span>' +
       '<span style="margin-left:auto">This point: <strong>' + mine + '</strong> · ' + esc(planta) + ' average: <strong>' + avg.toFixed(1) + '</strong> · never sampled: <strong>' + neverCount + '</strong> of ' + nPoints + ' points</span></div>' +
+    '<div id="phMap"></div>' +
     '<div class="ph-sec">Sampling history</div>' +
     (rows
       ? '<div class="table-wrap" style="max-height:260px;overflow-y:auto"><table><thead><tr><th>Date</th><th>Type</th><th>Pathogens</th><th>Result</th><th>Collected by</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       : '<div style="text-align:center;color:var(--gray-500);padding:22px;font-size:13px">No samples recorded for this point yet.</div>');
   document.getElementById('pointHistModal').classList.add('open');
+  if (typeof mapMiniInto === 'function') mapMiniInto(document.getElementById('phMap'), planta, key);
 }
 
 function closePointHistory() { document.getElementById('pointHistModal').classList.remove('open'); }

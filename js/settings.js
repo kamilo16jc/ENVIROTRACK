@@ -63,7 +63,10 @@ function loadMasterTable() {
   const issues = getMasterPoints().filter(p => p.plant === plant && masterIssue(p)).length;
   const note = document.getElementById('masterIssueNote');
   if (note) note.textContent = issues ? issues + (issues === 1 ? ' point needs review' : ' points need review') : '';
-  if ((document.getElementById('masterFilterIssue') || {}).value === 'review') all = all.filter(masterIssue);
+  const showF = (document.getElementById('masterFilterIssue') || {}).value;
+  if (showF === 'review') all = all.filter(masterIssue);
+  if (showF === 'nomap') all = all.filter(p => p.mapX == null && p.active !== false);
+  if (note && typeof mapPlacedCount === 'function') { const mc = mapPlacedCount(plant); note.innerHTML = (note.textContent ? esc(note.textContent) + ' · ' : '') + '<span style="color:var(--green)">Map: ' + mc.placed + ' of ' + mc.total + ' placed</span>'; }
   all.sort((a,b) => a.sample - b.sample);
 
   document.getElementById('masterCount').textContent =
@@ -91,7 +94,8 @@ function loadMasterTable() {
       <td>
         <div style="display:flex;gap:5px">
           ${!off
-            ? `<button class="btn btn-outline btn-sm" onclick="editMasterPoint('${plant}',${p.sample})" title="Edit"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+            ? `<button class="btn btn-outline btn-sm mp-pinbtn${p.mapX != null ? ' on' : ''}" onclick="openPlaceOnMap('${plant}',${p.sample})" title="${p.mapX != null ? 'On the map' + (p.mapAreaName ? ': ' + esc(p.mapAreaName) : '') : 'Place on the map'}"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>
+               <button class="btn btn-outline btn-sm" onclick="editMasterPoint('${plant}',${p.sample})" title="Edit"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
                <button class="btn btn-outline btn-sm" onclick="deactivateMasterPoint('${plant}',${p.sample})" style="color:var(--red)" title="Deactivate"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>`
             : `<button class="btn btn-outline btn-sm" onclick="reactivateMasterPoint('${plant}',${p.sample})" style="color:var(--green)" title="Reactivate"><svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg></button>`
           }
