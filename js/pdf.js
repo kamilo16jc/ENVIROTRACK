@@ -148,6 +148,7 @@ function exportRetestPDF(id) {
 
   const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn, kind);
   doc.save(pdfName + '.pdf');
+  if (typeof markRetestPdf === 'function') { markRetestPdf(h); if (typeof loadRetests === 'function') loadRetests(); }
   syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
   toast('✅ '+kind+' #'+rn+' PDF exported for Sample #'+(h.sample||h.location),'success');
 }

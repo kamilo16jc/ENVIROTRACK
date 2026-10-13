@@ -90,9 +90,15 @@ const LAB_STATUS_KEY = 'cap_labsent';
 function _labKey(rec) { return String(rec.id); }
 function _labStore() { try { return JSON.parse(localStorage.getItem(LAB_STATUS_KEY) || '{}'); } catch (e) { return {}; } }
 function setLabStatusFlag(rec, status) {
-  const st = _labStore(); st[_labKey(rec)] = { status: status, at: new Date().toISOString() };
+  const st = _labStore(); st[_labKey(rec)] = Object.assign({}, st[_labKey(rec)], { status: status, at: new Date().toISOString() });
   localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st)); if (typeof storeSaved === 'function') storeSaved(LAB_STATUS_KEY);
 }
+// The retest PDF was downloaded (shared across devices like the lab status).
+function markRetestPdf(rec) {
+  const st = _labStore(); st[_labKey(rec)] = Object.assign({}, st[_labKey(rec)], { pdfAt: new Date().toISOString(), pdfBy: (typeof CU !== 'undefined' && CU && CU.email) || '' });
+  localStorage.setItem(LAB_STATUS_KEY, JSON.stringify(st)); if (typeof storeSaved === 'function') storeSaved(LAB_STATUS_KEY);
+}
+function retestPdfDone(rec) { const e = _labStore()[_labKey(rec)]; return !!(e && e.pdfAt); }
 function getLabStatusFlag(rec) { const e = _labStore()[_labKey(rec)]; return e ? e.status : ''; }
 
 // One-time migration: old flags were keyed building|sample|retest#. Move each to
@@ -225,10 +231,11 @@ function loadRetests() {
       const isPending = res === 'Pending';
       const nPhotos = allPhotos.filter(p => String(p.retestId) === String(rt.id)).length;
       const lab = retestLabStatus(rt);
-      // Three process dots: Sent to lab → Result recorded → Passed.
+      const pdfDone = retestPdfDone(rt), formDone = lab === 'sent' || lab === 'filled';
+      // Three process dots: Lab form (filled or sent) → Result recorded → Passed.
       // Each turns green only once that step is complete.
       const _dot = (done, label) => '<span class="rt-step' + (done ? ' done' : '') + '" title="' + label + '"></span>';
-      const resBadge = _dot(lab === 'sent', 'Sent to lab');
+      const resBadge = _dot(formDone, lab === 'sent' ? 'Lab form sent to the lab' : lab === 'filled' ? 'Lab form filled' : 'Lab form not done yet');
       const dueBadge = _dot(!isPending, 'Result recorded');
       const labBadge = _dot(res === 'Negative', 'Passed · retest complete');
       const check = isPending
@@ -243,11 +250,11 @@ function loadRetests() {
         <span class="rt-status">${resBadge}${dueBadge}${labBadge}</span>
         <span class="rt-spacer"></span>
         <div class="rt-actions">
-          <button class="rt-btn ico" onclick="exportRetestPDF(${rt.id})" title="Download retest PDF"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+          <button class="rt-btn ico${pdfDone ? ' done' : ''}" onclick="exportRetestPDF(${rt.id})" title="${pdfDone ? 'Retest PDF downloaded — download again' : 'Download retest PDF'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
           <button class="rt-btn ico${nPhotos?' send done':''}" onclick="openPhotoModal(${rt.id},'${esc(rt.retestNum)} · Sample ${rt.sample}')" title="Evidence photos${nPhotos?' ('+nPhotos+')':''}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>${nPhotos?'<span class="rt-count">'+nPhotos+'</span>':''}</button>
           ${_retestSending.has(rt.id)
             ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gray-500);padding:0 6px"><span class="rt-spin"></span>Sending…</span>'
-            : `<button class="rt-btn ico" onclick="submitRetestLabForm(${rt.id},false)" title="Fill the lab form (no email)"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
+            : `<button class="rt-btn ico${formDone ? ' done' : ''}" onclick="submitRetestLabForm(${rt.id},false)" title="${formDone ? 'Lab form ' + (lab === 'sent' ? 'sent' : 'filled') + ' — fill again' : 'Fill the lab form (no email)'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
           ${canSend?`<button class="rt-btn send ico ${lab==='sent'?'done':''}" onclick="submitRetestLabForm(${rt.id},true)" title="${lab==='sent'?'Sent to lab':'Send to lab'}"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>`:''}
           ${!isDone?`<button class="rt-btn accent ico" onclick="openFailModal(${rt.id})" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>`:''}`}
         </div>

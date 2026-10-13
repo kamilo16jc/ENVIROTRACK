@@ -183,7 +183,7 @@ async function writeAll(ops) {
   }
 }
 const resolvedKey = r => [r.originalId, r.resolvedDate, r.closedOnGenerate ? 1 : 0].join("|");
-const submissionKey = s => (s.fileName || "") + "|" + (s.submittedAt || "");
+const submissionKey = s => (s.fileName || "") + "|" + String(s.submittedAt || "").slice(0, 19);
 
 async function spImport() {
   const out = { records: 0, recordsUpdated: 0, resolved: 0, points: 0, submissions: 0 };
