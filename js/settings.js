@@ -48,26 +48,31 @@ function masterIssue(p) {
   return '';
 }
 
-function loadMasterTable() {
-  const plant  = document.getElementById('masterFilterPlant').value;
-  const zone   = document.getElementById('masterFilterZone').value;
-  const search = document.getElementById('masterSearch').value.trim().toLowerCase();
-
-  let all = getMasterPoints().filter(p => p.plant === plant);
-  if(zone)   all = all.filter(p => String(p.zone)===zone);
-  if(search) all = all.filter(p =>
-    (p.area||'').toLowerCase().includes(search) ||
-    (p.location||'').toLowerCase().includes(search) ||
-    String(p.sample).includes(search)
+// Points Master filters (shared by the table and its PDF export).
+function masterFilters() {
+  const v = id => (document.getElementById(id) || {}).value || '';
+  return { plant: v('masterFilterPlant'), zone: v('masterFilterZone'), show: v('masterFilterIssue'), search: v('masterSearch').trim().toLowerCase() };
+}
+function masterFilteredPoints(f) {
+  let all = getMasterPoints().filter(p => p.plant === f.plant);
+  if (f.zone)   all = all.filter(p => String(p.zone) === f.zone);
+  if (f.search) all = all.filter(p =>
+    (p.area || '').toLowerCase().includes(f.search) ||
+    (p.location || '').toLowerCase().includes(f.search) ||
+    String(p.sample).includes(f.search)
   );
+  if (f.show === 'review') all = all.filter(masterIssue);
+  if (f.show === 'nomap') all = all.filter(p => p.mapX == null && p.active !== false);
+  return all.sort((a, b) => a.sample - b.sample);
+}
+
+function loadMasterTable() {
+  const f = masterFilters(), plant = f.plant;
+  const all = masterFilteredPoints(f);
   const issues = getMasterPoints().filter(p => p.plant === plant && masterIssue(p)).length;
   const note = document.getElementById('masterIssueNote');
   if (note) note.textContent = issues ? issues + (issues === 1 ? ' point needs review' : ' points need review') : '';
-  const showF = (document.getElementById('masterFilterIssue') || {}).value;
-  if (showF === 'review') all = all.filter(masterIssue);
-  if (showF === 'nomap') all = all.filter(p => p.mapX == null && p.active !== false);
   if (note && typeof mapPlacedCount === 'function') { const mc = mapPlacedCount(plant); note.innerHTML = (note.textContent ? esc(note.textContent) + ' · ' : '') + '<span style="color:var(--green)">Map: ' + mc.placed + ' of ' + mc.total + ' placed</span>'; }
-  all.sort((a,b) => a.sample - b.sample);
 
   document.getElementById('masterCount').textContent =
     all.filter(p=>p.active!==false).length+' active / '+all.length+' total';
@@ -481,4 +486,122 @@ function deleteUser(uid, email) {
   userFn('adminDeleteUser')({uid})
     .then(()=>{ toast('User deleted','success'); loadUsersTable(); })
     .catch(e=>toast(fnError(e),'error'));
+}
+
+// ═══════════════════════════════════════════════
+// PDF — POINTS MASTER with each point's test history
+// Flat printed form (white / grays / black, Caputo logo in color).
+// Uses the filters on screen; the table is refreshed first so both match.
+// ═══════════════════════════════════════════════
+function masterPointStats(plant, sample, hist) {
+  const recs = hist.filter(h => h.planta === plant && Number(h.sample) === Number(sample) && !(typeof isVectorRec === 'function' && isVectorRec(h)));
+  const routine = recs.filter(h => !h.retestNum);
+  const done = recs.filter(h => h.resultado && h.resultado !== 'Pending').sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const today = todayLocal();   // retests scheduled for a later date are not sampled yet
+  const last = recs.filter(h => h.fecha <= today).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  return {
+    sampled: routine.length,
+    retests: recs.length - routine.length,
+    positives: recs.filter(h => h.resultado === 'Positive').length,
+    last: last ? last.fecha : '',
+    lastResult: last ? (typeof labIsPresumptive === 'function' && labIsPresumptive(last) ? 'Presumptive' : (last.resultado || 'Pending')) : '',
+    lastDetail: done[0] && typeof labPositiveText === 'function' ? labPositiveText(done[0]) : ''
+  };
+}
+
+function exportMasterPDF() {
+  loadMasterTable();
+  const f = masterFilters(), pts = masterFilteredPoints(f);
+  if (!pts.length) { toast('No points for these filters', 'error'); return; }
+  const hist = GH();
+  const rows = pts.map(p => Object.assign({ p }, masterPointStats(f.plant, p.sample, hist)));
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+  const W = 279.4, PH = doc.internal.pageSize.getHeight(), M = 10;
+  const INK = [0, 0, 0], MUT = [110, 110, 110], LINE = [200, 200, 200], HEAD = [242, 242, 242];
+  const safe = s => String(s == null ? '' : s).replace(/[–—]/g, '-').replace(/·/g, '-');
+  const fmt = iso => { if (!iso) return '-'; const x = new Date(iso + 'T12:00:00'); return isNaN(x) ? iso : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const now = new Date();
+  const stamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const who = (typeof CU !== 'undefined' && CU && (CU.displayName || CU.email)) || '';
+
+  // Header
+  try { doc.addImage(pdfLogo(), 'JPEG', M, 7, 30, 15); } catch (e) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
+  doc.text('Sampling Points - Building ' + f.plant, M + 36, 14);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT);
+  doc.text('Caputo Foods - Environmental Monitoring Program (SQF 2.4.H) - Points master with test history', M + 36, 19.5);
+  doc.setFontSize(8);
+  doc.text('Generated ' + stamp, W - M, 13, { align: 'right' });
+  if (who) doc.text('by ' + safe(who), W - M, 17.5, { align: 'right' });
+  doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.line(M, 25, W - M, 25);
+
+  // Filters + summary
+  const showTxt = { '': 'All points', review: 'Needs review', nomap: 'Not on map' }[f.show] || f.show;
+  const filters = [['Building', f.plant], ['Zone', f.zone ? 'Zone ' + f.zone : 'All'], ['Show', showTxt], ['Search', f.search || '-']];
+  let x = M; doc.setFontSize(8);
+  filters.forEach(([k, v]) => {
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUT); doc.text(k + ':', x, 31);
+    const kw = doc.getTextWidth(k + ': ');
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK); doc.text(safe(v), x + kw, 31);
+    x += kw + doc.getTextWidth(safe(v)) + 9;
+  });
+  const active = pts.filter(p => p.active !== false).length;
+  const stats = [['Points', pts.length], ['Active', active], ['Sampled', rows.reduce((s, r) => s + r.sampled, 0)], ['Positives', rows.reduce((s, r) => s + r.positives, 0)], ['Never sampled', rows.filter(r => r.p.active !== false && !r.sampled).length]];
+  const bw = 26, bx0 = W - M - stats.length * (bw + 3) + 3;
+  stats.forEach(([k, v], i) => {
+    const bx = bx0 + i * (bw + 3);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.rect(bx, 28, bw, 11);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(v), bx + 3, 34);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...MUT); doc.text(k.toUpperCase(), bx + 3, 37.5);
+  });
+
+  // Table
+  doc.autoTable({
+    startY: 43, margin: { left: M, right: M, top: 14, bottom: 14 },
+    head: [['Sample', 'Zone', 'Area', 'Line', 'Location', 'Sampled', 'Retests', 'Positives', 'Last sampled', 'Last result', 'Map', 'Status']],
+    body: rows.map(r => [String(r.p.sample), String(r.p.zone || '-'), safe(r.p.area || ''), safe(r.p.line || 'N/A'), safe(r.p.location || ''),
+      String(r.sampled), String(r.retests || '-'), String(r.positives || '-'), fmt(r.last),
+      r.lastResult ? r.lastResult + (r.lastDetail && r.lastResult !== 'Negative' ? '\n' + safe(r.lastDetail) : '') : '-',
+      r.p.mapX != null ? 'Yes' : '-', r.p.active === false ? 'Deactivated' : 'Active']),
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 7.6, cellPadding: 2, textColor: INK, lineColor: LINE, lineWidth: 0.2, valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: HEAD, textColor: INK, fontStyle: 'bold', fontSize: 7.4 },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    columnStyles: {
+      0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 11, halign: 'center' }, 2: { cellWidth: 38 }, 3: { cellWidth: 18 },
+      4: { cellWidth: 'auto' }, 5: { cellWidth: 15, halign: 'center' }, 6: { cellWidth: 14, halign: 'center' }, 7: { cellWidth: 16, halign: 'center' },
+      8: { cellWidth: 22, halign: 'center' }, 9: { cellWidth: 30, halign: 'center' }, 10: { cellWidth: 11, halign: 'center' }, 11: { cellWidth: 19, halign: 'center' }
+    },
+    didParseCell: c => {
+      if (c.section === 'head' && c.column.index !== 2 && c.column.index !== 3 && c.column.index !== 4) c.cell.styles.halign = 'center';
+      if (c.section !== 'body') return;
+      const r = rows[c.row.index];
+      if (r.p.active === false) c.cell.styles.textColor = MUT;
+      if (c.column.index === 7 && r.positives) c.cell.styles.fontStyle = 'bold';
+      if (c.column.index === 9 && (r.lastResult === 'Positive' || r.lastResult === 'Presumptive')) c.cell.styles.fontStyle = 'bold';
+      if (c.column.index === 9 && (r.lastResult === 'Pending' || !r.lastResult)) c.cell.styles.textColor = MUT;
+      if (c.column.index === 5 && !r.sampled && r.p.active !== false) c.cell.styles.fontStyle = 'bold';
+    }
+  });
+
+  // Legend
+  let ly = doc.lastAutoTable.finalY + 5;
+  if (ly > PH - 14) { doc.addPage(); ly = 18; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
+  doc.text('Sampled = routine tests of the point. Retests and Positives include follow-up retests. Map = placed on the sampling map. Last result shows the lab detail when positive.', M, ly);
+
+  // Footer on every page
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, PH - 9, W - M, PH - 9);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
+    doc.text('Caputo Foods - Sampling Points ' + f.plant + ' - Confidential', M, PH - 5);
+    doc.text('Page ' + i + ' of ' + pages, W - M, PH - 5, { align: 'right' });
+  }
+
+  doc.save('Sampling Points ' + f.plant + ' ' + todayLocal() + '.pdf');
+  toast('PDF exported — ' + pts.length + ' point' + (pts.length === 1 ? '' : 's'), 'success');
 }
