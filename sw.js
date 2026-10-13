@@ -1,19 +1,19 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v93';
+const CACHE_NAME = 'envirotrack-v94';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-192.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png',
-  './icons/favicon-32.png',
+  './icons/icon-192-v2.png',
+  './icons/icon-512-v2.png',
+  './icons/icon-maskable-192-v2.png',
+  './icons/icon-maskable-512-v2.png',
+  './icons/apple-touch-icon-v2.png',
+  './icons/favicon-32-v2.png',
   './img/logo.svg',
   './css/styles.css',
   './js/firebase-init.js',
