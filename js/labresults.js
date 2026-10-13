@@ -73,6 +73,34 @@ function labParse(labNotes) {
 
 function getLabResults(rec) { return (rec && rec.labResults) || labParse(rec && rec.labNotes).results; }
 
+// ── Results for printed forms ──
+// Recorded per-test results; for older records without them, inferred from the
+// overall result (Negative → every test negative; Positive → the confirmed
+// failed pathogens positive, the rest negative). null = nothing to print yet.
+function labResultsForPrint(rec) {
+  if (!rec) return null;
+  const r = getLabResults(rec);
+  if (r && Object.keys(r).length) return r;
+  const tested = LAB_ORDER.filter(k => rec[k]);      // only infer for the tests actually ordered
+  if (!tested.length) return null;
+  const pos = rec.resultado === 'Positive' && typeof positivePathogens === 'function' ? positivePathogens(rec) : [];
+  if (rec.resultado !== 'Negative' && !pos.length) return null;
+  const out = {}; tested.forEach(k => { out[k] = { r: pos.includes(k) ? 'Positive' : 'Negative' }; }); return out;
+}
+// Short table cell: counts → "<10" or the count (CFU/sponge); screens → Negative / Positive / Presumptive.
+function labCellText(k, res) {
+  const T = LAB_TESTS[k]; if (!T || !res || !res.r) return '';
+  if (T.type === 'count') return res.r === 'Negative' ? '<' + T.lod : res.r === 'Positive' ? (res.v || 'Positive') : 'Presumptive';
+  return res.r;
+}
+const labCellIsHit = res => !!res && (res.r === 'Positive' || res.r === 'Presumptive');
+// "E. coli 35 CFU/sponge, Listeria Presumptive positive" — the tests that came back positive.
+function labPositiveText(rec) {
+  const r = labResultsForPrint(rec); if (!r) return '';
+  const extra = k => r[k].r === 'Presumptive' ? ' Presumptive positive' : LAB_TESTS[k].type === 'count' && r[k].v ? ' ' + labResultText(k, r[k]) : '';
+  return LAB_ORDER.filter(k => labCellIsHit(r[k])).map(k => LAB_TESTS[k].label + extra(k)).join(', ');
+}
+
 // Apply per-test results to a record: overall result, failed pathogens
 // (with counts), and the composed lab notes. Mutates and returns rec.
 function applyLabResults(rec, results, userNotes) {

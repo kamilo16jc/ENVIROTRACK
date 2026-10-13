@@ -25,7 +25,10 @@ function pdfMainTable(doc,rows,startY,W,margin) {
     head:[['Sample #','Zone','Area','Line','Location','E. Coli','Listeria','Salmonella','S. Aureus']],
     body:rows, startY, margin:{left:margin,right:margin},
     styles:{font:'helvetica',fontSize:7.5,cellPadding:2,textColor:[0,0,0],lineColor:[0,0,0],lineWidth:0.2},headStyles:{fillColor:[255,255,255],textColor:[0,0,0],fontStyle:'bold',halign:'center',fontSize:7.5,lineColor:[0,0,0],lineWidth:0.2},
-    columnStyles:{0:{halign:'center',cellWidth:18},1:{halign:'center',cellWidth:12},2:{cellWidth:50,halign:'left'},3:{halign:'center',cellWidth:22},4:{cellWidth:87,halign:'left'},5:{halign:'center',cellWidth:17},6:{halign:'center',cellWidth:17},7:{halign:'center',cellWidth:19},8:{halign:'center',cellWidth:17}}
+    columnStyles:{0:{halign:'center',cellWidth:18},1:{halign:'center',cellWidth:12},2:{cellWidth:50,halign:'left'},3:{halign:'center',cellWidth:22},4:{cellWidth:87,halign:'left'},5:{halign:'center',cellWidth:17},6:{halign:'center',cellWidth:17},7:{halign:'center',cellWidth:19},8:{halign:'center',cellWidth:17}},
+    // Lab results in the pathogen columns ("Presumptive", "<10", counts) — smaller so they fit one line
+    didParseCell:c=>{ if(c.section==='body'&&c.column.index>=5&&c.cell.raw&&c.cell.raw!=='X'){ c.cell.styles.fontSize=6.6; c.cell.styles.cellPadding=1.2; c.cell.styles.valign='middle';
+      if(c.cell.raw!=='Negative'&&!/^</.test(c.cell.raw)) c.cell.styles.fontStyle='bold'; } }
   });
 }
 
@@ -97,7 +100,8 @@ function exportRetestPDF(id) {
   // Key dates and info
   const retestDate  = new Date(h.fecha+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   const origDate    = orig ? new Date(orig.fecha+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : h.fecha;
-  const failedBact  = orig ? (orig.failedPathogensLabel || '—') : (h.failedPathogensLabel || '—');
+  const posRec      = orig || h;
+  const failedBact  = (typeof labPositiveText === 'function' && labPositiveText(posRec)) || posRec.failedPathogensLabel || '—';
   const sqf         = SQF_NUMS[h.planta]||'2.4.H';
 
   const {jsPDF} = window.jspdf;
@@ -137,9 +141,16 @@ function exportRetestPDF(id) {
   doc.text('_______________________', W-M-90+doc.getTextWidth('Collected by: '), y+14.5);
 
   // ── Table ─────────────────────────────────────────────────────────────
+  // Tested pathogens show "X" until the lab result is recorded, then the result itself.
+  const res  = (typeof labResultsForPrint === 'function') ? labResultsForPrint(h) : null;
+  const cell = k => res && res[k] ? labCellText(k, res[k]) : (h[k] ? 'X' : '');
   const rows = [[String(h.sample),String(h.zone),h.area,String(h.line||'N/A'),h.location,
-    h.ecoli?'X':'', h.listeria?'X':'', h.salmonella?'X':'', h.saureus?'X':'']];
+    cell('ecoli'), cell('listeria'), cell('salmonella'), cell('saureus')]];
   pdfMainTable(doc, rows, 57, W, M);
+  if (res) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(110,110,110);
+    doc.text((h.resultado === 'Pending' ? 'Presumptive result - awaiting the lab confirmation.' : 'Lab result: ' + h.resultado + '.') + ' E. coli / S. aureus in CFU/sponge (<10 = none detected).', M + 2, doc.lastAutoTable.finalY + 4);
+  }
 
   // ── Doc control + footer ──────────────────────────────────────────────
   const tableEnd = doc.lastAutoTable.finalY + 4;
@@ -215,9 +226,14 @@ function exportHistoryPDF() {
   doc.autoTable({
     startY: 43, margin: { left: M, right: M, top: 14, bottom: 14 },
     head: [['Date', 'Bldg', 'Sample', 'Zone', 'Area', 'Line', 'Location', 'E. coli', 'Listeria', 'Salm.', 'S. aureus', 'Result', 'Type']],
-    body: hist.map(h => [fmt(h.fecha), h.planta, h.sample ? '#' + h.sample : '—', h.zone || '—', h.area || '', h.line || '',
-      h.location || '', h.ecoli ? MARK : '', h.listeria ? MARK : '', h.salmonella ? MARK : '', h.saureus ? MARK : '',
-      h.resultado || 'Pending', typeOf(h)]),
+    body: hist.map(h => {
+      // Per-test lab result when recorded; a dot = tested, result pending.
+      const res = (typeof labResultsForPrint === 'function') ? labResultsForPrint(h) : null;
+      const cell = k => res && res[k] ? labCellText(k, res[k]) : (h[k] ? MARK : '');
+      return [fmt(h.fecha), h.planta, h.sample ? '#' + h.sample : '—', h.zone || '—', h.area || '', h.line || '',
+        h.location || '', cell('ecoli'), cell('listeria'), cell('salmonella'), cell('saureus'),
+        h.resultado || 'Pending', typeOf(h)];
+    }),
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 7.6, cellPadding: { top: 2, bottom: 2, left: 2, right: 2 }, textColor: INK, lineColor: LINE, lineWidth: 0.2, valign: 'middle', overflow: 'linebreak' },
     headStyles: { fillColor: HEAD, textColor: INK, fontStyle: 'bold', fontSize: 7.4, valign: 'middle' },
@@ -225,13 +241,17 @@ function exportHistoryPDF() {
     columnStyles: {
       0: { cellWidth: 22 }, 1: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
       3: { cellWidth: 11, halign: 'center' }, 4: { cellWidth: 30 }, 5: { cellWidth: 20 }, 6: { cellWidth: 'auto' },
-      7: { cellWidth: 14, halign: 'center' }, 8: { cellWidth: 14, halign: 'center' }, 9: { cellWidth: 12, halign: 'center' }, 10: { cellWidth: 17, halign: 'center' },
+      7: { cellWidth: 16, halign: 'center' }, 8: { cellWidth: 17, halign: 'center' }, 9: { cellWidth: 17, halign: 'center' }, 10: { cellWidth: 17, halign: 'center' },
       11: { cellWidth: 19, halign: 'center' }, 12: { cellWidth: 21, halign: 'center' }
     },
     didParseCell: c => {
       if (c.section === 'head' && c.column.index >= 1 && c.column.index !== 4 && c.column.index !== 5 && c.column.index !== 6) c.cell.styles.halign = 'center';
       if (c.section !== 'body') return;
       if (c.cell.raw === MARK) c.cell.text = [''];
+      if (c.column.index >= 7 && c.column.index <= 10 && c.cell.raw && c.cell.raw !== MARK) {
+        c.cell.styles.fontSize = 6.8; c.cell.styles.cellPadding = { top: 2, bottom: 2, left: 1, right: 1 };
+        if (c.cell.raw === 'Negative' || /^</.test(c.cell.raw)) c.cell.styles.textColor = MUT; else c.cell.styles.fontStyle = 'bold';
+      }
       if (c.column.index === 11 && c.cell.raw === 'Positive') c.cell.styles.fontStyle = 'bold';
       if (c.column.index === 11 && c.cell.raw === 'Pending') c.cell.styles.textColor = MUT;
       if (c.column.index === 12 && c.cell.raw === 'Routine') c.cell.styles.textColor = MUT;
@@ -242,6 +262,12 @@ function exportHistoryPDF() {
       }
     }
   });
+
+  // ── Legend under the table ──
+  let ly = doc.lastAutoTable.finalY + 5;
+  if (ly > PH - 14) { doc.addPage(); ly = 18; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
+  doc.text('E. coli / S. aureus: count in CFU/sponge (<10 = none detected). Listeria / Salmonella: Negative, Presumptive or Positive. Dot = tested, result pending.', M, ly);
 
   // ── Footer on every page ──
   const pages = doc.getNumberOfPages();

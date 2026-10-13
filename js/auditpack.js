@@ -41,6 +41,8 @@ function initAuditPack() {
 const _apMonday = ds => { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return todayLocal(d); };
 const _apFmt = ds => ds ? new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 const _apPath = h => {
+  const lab = (typeof labPositiveText === 'function') ? labPositiveText(h) : '';
+  if (lab) return lab;                       // with the lab's counts, e.g. "E. coli 35 CFU/sponge"
   const k = (typeof positivePathogens === 'function') ? positivePathogens(h) : [];
   return k.length ? k.map(x => AP_PATHO[x] || x).join(', ') : (h.failedPathogensLabel || '—');
 };
