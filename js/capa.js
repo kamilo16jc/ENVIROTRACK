@@ -135,6 +135,14 @@ function confirmVector() {
   toast(recs.length + ' vector sample(s) scheduled for Sample #' + root.sample, 'success');
 }
 
+// A positive already got its follow-up when the SAME site has retests dated
+// after it — even if that round was recorded under another origin (legacy
+// escalations were logged under the first positive, e.g. 1935 #148 in July).
+function siteRetestedAfter(p, hist) {
+  return (hist || GH()).some(x => x.planta === p.planta && String(x.sample) === String(p.sample) &&
+    x.retestNum && !isVectorRec(x) && x.id !== p.id && String(x.fecha) > String(p.fecha));
+}
+
 // Sites of a building with an OPEN positive follow-up: a positive whose
 // retests are not scheduled yet, or whose retests are still pending. The
 // weekly generator skips these — they are being retested, not rotated.
@@ -145,7 +153,7 @@ function sitesInFollowUp(planta) {
   hist.forEach(h => {
     if (h.resultado !== 'Positive' || !h.sample) return;
     const kids = hist.filter(r => r.originalId === h.id && r.retestNum && !isVectorRec(r));
-    const open = kids.length ? kids.some(r => r.resultado === 'Pending') : !rids.has(h.id);
+    const open = kids.length ? kids.some(r => r.resultado === 'Pending') : (!rids.has(h.id) && !siteRetestedAfter(h, hist));
     if (open) out.add(String(h.sample));
   });
   hist.forEach(h => { if (h.retestNum && !isVectorRec(h) && h.resultado === 'Pending' && h.sample) out.add(String(h.sample)); });

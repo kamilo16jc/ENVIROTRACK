@@ -170,7 +170,7 @@ function loadRetests() {
   const progStart = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
   const pos = hist.filter(h =>
     h.resultado === 'Positive' && (!h.retestNum || h.fecha >= progStart) &&
-    !rids.has(h.id) && !rootsWithRetests.has(h.id)
+    !rids.has(h.id) && !rootsWithRetests.has(h.id) && !siteRetestedAfter(h, hist)
   );
 
   // A round (retests sharing a root) is ACTIVE while it still has PENDING

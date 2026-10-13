@@ -56,7 +56,7 @@ function refreshDashboard() {
   // same rule as the Retests view: originals, positive vector sites and escalated
   // retests (the last two only from the SQF program start — keeps migrated data out)
   const progStart=typeof SQF_PROGRAM_START!=='undefined'?SQF_PROGRAM_START:'';
-  hist.filter(h=>h.resultado==='Positive'&&(!h.retestNum||h.fecha>=progStart)&&!rids.has(h.id)&&!rootsWithRetests.has(h.id))
+  hist.filter(h=>h.resultado==='Positive'&&(!h.retestNum||h.fecha>=progStart)&&!rids.has(h.id)&&!rootsWithRetests.has(h.id)&&!siteRetestedAfter(h,hist))
       .forEach(h=>cases.set(h.planta+'|'+h.sample,{sample:h.sample,planta:h.planta,fecha:h.fecha}));
   hist.filter(h=>h.retestNum&&!isVectorRec(h)&&h.resultado==='Pending')
       .forEach(h=>{const k=h.planta+'|'+h.sample; if(!cases.has(k)) cases.set(k,{sample:h.sample,planta:h.planta,fecha:h.fecha});});
