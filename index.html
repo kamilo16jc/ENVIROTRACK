@@ -444,18 +444,19 @@
         <div class="card" style="padding:18px 24px">
           <div class="filter-row">
             <div class="filter-field"><label>Building</label>
-              <select id="fPlant" style="min-width:150px" onchange="searchHistory()">
+              <select id="fPlant" style="min-width:150px">
                 <option value="">All</option><option value="1945">1945</option><option value="1935">1935</option>
                 <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
               </select></div>
-            <div class="filter-field"><label>Sample #</label><input type="text" id="fSample" placeholder="e.g. 303" style="width:110px" oninput="searchHistory()"></div>
-            <div class="filter-field"><label>From</label><input type="date" id="fFrom" onchange="searchHistory()"></div>
-            <div class="filter-field"><label>To</label><input type="date" id="fTo" onchange="searchHistory()"></div>
+            <div class="filter-field"><label>Sample #</label><input type="text" id="fSample" placeholder="e.g. 303" style="width:110px"></div>
+            <div class="filter-field"><label>From</label><input type="date" id="fFrom"></div>
+            <div class="filter-field"><label>To</label><input type="date" id="fTo"></div>
             <div class="filter-field"><label>Result</label>
-              <select id="fResult" style="min-width:130px" onchange="searchHistory()">
+              <select id="fResult" style="min-width:130px">
                 <option value="Pending" selected>Pending</option><option value="">All</option>
                 <option value="Negative">Negative</option><option value="Positive">Positive</option><option value="Presumptive">Presumptive</option>
               </select></div>
+            <button type="button" class="btn btn-primary filter-search" onclick="searchHistory()" title="Search" aria-label="Search" style="margin-top:18px"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
             <button class="btn btn-outline btn-sm" onclick="clearFilters()" style="margin-top:18px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>
             <button class="btn btn-outline btn-sm" style="margin-top:18px;margin-left:auto" onclick="exportHistoryPDF()"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Export PDF</button>
           </div>
@@ -587,20 +588,21 @@
         </div>
         <div class="card">
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-            <input type="text" id="subSearch" placeholder="Search sample, file or person…" oninput="loadSubmissions()" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:var(--font)">
-            <select id="subBuilding" onchange="loadSubmissions()" style="min-width:120px">
+            <input type="text" id="subSearch" placeholder="Search sample, file or person…" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:var(--font)">
+            <select id="subBuilding" style="min-width:120px">
               <option value="">All buildings</option>
               <option value="1945">1945</option><option value="1935">1935</option>
               <option value="1931">1931 (East)</option><option value="1931W">1931W</option>
             </select>
-            <select id="subType" onchange="loadSubmissions()" style="min-width:120px">
+            <select id="subType" style="min-width:120px">
               <option value="">All types</option>
               <option value="Generator">Generator</option><option value="Retest">Retest</option>
             </select>
-            <select id="subStatus" onchange="loadSubmissions()" style="min-width:120px">
+            <select id="subStatus" style="min-width:120px">
               <option value="">All statuses</option>
               <option value="Sent to lab">Sent to lab</option><option value="Generated">Generated only</option>
             </select>
+            <button type="button" class="btn btn-primary filter-search" onclick="loadSubmissions()" title="Search" aria-label="Search"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
             <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="refreshSubmissions()"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
           </div>
           <div class="table-wrap"><table>
@@ -633,7 +635,7 @@
         <!-- Stats panel -->
         <div id="repPanel-stats">
           <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
-            <select id="reportPeriod" style="min-width:150px" onchange="buildReports()">
+            <select id="reportPeriod" style="min-width:150px">
               <option value="all">All history</option>
               <option value="today">Today</option>
               <option value="month">This month</option>
@@ -644,9 +646,10 @@
               <option value="365">Last year</option>
             </select>
             <span style="font-size:12px;color:var(--gray-500)">or</span>
-            <input type="date" id="repFrom" onchange="buildReports()" title="From date" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <input type="date" id="repFrom" title="From date" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px">
             <span style="color:var(--gray-400)">→</span>
-            <input type="date" id="repTo" onchange="buildReports()" title="To date" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <input type="date" id="repTo" title="To date" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <button type="button" class="btn btn-primary filter-search" onclick="buildReports()" title="Search" aria-label="Search"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
             <button class="btn btn-outline btn-sm" onclick="clearRepDates()" title="Clear date range">Clear</button>
             <button class="btn btn-outline" onclick="exportReportPDF()"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Export PDF</button>
             <button class="btn btn-primary" onclick="emailMonthlyReport()" id="btnSaveMonthly" style="display:none;background:var(--navy)" title="Generate last month's report and email it straight to QA"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send Monthly Report to QA</button>
@@ -687,12 +690,12 @@
           <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Evaluation year</label>
-              <select id="sqfYear" style="min-width:130px" onchange="buildSQF()">
+              <select id="sqfYear" style="min-width:130px">
               </select>
             </div>
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Building</label>
-              <select id="sqfPlant" style="min-width:150px" onchange="buildSQF()">
+              <select id="sqfPlant" style="min-width:150px">
                 <option value="all">All buildings</option>
                 <option value="1945">1945</option>
                 <option value="1935">1935</option>
@@ -700,6 +703,7 @@
                 <option value="1931W">1931 West</option>
               </select>
             </div>
+            <button type="button" class="btn btn-primary filter-search" onclick="buildSQF()" title="Search" aria-label="Search" style="align-self:flex-end"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px">Min tests/week</label>
               <input type="number" id="sqfMinTests" value="10" min="1" max="30"
@@ -769,13 +773,14 @@
             <div class="card">
               <div class="card-title">SQF Audit Package — 2.4.H Environmental Monitoring</div>
               <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
-                <div class="field"><label class="field-label">From</label><input type="date" id="apFrom" onchange="renderAuditPackPreview()"></div>
-                <div class="field"><label class="field-label">To</label><input type="date" id="apTo" onchange="renderAuditPackPreview()"></div>
+                <div class="field"><label class="field-label">From</label><input type="date" id="apFrom"></div>
+                <div class="field"><label class="field-label">To</label><input type="date" id="apTo"></div>
                 <div class="field"><label class="field-label">Building</label>
-                  <select id="apPlant" onchange="renderAuditPackPreview()">
+                  <select id="apPlant">
                     <option value="all">All buildings</option><option value="1945">1945</option><option value="1935">1935</option>
                     <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
                   </select></div>
+                <button type="button" class="btn btn-primary filter-search" onclick="renderAuditPackPreview()" title="Search" aria-label="Search"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
                 <button class="btn btn-primary" onclick="exportAuditPack()"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>Generate package (PDF)</button>
               </div>
               <div id="apSections" class="ap-sections"></div>
@@ -837,7 +842,7 @@
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
               <div class="filter-field">
                 <label>Building</label>
-                <select id="masterFilterPlant" style="min-width:150px" onchange="loadMasterTable()">
+                <select id="masterFilterPlant" style="min-width:150px">
                   <option value="1945">1945</option>
                   <option value="1935">1935</option>
                   <option value="1931E">1931 East</option>
@@ -846,7 +851,7 @@
               </div>
               <div class="filter-field">
                 <label>Zone</label>
-                <select id="masterFilterZone" style="min-width:100px" onchange="loadMasterTable()">
+                <select id="masterFilterZone" style="min-width:100px">
                   <option value="">All</option>
                   <option value="2">Zone 2</option>
                   <option value="3">Zone 3</option>
@@ -855,15 +860,16 @@
               </div>
               <div class="filter-field">
                 <label>Show</label>
-                <select id="masterFilterIssue" style="min-width:150px" onchange="loadMasterTable()">
+                <select id="masterFilterIssue" style="min-width:150px">
                   <option value="">All points</option>
                   <option value="review">Needs review</option>
                 </select>
               </div>
               <div class="filter-field">
                 <label>Search</label>
-                <input type="text" id="masterSearch" placeholder="Area or location..." style="min-width:200px" oninput="loadMasterTable()">
+                <input type="text" id="masterSearch" placeholder="Area or location..." style="min-width:200px">
               </div>
+              <button type="button" class="btn btn-primary filter-search" onclick="loadMasterTable()" title="Search" aria-label="Search" style="margin-top:18px"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
               <button class="btn btn-primary" onclick="openMasterModal()" style="margin-top:18px">
                 + Add Point
               </button>

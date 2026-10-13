@@ -334,6 +334,7 @@ function buildReports() {
 
 function exportReportPDF(opts) {
   opts = opts || {};
+  if (!opts.returnDoc) buildReports();   // the PDF and the screen show the same period
   const H = getFilteredHistory();
   const D = erReportData(H);
   const range = repRange();
