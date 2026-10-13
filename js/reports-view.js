@@ -6,6 +6,46 @@
 // ═══════════════════════════════════════════════════════════════
 let _erTrendRO = null;
 
+const ER_PATHO = [['ecoli', 'E. coli'], ['listeria', 'Listeria'], ['salmonella', 'Salmonella'], ['saureus', 'S. aureus']];
+
+// Everything the Reports screen and its PDF show, from one set of records:
+// routine tests (retests and vector samples are counted separately).
+function erReportData(H) {
+  const base = H.filter(h => !h.retestNum && !h.isRetest);
+  const retestRecs = H.filter(h => (h.retestNum || h.isRetest) && !isVectorRec(h));
+  const PLANTS = ['1945', '1935', '1931E', '1931W'];
+  const _posOf = h => (typeof positivePathogens === 'function' ? positivePathogens(h) : []);
+  const buildings = PLANTS.map(id => ({
+    id,
+    total:    base.filter(h => h.planta === id).length,
+    positive: base.filter(h => h.planta === id && h.resultado === 'Positive').length,
+    retests:  retestRecs.filter(h => h.planta === id).length
+  })).filter(b => b.total || b.retests);
+  if (!buildings.length) PLANTS.forEach(id => buildings.push({ id, total: 0, positive: 0, retests: 0 }));
+  const negC = base.filter(h => h.resultado === 'Negative').length;
+  const posC = base.filter(h => h.resultado === 'Positive').length;
+  const pendC = base.filter(h => h.resultado === 'Pending').length;
+  const pathogens = ER_PATHO.map(([k, name]) => ({ name, key: k,
+    tested: base.filter(h => h[k]).length,
+    positive: base.filter(h => h.resultado === 'Positive' && _posOf(h).includes(k)).length }));
+  const zoneIds = Array.from(new Set(base.map(h => Number(h.zone)).filter(z => z))).sort((a, b) => a - b);
+  const zones = (zoneIds.length ? zoneIds : [2, 3, 4]).map(z => {
+    const zr = base.filter(h => Number(h.zone) === z);
+    return { name: 'Zone ' + z, zone: z, total: zr.length, positive: zr.filter(h => h.resultado === 'Positive').length };
+  });
+  const weekStart = ds => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d; };
+  const wmap = {};
+  base.forEach(h => { if (!h.fecha) return; const ws = weekStart(h.fecha); const key = ws.toISOString().slice(0, 10);
+    (wmap[key] || (wmap[key] = { ws, total: 0, positive: 0 })); wmap[key].total++; if (h.resultado === 'Positive') wmap[key].positive++; });
+  const weeks = Object.values(wmap).sort((a, b) => a.ws - b.ws)
+    .map(w => ({ label: 'Week of ' + w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), short: w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: w.total, positive: w.positive }));
+  const resolvedCount = (typeof GRV === 'function' ? GRV() : []).length;
+  const totalTests = base.length;
+  return { base, retestRecs, buildings, pathogens, zones, weeks, negC, posC, pendC, totalTests,
+    totalRetests: retestRecs.length, resolvedCount,
+    positiveRate: totalTests ? posC / totalTests * 100 : 0, negativeRate: totalTests ? negC / totalTests * 100 : 0 };
+}
+
 function renderReportsView() {
   const root = document.getElementById('enviro-reports');
   if (!root || typeof getFilteredHistory !== 'function') return;
@@ -16,58 +56,21 @@ function renderReportsView() {
   const svgEl = (t, a) => { const n = document.createElementNS(NS, t); for (const k in (a || {})) n.setAttribute(k, String(a[k])); return n; };
   const num = n => String(n);
 
-  // ── Data from real records ──────────────────────────────────
-  const H = getFilteredHistory();
-  const base = H.filter(h => !h.retestNum && !h.isRetest);
-  const retestRecs = H.filter(h => (h.retestNum || h.isRetest) && !isVectorRec(h));   // vector samples are reported separately
-  const PLANTS = ['1945', '1935', '1931E', '1931W'];
-  const resolved = (typeof GRV === 'function' ? GRV() : []);
-
-  const buildings = PLANTS.map(id => ({
-    id,
-    total:    base.filter(h => h.planta === id).length,
-    positive: base.filter(h => h.planta === id && h.resultado === 'Positive').length,
-    retests:  retestRecs.filter(h => h.planta === id).length
-  })).filter(b => b.total || b.retests);
-  if (!buildings.length) PLANTS.forEach(id => buildings.push({ id, total: 0, positive: 0, retests: 0 }));
-
-  const totalTests = base.length;
-  const negC  = base.filter(h => h.resultado === 'Negative').length;
-  const posC  = base.filter(h => h.resultado === 'Positive').length;
-  const pendC = base.filter(h => h.resultado === 'Pending').length;
+  // ── Data from real records (shared with the PDF: erReportData) ──
+  const D = erReportData(getFilteredHistory());
+  const { base, buildings, pathogens, zones, totalTests, negC, posC, pendC, totalRetests, resolvedCount, positiveRate, negativeRate } = D;
+  const PATHO = ER_PATHO;
+  const _posOf = h => (typeof positivePathogens === 'function' ? positivePathogens(h) : []);
   const results = [
     { key: 'negative', name: 'Negative', count: negC,  color: 'var(--er-series)' },
     { key: 'positive', name: 'Positive', count: posC,  color: 'var(--er-positive)' },
     { key: 'pending',  name: 'Pending',  count: pendC, color: 'var(--er-pending)' }
   ];
-  const PATHO = [['ecoli', 'E. coli'], ['listeria', 'Listeria'], ['salmonella', 'Salmonella'], ['saureus', 'S. aureus']];
-  // tested = samples assigned that pathogen (the flag); positive = lab-confirmed
-  // via positivePathogens() — never infer a positive just because it was swabbed.
-  const _posOf = h => (typeof positivePathogens === 'function' ? positivePathogens(h) : []);
-  const pathogens = PATHO.map(([k, name]) => ({ name, key: k,
-    tested: base.filter(h => h[k]).length,
-    positive: base.filter(h => h.resultado === 'Positive' && _posOf(h).includes(k)).length }));
-
-  const zoneIds = Array.from(new Set(base.map(h => Number(h.zone)).filter(z => z))).sort((a, b) => a - b);
-  const zones = (zoneIds.length ? zoneIds : [1, 2, 3]).map(z => {
-    const zr = base.filter(h => Number(h.zone) === z);
-    return { name: 'Zone ' + z, total: zr.length, positive: zr.filter(h => h.resultado === 'Positive').length };
-  });
-
-  function weekStart(ds) { const d = new Date(ds + 'T00:00:00'); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d; }
-  const wmap = {};
-  base.forEach(h => { if (!h.fecha) return; const ws = weekStart(h.fecha); const key = ws.toISOString().slice(0, 10); (wmap[key] || (wmap[key] = { ws, total: 0, positive: 0 })); wmap[key].total++; if (h.resultado === 'Positive') wmap[key].positive++; });
-  const weeks = Object.values(wmap).sort((a, b) => a.ws - b.ws).slice(-8)
-    .map(w => ({ label: 'Week of ' + w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: w.total, positive: w.positive }));
-
-  const totalRetests = retestRecs.length;
-  const resolvedCount = resolved.length;
-  const positiveRate = totalTests ? (posC / totalTests * 100) : 0;
-  const negativeRate = totalTests ? (negC / totalTests * 100) : 0;
+  const weeks = D.weeks.slice(-8);
 
   // ── Period label ────────────────────────────────────────────
   const pSel = document.getElementById('reportPeriod');
-  $('#er-period-label').textContent = (pSel && pSel.options[pSel.selectedIndex]) ? pSel.options[pSel.selectedIndex].text : 'All history';
+  $('#er-period-label').textContent = typeof repRange === 'function' ? repRange().label : ((pSel && pSel.options[pSel.selectedIndex]) ? pSel.options[pSel.selectedIndex].text : 'All history');
 
   // ── KPIs ────────────────────────────────────────────────────
   const kpis = [

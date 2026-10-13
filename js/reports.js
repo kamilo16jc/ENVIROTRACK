@@ -8,23 +8,32 @@ function destroyCharts() {
   chartInstances = {};
 }
 
+// The period the Reports view (and its PDF) covers: explicit From/To dates win,
+// otherwise the period selector (Today / This month / Last month / last N days).
+function repRange() {
+  const from = (document.getElementById('repFrom') || {}).value || '';
+  const to = (document.getElementById('repTo') || {}).value || '';
+  const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (from || to) return { from, to, label: from && to && from === to ? fmt(from) : (from ? fmt(from) : 'Start') + ' – ' + (to ? fmt(to) : 'Today') };
+  const v = (document.getElementById('reportPeriod') || {}).value || 'all';
+  const now = new Date(), today = todayLocal();
+  if (v === 'today') return { from: today, to: today, label: 'Today · ' + fmt(today) };
+  if (v === 'month') {
+    const f = todayLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    return { from: f, to: today, label: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
+  }
+  if (v === 'prevmonth') {
+    const f = new Date(now.getFullYear(), now.getMonth() - 1, 1), l = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: todayLocal(f), to: todayLocal(l), label: f.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
+  }
+  const days = parseInt(v, 10);
+  if (!isNaN(days)) { const c = new Date(); c.setDate(c.getDate() - days); return { from: todayLocal(c), to: today, label: 'Last ' + days + ' days' }; }
+  return { from: '', to: '', label: 'All history' };
+}
+
 function getFilteredHistory() {
-  let hist = GH();
-  const from = (document.getElementById('repFrom')||{}).value;
-  const to   = (document.getElementById('repTo')||{}).value;
-  if(from || to) {                       // explicit date range overrides the period
-    if(from) hist = hist.filter(h => h.fecha >= from);
-    if(to)   hist = hist.filter(h => h.fecha <= to);
-    return hist;
-  }
-  const days = parseInt(document.getElementById('reportPeriod').value);
-  if(!isNaN(days)) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const cutStr = todayLocal(cutoff);
-    hist = hist.filter(h => h.fecha >= cutStr);
-  }
-  return hist;
+  const r = repRange();
+  return GH().filter(h => (!r.from || h.fecha >= r.from) && (!r.to || h.fecha <= r.to));
 }
 
 function clearRepDates() {
@@ -325,208 +334,238 @@ function buildReports() {
 
 function exportReportPDF(opts) {
   opts = opts || {};
-  const hist = getFilteredHistory();
-  if(!hist.length) { if(!opts.returnDoc) toast('No data to export','error'); return; }
-  const {jsPDF} = window.jspdf;
-  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
-  const W=215.9, H=279.4, M=14, today=new Date().toLocaleDateString('en-US');
-  const plants = ['1945','1935','1931E','1931W'];
-  const patKeys=['ecoli','listeria','salmonella','saureus'];
-  const patNames={ecoli:'E. Coli',listeria:'Listeria',salmonella:'Salmonella',saureus:'S. Aureus'};
+  const H = getFilteredHistory();
+  const D = erReportData(H);
+  const range = repRange();
+  if (!D.totalTests && !D.totalRetests) { if (!opts.returnDoc) toast('No data for this period', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const W = 215.9, PH = 279.4, M = 14;
+  const G = [52, 93, 70], INK = [40, 61, 49], MUT = [102, 115, 98], LINE = [221, 229, 216], SOFT = [244, 247, 241], TRACK = [232, 237, 223];
+  const SERIES = [128, 157, 114], POS = [189, 135, 123], PEND = [184, 162, 104], RED = [167, 90, 82];
+  const safe = t => String(t == null ? '' : t).replace(/[–—]/g, '-').replace(/·/g, '-').replace(/→/g, '->');
+  const base = D.base, total = D.totalTests, pos = D.posC, neg = D.negC, pend = D.pendC, retests = D.totalRetests;
+  const posRate = +D.positiveRate.toFixed(1);
+  const patNames = { ecoli: 'E. coli', listeria: 'Listeria', salmonella: 'Salmonella', saureus: 'S. aureus' };
+  const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-  // ── Metrics & insights ──────────────────────────────────────────────
-  const dates=hist.map(h=>h.fecha).filter(Boolean).sort();
-  const from=dates[0]||'', to=dates[dates.length-1]||'';
-  const fmt=d=> d? new Date(d+'T12:00:00').toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'—';
-  const total=hist.length,
-        pos=hist.filter(h=>h.resultado==='Positive').length,
-        neg=hist.filter(h=>h.resultado==='Negative').length,
-        pend=hist.filter(h=>h.resultado==='Pending').length,
-        retests=hist.filter(h=>h.retestNum).length,
-        posRate= total>0? +(pos/total*100).toFixed(1):0,
-        // "Open" = original positives NOT yet resolved. A closed case keeps its
-        // record as 'Positive' (resolution lives in ResolvedRetests), so we must
-        // exclude the resolved ones — same rule as the SQF report & Retests view.
-        _rptResolvedIds=new Set((typeof GRV==='function'?GRV():[]).map(r=>r.originalId)),
-        openPos=hist.filter(h=>h.resultado==='Positive'&&!h.retestNum&&!_rptResolvedIds.has(h.id)).length;
-
-  const bStats=plants.map(p=>{const ph=hist.filter(h=>h.planta===p);const pp=ph.filter(h=>h.resultado==='Positive').length;return {p,total:ph.length,pos:pp,rate:ph.length>0?pp/ph.length*100:0};});
-  const worstB=bStats.filter(b=>b.total>0).sort((a,b)=>b.rate-a.rate)[0];
-  const patStat=patKeys.map(k=>({k,n:hist.filter(h=>positivePathogens(h).includes(k)).length})).sort((a,b)=>b.n-a.n);
-  const worstPat=patStat[0];
-  const zStat=[2,3,4].map(z=>{const zh=hist.filter(h=>h.zone==z);const zp=zh.filter(h=>h.resultado==='Positive').length;return {z,total:zh.length,pos:zp,rate:zh.length>0?zp/zh.length*100:0};});
-  const worstZone=zStat.filter(z=>z.total>0).sort((a,b)=>b.rate-a.rate)[0];
-  const smap={};
-  hist.filter(h=>!h.retestNum).forEach(h=>{const k=h.planta+'|'+h.sample;if(!smap[k])smap[k]={sample:h.sample,planta:h.planta,zone:h.zone,area:h.area,location:h.location,total:0,pos:0};smap[k].total++;if(h.resultado==='Positive')smap[k].pos++;});
-  const topPts=Object.values(smap).filter(s=>s.pos>0).sort((a,b)=>b.pos-a.pos||(b.pos/b.total)-(a.pos/a.total));
-  const topPt=topPts[0];
-  let trend='stable';
-  if(dates.length>6){
-    const mid=dates[Math.floor(dates.length/2)];
-    const fh=hist.filter(h=>h.fecha<mid), sh=hist.filter(h=>h.fecha>=mid);
-    const r1=fh.length?fh.filter(h=>h.resultado==='Positive').length/fh.length*100:0;
-    const r2=sh.length?sh.filter(h=>h.resultado==='Positive').length/sh.length*100:0;
-    if(r2<r1-1)trend='improving'; else if(r2>r1+1)trend='worsening';
+  // ── Metrics & insights (routine tests, same as the screen) ──────────
+  const resolvedIds = new Set((typeof GRV === 'function' ? GRV() : []).map(r => r.originalId));
+  const openPos = base.filter(h => h.resultado === 'Positive' && !resolvedIds.has(h.id)).length;
+  const bStats = D.buildings.map(b => ({ p: b.id, total: b.total, pos: b.positive, rate: b.total ? b.positive / b.total * 100 : 0, retests: b.retests }));
+  const worstB = bStats.filter(b => b.total > 0).sort((a, b) => b.rate - a.rate)[0];
+  const patStat = D.pathogens.map(p => ({ k: p.key, n: p.positive })).sort((a, b) => b.n - a.n);
+  const worstPat = patStat[0];
+  const zStat = D.zones.map(z => ({ z: z.zone, total: z.total, pos: z.positive, rate: z.total ? z.positive / z.total * 100 : 0 }));
+  const worstZone = zStat.filter(z => z.total > 0).sort((a, b) => b.rate - a.rate)[0];
+  const smap = {};
+  base.forEach(h => { const k = h.planta + '|' + h.sample; if (!smap[k]) smap[k] = { sample: h.sample, planta: h.planta, zone: h.zone, area: h.area, location: h.location, total: 0, pos: 0 }; smap[k].total++; if (h.resultado === 'Positive') smap[k].pos++; });
+  const topPts = Object.values(smap).filter(s => s.pos > 0).sort((a, b) => b.pos - a.pos || (b.pos / b.total) - (a.pos / a.total));
+  const topPt = topPts[0];
+  const dates = base.map(h => h.fecha).filter(Boolean).sort();
+  let trend = 'stable';
+  if (dates.length > 6) {
+    const mid = dates[Math.floor(dates.length / 2)];
+    const fh = base.filter(h => h.fecha < mid), sh = base.filter(h => h.fecha >= mid);
+    const r1 = fh.length ? fh.filter(h => h.resultado === 'Positive').length / fh.length * 100 : 0;
+    const r2 = sh.length ? sh.filter(h => h.resultado === 'Positive').length / sh.length * 100 : 0;
+    if (r2 < r1 - 1) trend = 'improving'; else if (r2 > r1 + 1) trend = 'worsening';
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────
-  let y=0;
-  const ensure=(h)=>{ if(y+h > H-16){ doc.addPage(); y=16; } };
-  const secTitle=(t)=>{ ensure(12); doc.setFillColor(26,35,50); doc.rect(M,y,W-M*2,7,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(255,255,255); doc.text(t,M+3,y+4.8); y+=10; };
-  const chartImg=(id)=>{ const c=document.getElementById(id); try{ return c&&c.width? {img:c.toDataURL('image/png',1.0), ar:c.width/c.height}:null; }catch(e){ return null; } };
-  const bullet=(txt)=>{ const lines=doc.splitTextToSize(txt,W-M*2-8); ensure(lines.length*4.2+2); doc.setFillColor(192,57,43); doc.circle(M+2,y-0.8,0.8,'F'); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,45,55); doc.text(lines,M+5,y); y+=lines.length*4.2+1.5; };
+  // ── Layout helpers ──────────────────────────────────────────────────
+  let y = 0;
+  const ensure = h => { if (y + h > PH - 16) { doc.addPage(); y = 16; } };
+  const secTitle = t => { ensure(14); doc.setFillColor(...G); doc.rect(M, y, W - M * 2, 7, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(255, 255, 255); doc.text(safe(t), M + 3, y + 4.8); y += 10; };
+  const bullet = txt => { const lines = doc.splitTextToSize(safe(txt), W - M * 2 - 8); ensure(lines.length * 4.2 + 2); doc.setFillColor(...G); doc.circle(M + 2, y - 0.8, 0.8, 'F'); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(lines, M + 5, y); y += lines.length * 4.2 + 1.5; };
+  const txt = (t, x, yy, o) => { o = o || {}; doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(o.size || 7.5); doc.setTextColor(...(o.color || INK)); doc.text(safe(t), x, yy, o.align ? { align: o.align } : undefined); };
+  const n1 = v => v.toFixed(1);
 
-  // ── Header band (Caputo logo on the navy band — its original design) ──
-  doc.setFillColor(26,35,50); doc.rect(0,0,W,30,'F');
-  try{ doc.addImage(LOGO,'JPEG',M,7.5,25,13); }catch(e){}
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(255,255,255);
-  doc.text('Environmental Monitoring Report',W/2,13,{align:'center'});
-  doc.setFontSize(11); doc.setTextColor(232,120,110);
-  doc.text('CAPUTO FOODS',W/2,20,{align:'center'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(200,206,216);
-  doc.text('Period:  '+fmt(from)+'   to   '+fmt(to)+'          Generated: '+today,W/2,26,{align:'center'});
-  y=37;
-
-  // ── Executive summary ────────────────────────────────────────────────
-  secTitle('Executive Summary');
-  const assess = posRate<5?'WELL-CONTROLLED':posRate<12?'MODERATE CONCERN':'HIGH CONCERN';
-  const trendTxt = trend==='improving'?'The positive rate is trending down versus the earlier part of the period, a good sign.':trend==='worsening'?'The positive rate is trending up versus the earlier part of the period; corrective action is recommended.':'The positive rate has held stable across the period.';
-  const summary =
-    total+' environmental samples were collected across the four buildings during this period. '+
-    pos+' tested positive ('+posRate+'%), '+neg+' were negative, and '+pend+' are pending results. '+
-    (openPos>0? openPos+' positive case(s) currently remain OPEN and require retest follow-up. ':'All positive cases have been managed through their retest cycle. ')+
-    (worstB&&worstB.pos>0? 'Building '+worstB.p+' carries the highest positive rate ('+worstB.rate.toFixed(1)+'%). ':'')+
-    (worstPat&&worstPat.n>0? patNames[worstPat.k]+' is the most frequently detected organism, with '+worstPat.n+' positive result(s). ':'')+
-    'Overall program status is assessed as '+assess+'. '+trendTxt;
-  const sumLines=doc.splitTextToSize(summary, W-M*2-6);
-  const sumH=sumLines.length*4.2+6;
-  doc.setFillColor(245,247,249); doc.setDrawColor(220,224,230); doc.setLineWidth(0.2);
-  doc.roundedRect(M,y,W-M*2,sumH,2,2,'FD');
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,45,55);
-  doc.text(sumLines,M+3,y+5);
-  y+=sumH+6;
-
-  // ── KPI boxes ────────────────────────────────────────────────────────
-  secTitle('Key Indicators');
-  const kpis=[
-    {l:'Total Tests',v:String(total),c:[26,35,50]},
-    {l:'Negatives',v:String(neg),c:[5,150,105]},
-    {l:'Positives',v:String(pos),c:[192,57,43]},
-    {l:'Positive Rate',v:posRate+'%',c:[192,57,43]},
-    {l:'Retests',v:String(retests),c:[217,119,6]},
-    {l:'Open Cases',v:String(openPos),c:openPos>0?[192,57,43]:[5,150,105]},
-  ];
-  const kw=(W-M*2-5*4)/6, kh=18;
-  kpis.forEach((k,i)=>{
-    const x=M+i*(kw+4);
-    doc.setFillColor(k.c[0],k.c[1],k.c[2]); doc.roundedRect(x,y,kw,kh,1.5,1.5,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
-    doc.text(k.v,x+kw/2,y+9,{align:'center'});
-    doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(255,255,255);
-    doc.text(k.l.toUpperCase(),x+kw/2,y+14.5,{align:'center'});
-  });
-  y+=kh+8;
-
-  // ── Charts ───────────────────────────────────────────────────────────
-  secTitle('Visual Analysis');
-  const charts=[
-    ['chartPlant','Tests & Positives by Building'],
-    ['chartResult','Result Distribution'],
-    ['chartZone','Positive Rate by Zone'],
-    ['chartPat','Pathogen Detection'],
-    ['chartTrend','Weekly Trend'],
-    ['chartRetest','Retests by Building'],
-  ];
-  const cw=(W-M*2-6)/2;
-  for(let i=0;i<charts.length;i+=2){
-    let rowH=0; const cells=[];
-    for(let j=0;j<2 && i+j<charts.length;j++){
-      const ci=chartImg(charts[i+j][0]);
-      const ih=ci? Math.min(cw/ci.ar,52):40;
-      cells.push({ci,ih,title:charts[i+j][1]}); rowH=Math.max(rowH,ih);
-    }
-    ensure(rowH+9);
-    cells.forEach((cell,j)=>{
-      const x=M+j*(cw+6);
-      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(70,70,70);
-      doc.text(cell.title,x,y+1);
-      if(cell.ci){ try{ doc.addImage(cell.ci.img,'PNG',x,y+3,cw,cell.ih); }catch(e){} }
+  // ── Chart primitives (vector) ───────────────────────────────────────
+  // Horizontal bars with the positive share overlaid, like the screen.
+  function hbars(x, yy, w, h, rows) {
+    const max = Math.max(1, ...rows.map(r => r.value));
+    const rh = Math.min(9, h / Math.max(1, rows.length)), lw = 18, vw = 18, bw = w - lw - vw;
+    rows.forEach((r, i) => {
+      const cy = yy + i * rh + rh / 2;
+      txt(r.label, x, cy + 1.2, { size: 7.5 });
+      doc.setFillColor(...TRACK); doc.roundedRect(x + lw, cy - 1.8, bw, 3.6, 1, 1, 'F');
+      const fw = bw * (r.value / max);
+      if (fw > 0) { doc.setFillColor(...(r.color || SERIES)); doc.roundedRect(x + lw, cy - 1.8, Math.max(fw, 1.2), 3.6, 1, 1, 'F'); }
+      if (r.positive && r.value) { doc.setFillColor(...POS); doc.roundedRect(x + lw, cy - 1.8, Math.max(fw * r.positive / r.value, 1.2), 3.6, 1, 1, 'F'); }
+      txt(r.right != null ? r.right : String(r.value), x + w, cy + 1.2, { size: 7.5, bold: true, align: 'right' });
     });
-    y+=rowH+10;
   }
+  // Donut by filled arc polygons.
+  function donut(cx, cy, ro, ri, parts) {
+    const sum = parts.reduce((a, p) => a + p.value, 0);
+    if (!sum) { doc.setDrawColor(...TRACK); doc.setLineWidth(ro - ri); doc.circle(cx, cy, (ro + ri) / 2, 'S'); return; }
+    let a0 = -Math.PI / 2;
+    parts.forEach(p => {
+      if (!p.value) return;
+      const a1 = a0 + p.value / sum * Math.PI * 2, steps = Math.max(4, Math.ceil((a1 - a0) / 0.08)), pts = [];
+      for (let i = 0; i <= steps; i++) { const a = a0 + (a1 - a0) * i / steps; pts.push([cx + ro * Math.cos(a), cy + ro * Math.sin(a)]); }
+      for (let i = steps; i >= 0; i--) { const a = a0 + (a1 - a0) * i / steps; pts.push([cx + ri * Math.cos(a), cy + ri * Math.sin(a)]); }
+      const d = []; for (let i = 1; i < pts.length; i++) d.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+      doc.setFillColor(...p.color); doc.setDrawColor(...p.color); doc.setLineWidth(0.1);
+      doc.lines(d, pts[0][0], pts[0][1], [1, 1], 'FD', true);
+      a0 = a1;
+    });
+  }
+  // Weekly trend: total tests line + positive line, with labels.
+  function trendChart(x, yy, w, h, weeks) {
+    const n = weeks.length, l = x + 8, r = x + w - 3, top = yy + 3, bot = yy + h - 7;
+    const ceil = Math.max(5, Math.ceil(Math.max(1, ...weeks.map(v => v.total)) / 5) * 5);
+    const Y = v => bot - v / ceil * (bot - top), X = i => n <= 1 ? (l + r) / 2 : l + i * (r - l) / (n - 1);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2);
+    [0, ceil / 2, ceil].forEach(v => { doc.line(l, Y(v), r, Y(v)); txt(String(v), l - 1.5, Y(v) + 1, { size: 6, color: MUT, align: 'right' }); });
+    if (!n) { txt('No weekly data', (l + r) / 2, (top + bot) / 2, { size: 7, color: MUT, align: 'center' }); return; }
+    const line = (key, col, wdt) => { doc.setDrawColor(...col); doc.setLineWidth(wdt); for (let i = 1; i < n; i++) doc.line(X(i - 1), Y(weeks[i - 1][key]), X(i), Y(weeks[i][key])); };
+    line('total', SERIES, 0.7); line('positive', POS, 0.6);
+    weeks.forEach((v, i) => {
+      doc.setFillColor(...SERIES); doc.circle(X(i), Y(v.total), 0.9, 'F');
+      doc.setFillColor(...POS); doc.circle(X(i), Y(v.positive), 0.7, 'F');
+      txt(String(v.total), X(i), Y(v.total) - 1.8, { size: 6, bold: true, align: 'center' });
+      if (n <= 8 || i % Math.ceil(n / 8) === 0) txt(v.short, X(i), bot + 4, { size: 5.8, color: MUT, align: 'center' });
+    });
+  }
+  const legend = (x, yy, items) => { let cx = x; items.forEach(([lbl, col]) => { doc.setFillColor(...col); doc.roundedRect(cx, yy - 2, 3, 2.4, 0.5, 0.5, 'F'); txt(lbl, cx + 4, yy, { size: 6.5, color: MUT }); cx += 6 + doc.getTextWidth(safe(lbl)) + 4; }); };
+  // Chart card frame
+  const card = (x, yy, w, h, title, sub) => {
+    doc.setDrawColor(...LINE); doc.setFillColor(255, 255, 255); doc.setLineWidth(0.25); doc.roundedRect(x, yy, w, h, 2, 2, 'FD');
+    txt(title, x + 4, yy + 6, { size: 8.5, bold: true }); if (sub) txt(sub, x + w - 4, yy + 6, { size: 6.5, color: MUT, align: 'right' });
+  };
 
-  // ── Key findings ─────────────────────────────────────────────────────
-  secTitle('Key Findings');
-  bullet('Positive rate for the period: '+posRate+'% ('+pos+' of '+total+' tests). Assessed as '+assess.toLowerCase()+'.');
-  if(worstB&&worstB.pos>0) bullet('Most affected building: '+worstB.p+' with '+worstB.pos+' positive(s), a '+worstB.rate.toFixed(1)+'% positive rate.');
-  if(worstPat&&worstPat.n>0) bullet('Most frequent organism: '+patNames[worstPat.k]+' with '+worstPat.n+' positive detection(s).');
-  if(worstZone&&worstZone.pos>0) bullet('Highest-risk zone: Zone '+worstZone.z+' at '+worstZone.rate.toFixed(1)+'% positive.');
-  if(topPt) bullet('Top recurring point: Sample #'+topPt.sample+' ('+topPt.planta+' — '+topPt.area+') with '+topPt.pos+' positive(s) out of '+topPt.total+' tests.');
-  bullet('Retest activity: '+retests+' retest(s) generated; '+openPos+' positive case(s) still open.');
+  // ── Header ──────────────────────────────────────────────────────────
+  try { doc.addImage(typeof pdfLogo === 'function' ? pdfLogo() : LOGO, 'JPEG', M, 8, 28, 14); } catch (e) {}
+  txt('Environmental Monitoring Report', W - M, 13, { size: 15, bold: true, align: 'right' });
+  txt('Period: ' + range.label + (range.from || range.to ? '  (' + fmt(range.from || dates[0]) + ' - ' + fmt(range.to || dates[dates.length - 1]) + ')' : ''), W - M, 19, { size: 8.5, color: MUT, align: 'right' });
+  txt('Generated ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + (CU && CU.displayName ? ' by ' + CU.displayName : ''), W - M, 23.5, { size: 7.5, color: MUT, align: 'right' });
+  doc.setDrawColor(...G); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
+  y = 34;
 
-  // ── Recommendations ──────────────────────────────────────────────────
-  secTitle('Recommendations — Where to Improve');
-  const recs=[];
-  if(openPos>0) recs.push('Prioritize closing the '+openPos+' open positive case(s): schedule and complete their retest cycles promptly.');
-  if(topPt&&topPt.pos>=2) recs.push('Root-cause Sample #'+topPt.sample+' at '+topPt.planta+' ('+topPt.area+' / '+topPt.location+') — a recurring positive that warrants a deep clean and equipment review.');
-  if(worstB&&worstB.rate>=8) recs.push('Reinforce sanitation and verification frequency in Building '+worstB.p+', which shows the highest positive rate.');
-  if(worstPat&&worstPat.n>=2) recs.push('Target '+patNames[worstPat.k]+' controls (the leading organism): review harborage points, drains and cleaning chemistry.');
-  if(worstZone&&worstZone.rate>=8) recs.push('Focus corrective cleaning on Zone '+worstZone.z+' surfaces, currently the highest-risk zone.');
-  if(trend==='worsening') recs.push('The positive trend is rising — investigate what changed (equipment, staffing, cleaning schedule) and act before it escalates.');
-  if(recs.length===0) recs.push('No critical issues detected this period. Maintain current sanitation and verification practices and keep monitoring.');
+  // ── Executive summary ───────────────────────────────────────────────
+  secTitle('Executive Summary');
+  const assess = posRate < 5 ? 'WELL-CONTROLLED' : posRate < 12 ? 'MODERATE CONCERN' : 'HIGH CONCERN';
+  const trendTxt = trend === 'improving' ? 'The positive rate is trending down versus the earlier part of the period.' : trend === 'worsening' ? 'The positive rate is trending up versus the earlier part of the period; corrective action is recommended.' : 'The positive rate has held stable across the period.';
+  const summary = total + ' routine environmental samples were collected in this period. ' + pos + ' tested positive (' + posRate + '%), ' + neg + ' were negative and ' + pend + ' are pending. ' +
+    retests + ' follow-up retest(s) were run. ' + (openPos > 0 ? openPos + ' positive case(s) remain open. ' : 'All positive cases have been managed through their retest cycle. ') +
+    (worstB && worstB.pos > 0 ? 'Building ' + worstB.p + ' carries the highest positive rate (' + n1(worstB.rate) + '%). ' : '') +
+    (worstPat && worstPat.n > 0 ? patNames[worstPat.k] + ' is the most frequently detected organism (' + worstPat.n + '). ' : '') + 'Program status: ' + assess + '. ' + trendTxt;
+  const sumLines = doc.splitTextToSize(safe(summary), W - M * 2 - 6), sumH = sumLines.length * 4.2 + 6;
+  doc.setFillColor(...SOFT); doc.roundedRect(M, y, W - M * 2, sumH, 2, 2, 'F');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(sumLines, M + 3, y + 5);
+  y += sumH + 6;
+
+  // ── KPI tiles (same five as the screen + open cases) ────────────────
+  const kpis = [['Total tests', String(total), 'Recorded samples', INK], ['Positive rate', posRate + '%', pos + ' positive', RED], ['Negative rate', n1(D.negativeRate) + '%', neg + ' negative', G],
+    ['Retests', String(retests), 'Follow-up tests', [140, 116, 59]], ['Resolved cases', String(D.resolvedCount), 'Retests OK', G], ['Open cases', String(openPos), 'Need follow-up', openPos ? RED : G]];
+  const kw = (W - M * 2 - 5 * 3) / 6, kh = 19;
+  ensure(kh + 4);
+  kpis.forEach((k, i) => {
+    const x = M + i * (kw + 3);
+    doc.setDrawColor(...LINE); doc.setFillColor(255, 255, 255); doc.setLineWidth(0.25); doc.roundedRect(x, y, kw, kh, 2, 2, 'FD');
+    txt(k[0].toUpperCase(), x + 3, y + 5, { size: 5.8, bold: true, color: MUT });
+    txt(k[1], x + 3, y + 12.5, { size: 14, bold: true, color: k[3] });
+    txt(k[2], x + 3, y + 16.5, { size: 6, color: MUT });
+  });
+  y += kh + 8;
+
+  // ── Charts (same set as the screen) ─────────────────────────────────
+  secTitle('Visual Analysis');
+  const cw = (W - M * 2 - 6) / 2, ch = 62;
+  const pairs = [
+    [c => { card(c.x, c.y, cw, ch, 'Tests by building', total + ' tests');
+            hbars(c.x + 4, c.y + 11, cw - 8, 36, D.buildings.map(b => ({ label: b.id, value: b.total, positive: b.positive })));
+            legend(c.x + 4, c.y + ch - 5, [['All tests', SERIES], ['Positive', POS]]); },
+     c => { card(c.x, c.y, cw, ch, 'Result distribution', pend + ' pending');
+            donut(c.x + 22, c.y + 34, 15, 9.5, [{ value: neg, color: SERIES }, { value: pos, color: POS }, { value: pend, color: PEND }]);
+            txt(String(total), c.x + 22, c.y + 35, { size: 11, bold: true, align: 'center' }); txt('tests', c.x + 22, c.y + 39, { size: 6, color: MUT, align: 'center' });
+            [['Negative', neg, SERIES], ['Positive', pos, POS], ['Pending', pend, PEND]].forEach((r, i) => {
+              const yy = c.y + 22 + i * 9; doc.setFillColor(...r[2]); doc.roundedRect(c.x + 44, yy - 2.4, 3, 3, 0.6, 0.6, 'F');
+              txt(r[0], c.x + 49, yy, { size: 7.5 }); txt((total ? n1(r[1] / total * 100) : '0.0') + '% of all tests', c.x + 49, yy + 3.4, { size: 6, color: MUT });
+              txt(String(r[1]), c.x + cw - 4, yy, { size: 8, bold: true, align: 'right' }); }); }],
+    [c => { card(c.x, c.y, cw, ch, 'Positive rate by zone', 'scale 0-10%');
+            hbars(c.x + 4, c.y + 11, cw - 8, 36, D.zones.map(z => { const r = z.total ? z.positive / z.total * 100 : 0;
+              return { label: z.name, value: Math.min(10, r), right: z.total ? n1(r) + '% (' + z.total + ')' : '-', color: r > 0 ? POS : SERIES }; }).map(r => Object.assign(r, { value: r.value })));
+            txt('Bar length = positive rate (capped at 10%); tests in brackets', c.x + 4, c.y + ch - 5, { size: 6, color: MUT }); },
+     c => { card(c.x, c.y, cw, ch, 'Pathogens', 'tested vs positive');
+            hbars(c.x + 4, c.y + 11, cw - 8, 36, D.pathogens.map(p => ({ label: p.name, value: p.tested, positive: p.positive, right: p.tested + (p.positive ? ' (' + p.positive + '+)' : '') })));
+            legend(c.x + 4, c.y + ch - 5, [['Tested', SERIES], ['Positive', POS]]); }],
+    [c => { card(c.x, c.y, cw, ch, 'Weekly trend', D.weeks.length + ' week' + (D.weeks.length === 1 ? '' : 's'));
+            trendChart(c.x + 4, c.y + 10, cw - 8, 44, D.weeks.slice(-12));
+            legend(c.x + 4, c.y + ch - 3, [['Tests', SERIES], ['Positive', POS]]); },
+     c => { card(c.x, c.y, cw, ch, 'Retests by building', D.resolvedCount + ' resolved - ' + retests + ' retests');
+            hbars(c.x + 4, c.y + 11, cw - 8, 36, D.buildings.map(b => ({ label: b.id, value: b.retests, color: PEND })));
+            legend(c.x + 4, c.y + ch - 5, [['Retests', PEND]]); }]
+  ];
+  pairs.forEach(row => { ensure(ch + 4); row.forEach((draw, j) => draw({ x: M + j * (cw + 6), y })); y += ch + 5; });
+
+  // ── Key findings ────────────────────────────────────────────────────
+  y += 2; secTitle('Key Findings');
+  bullet('Positive rate for the period: ' + posRate + '% (' + pos + ' of ' + total + ' routine tests). Assessed as ' + assess.toLowerCase() + '.');
+  if (worstB && worstB.pos > 0) bullet('Most affected building: ' + worstB.p + ' with ' + worstB.pos + ' positive(s), a ' + n1(worstB.rate) + '% positive rate.');
+  if (worstPat && worstPat.n > 0) bullet('Most frequent organism: ' + patNames[worstPat.k] + ' with ' + worstPat.n + ' positive detection(s).');
+  if (worstZone && worstZone.pos > 0) bullet('Highest-risk zone: Zone ' + worstZone.z + ' at ' + n1(worstZone.rate) + '% positive.');
+  if (topPt) bullet('Top recurring point: Sample #' + topPt.sample + ' (' + topPt.planta + ' - ' + (topPt.area || '') + ') with ' + topPt.pos + ' positive(s) out of ' + topPt.total + ' tests.');
+  bullet('Retest activity: ' + retests + ' retest(s) in the period; ' + openPos + ' positive case(s) still open.');
+
+  // ── Recommendations ─────────────────────────────────────────────────
+  secTitle('Recommendations');
+  const recs = [];
+  if (openPos > 0) recs.push('Prioritize closing the ' + openPos + ' open positive case(s): schedule and complete their retest cycles promptly.');
+  if (topPt && topPt.pos >= 2) recs.push('Root-cause Sample #' + topPt.sample + ' at ' + topPt.planta + ' (' + (topPt.area || '') + ' / ' + (topPt.location || '') + ') - a recurring positive that warrants vector sampling, a deep clean and an equipment review.');
+  if (worstB && worstB.rate >= 8) recs.push('Reinforce sanitation and verification in Building ' + worstB.p + ', which shows the highest positive rate.');
+  if (worstPat && worstPat.n >= 2) recs.push('Target ' + patNames[worstPat.k] + ' controls (the leading organism): review harborage points, drains and cleaning chemistry.');
+  if (worstZone && worstZone.rate >= 8) recs.push('Focus corrective cleaning on Zone ' + worstZone.z + ' surfaces, currently the highest-risk zone.');
+  if (trend === 'worsening') recs.push('The positive trend is rising - investigate what changed (equipment, staffing, cleaning schedule) and act before it escalates.');
+  if (!recs.length) recs.push('No critical issues detected this period. Maintain current sanitation and verification practices and keep monitoring.');
   recs.forEach(bullet);
 
-  // ── Detail tables ────────────────────────────────────────────────────
-  const tblHead={fillColor:[26,35,50],textColor:[255,255,255],fontStyle:'bold',fontSize:8.5,lineColor:[200,200,200],lineWidth:0.1};
-  const tblStyle={fontSize:8.5,cellPadding:2.6,textColor:[30,30,30],lineColor:[210,210,210],lineWidth:0.1,halign:'center'};
-
-  y+=2; secTitle('Detail — Tests by Building');
+  // ── Detail tables ───────────────────────────────────────────────────
+  const tblHead = { fillColor: [234, 241, 228], textColor: INK, fontStyle: 'bold', fontSize: 8.5, lineColor: LINE, lineWidth: 0.2 };
+  const tblStyle = { fontSize: 8.5, cellPadding: 2.4, textColor: INK, lineColor: LINE, lineWidth: 0.2, halign: 'center' };
+  y += 2; secTitle('Detail - Tests by Building');
   doc.autoTable({
-    head:[['Building','Total','Positives','Negatives','Pending','Retests','Positive Rate']],
-    body:[...bStats.map(b=>[b.p,b.total,b.pos,hist.filter(h=>h.planta===b.p&&h.resultado==='Negative').length,hist.filter(h=>h.planta===b.p&&h.resultado==='Pending').length,hist.filter(h=>h.planta===b.p&&h.retestNum).length,b.total>0?b.rate.toFixed(1)+'%':'0%']),
-      ['TOTAL',total,pos,neg,pend,retests,total>0?posRate+'%':'0%']],
-    startY:y, margin:{left:M,right:M}, styles:tblStyle, headStyles:tblHead,
-    columnStyles:{0:{halign:'left',fontStyle:'bold'}},
-    didParseCell:d=>{ if(d.row.raw&&d.row.raw[0]==='TOTAL'){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[240,242,245];}
-      if((d.column.index===2||d.column.index===6)&&parseFloat(d.cell.raw)>0)d.cell.styles.textColor=[192,57,43]; }
+    head: [['Building', 'Routine tests', 'Positives', 'Negatives', 'Pending', 'Retests', 'Positive rate']],
+    body: [...bStats.map(b => [b.p, b.total, b.pos, base.filter(h => h.planta === b.p && h.resultado === 'Negative').length, base.filter(h => h.planta === b.p && h.resultado === 'Pending').length, b.retests, b.total ? n1(b.rate) + '%' : '0%']),
+      ['TOTAL', total, pos, neg, pend, retests, total ? posRate + '%' : '0%']],
+    startY: y, margin: { left: M, right: M }, styles: tblStyle, headStyles: tblHead, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+    didParseCell: d => { if (d.row.raw && d.row.raw[0] === 'TOTAL') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = SOFT; }
+      if ((d.column.index === 2 || d.column.index === 6) && d.section === 'body' && parseFloat(d.cell.raw) > 0) d.cell.styles.textColor = RED; }
   });
-  y=doc.lastAutoTable.finalY+7;
-
-  secTitle('Detail — Positives by Building & Pathogen');
+  y = doc.lastAutoTable.finalY + 7;
+  ensure(30); secTitle('Detail - Positives by Building & Pathogen');
   doc.autoTable({
-    head:[['Building','E. Coli +','Listeria +','Salmonella +','S. Aureus +','Total Pos.','Positive Rate']],
-    body:bStats.map(b=>{const ph=hist.filter(h=>h.planta===b.p&&h.resultado==='Positive');return [b.p,...patKeys.map(k=>ph.filter(h=>positivePathogens(h).includes(k)).length),b.pos,b.total>0?b.rate.toFixed(1)+'%':'0%'];}),
-    startY:y, margin:{left:M,right:M}, styles:tblStyle, headStyles:tblHead,
-    columnStyles:{0:{halign:'left',fontStyle:'bold'}},
-    didParseCell:d=>{ if(d.column.index>0&&d.column.index<6&&parseFloat(d.cell.raw)>0){d.cell.styles.textColor=[192,57,43];d.cell.styles.fontStyle='bold';} }
+    head: [['Building', 'E. coli +', 'Listeria +', 'Salmonella +', 'S. aureus +', 'Total pos.', 'Positive rate']],
+    body: bStats.map(b => { const ph = base.filter(h => h.planta === b.p && h.resultado === 'Positive'); return [b.p, ...['ecoli', 'listeria', 'salmonella', 'saureus'].map(k => ph.filter(h => positivePathogens(h).includes(k)).length), b.pos, b.total ? n1(b.rate) + '%' : '0%']; }),
+    startY: y, margin: { left: M, right: M }, styles: tblStyle, headStyles: tblHead, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+    didParseCell: d => { if (d.section === 'body' && d.column.index > 0 && d.column.index < 6 && parseFloat(d.cell.raw) > 0) { d.cell.styles.textColor = RED; d.cell.styles.fontStyle = 'bold'; } }
   });
-  y=doc.lastAutoTable.finalY+7;
-
-  secTitle('Detail — Top Points with Most Positives');
+  y = doc.lastAutoTable.finalY + 7;
+  ensure(30); secTitle('Detail - Points with Positives');
   doc.autoTable({
-    head:[['#','Sample','Bldg','Zone','Area','Location','Tests','Pos.','Rate']],
-    body: topPts.length>0? topPts.slice(0,12).map((s,i)=>[i+1,s.sample,s.planta,s.zone,(s.area||'').length>20?(s.area).slice(0,20)+'…':s.area,(s.location||'').length>28?(s.location).slice(0,28)+'…':s.location,s.total,s.pos,s.total>0?(s.pos/s.total*100).toFixed(0)+'%':'0%'])
-      : [['—','—','—','—','No positives recorded','—','—','—','—']],
-    startY:y, margin:{left:M,right:M}, styles:{...tblStyle,fontSize:8}, headStyles:{...tblHead,fontSize:8},
-    columnStyles:{0:{cellWidth:8},1:{cellWidth:16},2:{cellWidth:16},3:{cellWidth:11},4:{halign:'left'},5:{halign:'left'},6:{cellWidth:13},7:{cellWidth:13,fontStyle:'bold'},8:{cellWidth:13}},
-    didParseCell:d=>{ if(d.column.index===7&&parseFloat(d.cell.raw)>0)d.cell.styles.textColor=[192,57,43];
-      if(d.column.index===8&&parseFloat(d.cell.raw)>=50){d.cell.styles.textColor=[192,57,43];d.cell.styles.fontStyle='bold';} }
+    head: [['#', 'Sample', 'Bldg', 'Zone', 'Area', 'Location', 'Tests', 'Pos.', 'Rate']],
+    body: topPts.length ? topPts.slice(0, 15).map((s, i) => [i + 1, s.sample, s.planta, s.zone, s.area || '', s.location || '', s.total, s.pos, s.total ? (s.pos / s.total * 100).toFixed(0) + '%' : '0%'])
+      : [['-', '-', '-', '-', 'No positives recorded', '-', '-', '-', '-']],
+    startY: y, margin: { left: M, right: M }, styles: Object.assign({}, tblStyle, { fontSize: 8 }), headStyles: Object.assign({}, tblHead, { fontSize: 8 }),
+    columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 14 }, 4: { halign: 'left' }, 5: { halign: 'left' }, 6: { cellWidth: 13 }, 7: { cellWidth: 13, fontStyle: 'bold' }, 8: { cellWidth: 13 } },
+    didParseCell: d => { if (d.section === 'body' && d.column.index === 7 && parseFloat(d.cell.raw) > 0) d.cell.styles.textColor = RED; }
   });
 
-  // ── Footer + page numbers on every page ──────────────────────────────
-  const pages=doc.getNumberOfPages();
-  for(let p=1;p<=pages;p++){
+  // ── Footer on every page ────────────────────────────────────────────
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
-    doc.setDrawColor(192,57,43); doc.setLineWidth(0.4); doc.line(M,H-11,W-M,H-11);
-    doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
-    doc.text('Caputo Foods — Environmental Monitoring Program   |   Confidential',M,H-7);
-    doc.text('Page '+p+' of '+pages,W-M,H-7,{align:'right'});
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, PH - 11, W - M, PH - 11);
+    txt('Caputo Foods - Environmental Monitoring Program - ' + range.label + ' - Confidential', M, PH - 7, { size: 7, color: MUT });
+    txt('Page ' + p + ' of ' + pages, W - M, PH - 7, { size: 7, color: MUT, align: 'right' });
   }
 
-  const fname = opts.fileName || 'Caputo_Environmental_Report_'+todayLocal();
-  if(opts.returnDoc) return { doc: doc, fname: fname };
-  doc.save(fname+'.pdf');
-  toast('✅ Professional report exported','success');
+  const tag = range.from && range.to ? (range.from === range.to ? range.from : range.from + '_to_' + range.to) : todayLocal();
+  const fname = opts.fileName || 'Environmental Report ' + tag;
+  if (opts.returnDoc) return { doc: doc, fname: fname };
+  doc.save(fname + '.pdf');
+  toast('Report exported - ' + range.label, 'success');
 }
 
 // ═══════════════════════════════════════════════
