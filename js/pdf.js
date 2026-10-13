@@ -267,7 +267,7 @@ function exportHistoryPDF() {
   let ly = doc.lastAutoTable.finalY + 5;
   if (ly > PH - 14) { doc.addPage(); ly = 18; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
-  doc.text('E. coli / S. aureus: count in CFU/sponge (<10 = none detected). Listeria / Salmonella: Negative, Presumptive or Positive. Dot = tested, result pending.', M, ly);
+  doc.text('E. coli / S. aureus: count in CFU/sponge (<10 = none detected). Listeria / Salmonella: Negative or Positive. Presumptive = awaiting the lab confirmation. Dot = tested, result pending.', M, ly);
 
   // ── Footer on every page ──
   const pages = doc.getNumberOfPages();

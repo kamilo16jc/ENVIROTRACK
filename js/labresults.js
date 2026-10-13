@@ -6,6 +6,8 @@
 //   • E. coli, S. aureus → Petrifilm COUNTS: "<10 CFU" when nothing
 //     grows (below the detection limit), otherwise a count. Any count
 //     at or above the limit is a positive per SOP 2.4.H.
+//   • Any test can be marked Presumptive (lab still confirming): the
+//     record stays Pending and monitored, no retests yet.
 // The per-test results are written as one readable line at the top of
 // the record's lab notes ("Lab results: …"), which is synced to the
 // existing SharePoint Records list — no new columns — and parsed back.
@@ -37,8 +39,9 @@ function labIsPresumptive(rec) {
 // Readable value of one result
 function labResultText(k, res) {
   const T = LAB_TESTS[k]; if (!res || !res.r) return '—';
+  if (res.r === 'Presumptive') return 'Presumptive positive';
   if (T.type === 'count') return res.r === 'Negative' ? '<' + T.lod + ' ' + T.unit : (res.v || '?') + ' ' + T.unit;
-  return res.r === 'Presumptive' ? 'Presumptive positive' : res.r;
+  return res.r;
 }
 
 function labDefaultNegative(rec) {
@@ -62,7 +65,8 @@ function labParse(labNotes) {
     const name = part.slice(0, i).trim(), val = part.slice(i + 2).trim();
     const k = LAB_ORDER.find(x => LAB_TESTS[x].label === name); if (!k) return;
     if (LAB_TESTS[k].type === 'count') {
-      if (val.startsWith('<')) results[k] = { r: 'Negative' };
+      if (/^presumptive/i.test(val)) results[k] = { r: 'Presumptive' };
+      else if (val.startsWith('<')) results[k] = { r: 'Negative' };
       else results[k] = { r: 'Positive', v: val.replace(/\s*CFU.*$/i, '').trim() };
     } else {
       results[k] = { r: /^presumptive/i.test(val) ? 'Presumptive' : /^positive/i.test(val) ? 'Positive' : 'Negative' };
@@ -125,7 +129,7 @@ function labModalRows(rec) {
     const T = LAB_TESTS[k];
     const opts = T.type === 'qual'
       ? [['Negative', 'Negative'], ['Presumptive', 'Presumptive'], ['Positive', 'Positive']]
-      : [['Negative', '<' + T.lod + ' CFU'], ['Positive', 'Count']];
+      : [['Negative', '<' + T.lod + ' CFU'], ['Presumptive', 'Presumptive'], ['Positive', 'Count']];
     return '<div class="lr-row" data-k="' + k + '">' +
       '<div class="lr-name">' + esc(T.label) + '<span>' + esc(T.method) + (T.type === 'count' ? ' · ' + esc(T.unit) : '') + '</span></div>' +
       '<div class="lr-seg">' + opts.map(([v, l]) => '<button type="button" data-v="' + v + '" onclick="labPick(\'' + k + '\',\'' + v + '\')">' + esc(l) + '</button>').join('') + '</div>' +
@@ -136,7 +140,7 @@ function labModalRows(rec) {
 
 function labPick(k, v) {
   LABRES[k] = Object.assign({}, LABRES[k], { r: v });
-  if (LAB_TESTS[k].type === 'count' && v === 'Negative') delete LABRES[k].v;
+  if (LAB_TESTS[k].type === 'count' && v !== 'Positive') delete LABRES[k].v;
   labRefresh();
   if (LAB_TESTS[k].type === 'count' && v === 'Positive') { const i = document.getElementById('lrc-' + k); if (i) i.focus(); }
 }
