@@ -151,7 +151,8 @@ function sitesInFollowUp(planta) {
   hist.forEach(h => {
     if (h.resultado !== 'Positive' || !h.sample) return;
     const kids = hist.filter(r => r.originalId === h.id && r.retestNum && !isVectorRec(r));
-    const open = kids.length ? kids.some(r => r.resultado === 'Pending') : (!rids.has(h.id) && !siteRetestedAfter(h, hist));
+    const start = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
+    const open = kids.length ? kids.some(r => r.resultado === 'Pending') : (h.fecha >= start && !rids.has(h.id) && !siteRetestedAfter(h, hist));
     if (open) out.add(String(h.sample));
   });
   hist.forEach(h => { if (h.retestNum && !isVectorRec(h) && h.resultado === 'Pending' && h.sample) out.add(String(h.sample)); });

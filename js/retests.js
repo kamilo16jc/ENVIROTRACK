@@ -171,11 +171,11 @@ function loadRetests() {
   // Original positives without retests generated yet
   // Any positive needs its own round of 3 retests: the original test, a
   // positive VECTOR site (a new positive location) and a positive retest
-  // (escalation). Retests/vectors only count from the SQF program start so
-  // legacy data from before go-live does not resurface.
+  // (escalation). Only from the SQF program start, so history from before
+  // go-live (incl. imported lab reports) never resurfaces as an open case.
   const progStart = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
   const pos = hist.filter(h =>
-    h.resultado === 'Positive' && (!h.retestNum || h.fecha >= progStart) &&
+    h.resultado === 'Positive' && h.fecha >= progStart &&
     !rids.has(h.id) && !rootsWithRetests.has(h.id) && !siteRetestedAfter(h, hist)
   );
 

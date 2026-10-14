@@ -21,7 +21,7 @@ function buildAlerts() {
   // 1) Positives whose 3 retests are not scheduled yet
   const rids = new Set(GRV().map(r => r.originalId));
   const rootsWithRetests = new Set(hist.filter(h => h.retestNum && h.originalId && !isVectorRec(h)).map(h => h.originalId));
-  const needRetests = hist.filter(h => h.resultado === 'Positive' && (!h.retestNum || h.fecha >= start) && !rids.has(h.id) && !rootsWithRetests.has(h.id) && !siteRetestedAfter(h, hist));
+  const needRetests = hist.filter(h => h.resultado === 'Positive' && h.fecha >= start && !rids.has(h.id) && !rootsWithRetests.has(h.id) && !siteRetestedAfter(h, hist));
   if (needRetests.length) add('red', needRetests.length + ' positive' + (needRetests.length === 1 ? '' : 's') + ' without retests scheduled',
     needRetests.slice(0, 3).map(h => '#' + h.sample + ' ' + h.planta).join(', '), 'retests');
 

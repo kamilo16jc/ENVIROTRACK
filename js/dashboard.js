@@ -53,10 +53,10 @@ function refreshDashboard() {
   // NOT active — that's what kept the migrated 206 out. De-duped by sample+plant.
   const rootsWithRetests=new Set(hist.filter(h=>h.retestNum&&h.originalId&&!isVectorRec(h)).map(h=>h.originalId));
   const cases=new Map();
-  // same rule as the Retests view: originals, positive vector sites and escalated
-  // retests (the last two only from the SQF program start — keeps migrated data out)
+  // same rule as the Retests view: positives from the SQF program start only
+  // (keeps migrated / imported history out)
   const progStart=typeof SQF_PROGRAM_START!=='undefined'?SQF_PROGRAM_START:'';
-  hist.filter(h=>h.resultado==='Positive'&&(!h.retestNum||h.fecha>=progStart)&&!rids.has(h.id)&&!rootsWithRetests.has(h.id)&&!siteRetestedAfter(h,hist))
+  hist.filter(h=>h.resultado==='Positive'&&h.fecha>=progStart&&!rids.has(h.id)&&!rootsWithRetests.has(h.id)&&!siteRetestedAfter(h,hist))
       .forEach(h=>cases.set(h.planta+'|'+h.sample,{sample:h.sample,planta:h.planta,fecha:h.fecha}));
   hist.filter(h=>h.retestNum&&!isVectorRec(h)&&h.resultado==='Pending')
       .forEach(h=>{const k=h.planta+'|'+h.sample; if(!cases.has(k)) cases.set(k,{sample:h.sample,planta:h.planta,fecha:h.fecha});});
