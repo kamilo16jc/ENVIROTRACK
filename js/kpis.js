@@ -7,7 +7,7 @@ const KG_NS = 'http://www.w3.org/2000/svg';
 
 // (Re)build the four donut cards from live counts. Safe to call on every
 // dashboard refresh — it clears and rebuilds the arcs and rebinds handlers.
-function kpiRender(total, neg, pos, pend) {
+function kpiRender(total, neg, pos, pend, totalNote) {
   const root = document.getElementById('enviro-dashboard-kpis');
   if (!root) return;
   total = total || 0;
@@ -54,7 +54,7 @@ function kpiRender(total, neg, pos, pend) {
     // Resting state text
     if (kind === 'total') {
       percentEl.textContent = '100%';
-      detail.textContent = 'All results';
+      detail.textContent = totalNote || 'All results';
     } else {
       percentEl.textContent = (data[0] ? data[0].percent : 0).toFixed(1) + '%';
       detail.textContent = 'of all tests';
@@ -68,7 +68,7 @@ function kpiRender(total, neg, pos, pend) {
       if (kind === 'total') {
         const c = data[selected] || data[0];
         percentEl.textContent = active && c ? c.percent.toFixed(1) + '%' : '100%';
-        detail.textContent = active && c ? c.label + ' · ' + c.count : 'All results';
+        detail.textContent = active && c ? c.label + ' · ' + c.count : (totalNote || 'All results');
       } else {
         detail.textContent = active ? data[0].count + ' of ' + total + ' tests' : 'of all tests';
       }

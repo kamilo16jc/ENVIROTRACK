@@ -4,15 +4,17 @@
 function refreshDashboard() {
   if (typeof renderDashboardAlerts === 'function') { try { renderDashboardAlerts(); } catch (e) { console.warn('[alerts]', e); } }
   const hist=GH();
-  const _tot=hist.length;
-  const _neg=hist.filter(h=>h.resultado==='Negative').length;
-  const _pos=hist.filter(h=>h.resultado==='Positive').length;
-  const _pend=hist.filter(h=>h.resultado==='Pending').length;
+  // Same count as Reports: routine tests; retests and vector samples are follow-up, shown apart.
+  const routine=hist.filter(h=>!h.retestNum && !h.isRetest), _fu=hist.length-routine.length;
+  const _tot=routine.length;
+  const _neg=routine.filter(h=>h.resultado==='Negative').length;
+  const _pos=routine.filter(h=>h.resultado==='Positive').length;
+  const _pend=routine.filter(h=>h.resultado==='Pending').length;
   document.getElementById('st0').textContent=_tot;
   document.getElementById('st1').textContent=_neg;
   document.getElementById('st2').textContent=_pos;
   document.getElementById('st3').textContent=_pend;
-  if(typeof kpiRender==='function') kpiRender(_tot,_neg,_pos,_pend);
+  if(typeof kpiRender==='function') kpiRender(_tot,_neg,_pos,_pend,_fu?'+ '+_fu+' retest'+(_fu===1?'':'s'):'');
   // Recent weeks — DERIVED from the records (grouped by plant+date) so it always
   // reflects SharePoint data. Retests are excluded (they aren't sampling weeks).
   const wb=document.getElementById('recentWeeks');
