@@ -170,8 +170,42 @@ async function mirror(col, id) {
 
 const trig = col => onDocumentWritten({ document: col + "/{id}", region: REGION, timeoutSeconds: 120 }, ev => {
   if (!ev.data || !ev.data.after || !ev.data.after.exists) return null;
+  if (ev.data.after.data()._spDefer === true) return null;   // bulk history import → copied later by spBackfill
   return mirror(col, ev.params.id);
 });
+// ── Backfill: history imported in bulk (_spDefer: true) goes to SharePoint a
+// few documents at a time, so the Power Automate flows are never flooded.
+// Each run copies up to BACKFILL_BATCH documents one by one, clears the flag
+// on success (that write is then a no-op for the mirror) and stops early when
+// the flows start failing — the next run retries.
+const BACKFILL_BATCH = 25;
+async function spBackfill() {
+  const out = { sent: 0, failed: 0, left: 0 };
+  let budget = BACKFILL_BATCH, fails = 0;
+  for (const col of ["resolved", "records"]) {
+    if (budget <= 0 || fails >= 2) break;
+    const snap = await db().collection(col).where("_spDefer", "==", true).limit(budget).get();
+    for (const d of snap.docs) {
+      if (fails >= 2) break;
+      await mirror(col, d.id);
+      const m = await db().collection("spMirror").doc(col + "__" + d.id).get();
+      if (m.exists && m.data().created && m.data().ok) {
+        await d.ref.update({ _spDefer: FieldValue.delete() });
+        out.sent++; budget--; fails = 0;
+      } else { out.failed++; fails++; }
+    }
+  }
+  for (const col of ["resolved", "records"]) {
+    out.left += (await db().collection(col).where("_spDefer", "==", true).count().get()).data().count;
+  }
+  await db().collection("spMirror").doc("_backfill").set({ at: nowIso(), last: out }, { merge: true });
+  return out;
+}
+exports.spBackfill = onSchedule({ schedule: "every 10 minutes", region: REGION, timeoutSeconds: 540 }, async () => {
+  const r = await spBackfill();
+  if (r.sent || r.failed) console.log("[spBackfill]", JSON.stringify(r));
+});
+
 exports.spMirrorRecords = trig("records");
 exports.spMirrorResolved = trig("resolved");
 exports.spMirrorPoints = trig("masterPoints");
