@@ -85,7 +85,7 @@ const _pcFill = (txt, v) => String(txt || '').replace(/\{\{(\w+)\}\}/g, (m, k) =
 function renderCapaLog() {
   const host = document.getElementById('capaLogBody'); if (!host) return;
   if (!Object.keys(PCAPA_TEMPLATES).length) pcLoadTemplates();
-  const badge = st => '<span class="badge ' + (st === 'Closed' ? 'badge-green' : st === 'Open' || st === 'Not effective' ? 'badge-red' : 'badge-gray') + '">' + esc(st) + '</span>';
+  const badge = st => '<span class="badge ' + (st === 'Closed' ? 'badge-green' : st === 'Open' || st === 'Not effective' ? 'badge-red' : st === 'Awaiting approval' ? 'badge-yellow' : 'badge-gray') + '">' + esc(st) + '</span>';
 
   const prog = getProgCapas().slice().sort((a, b) => b.no.localeCompare(a.no));
   const progRows = prog.map(c => {
@@ -98,11 +98,12 @@ function renderCapaLog() {
   const pos = GH().filter(h => h.resultado === 'Positive' && ((!h.isRetest && !String(h.retestNum || '')) || isVectorRec(h))).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const posRows = pos.map(p => {
     const c = typeof getCapa === 'function' ? getCapa(p.id) : null;
-    const eff = typeof capaEffectiveness === 'function' ? capaEffectiveness(p.id) : { ok: false, text: '—' };
-    const st = !capaComplete(c) ? 'Open' : (eff.ok && c.verifiedBy) ? 'Closed' : 'Verification pending';
+    const eff = typeof capaEventEffect === 'function' ? capaEventEffect(capaPrimaryId(p.id)) : { ok: false, text: '—' };
+    const st = typeof capaStatus === 'function' ? capaStatus(p.id) : (!capaComplete(c) ? 'Open' : 'Verification pending');
+    const lk = getCapaAll()[p.id], shared = lk && lk.linkedTo ? GH().find(h => h.id === lk.linkedTo) : null;
     return '<tr class="cl-row" onclick="openCapaModal(' + p.id + ')"><td class="cl-no">' + (p.sample ? '#' + esc(p.sample) : esc(p.location || 'Site')) + ' · ' + esc(p.planta) + (isVectorRec(p) ? '<div class="cl-sub">' + esc(p.retestNum) + '</div>' : '') + '</td><td>' + esc(_pcFmt(p.fecha)) + '</td>' +
       '<td><div style="font-weight:600">' + esc(_apPath(p)) + ' positive</div><div class="cl-sub">Zone ' + esc(p.zone || '—') + ' · ' + esc(p.area || '') + (p.location ? ' — ' + esc(p.location) : '') + '</div></td>' +
-      '<td style="font-size:12px">' + esc(eff.text) + '</td><td>' + badge(st) + '</td></tr>';
+      '<td style="font-size:12px">' + esc(eff.text) + (shared ? '<div class="cl-sub">Same CAPA as #' + esc(shared.sample) + '</div>' : '') + '</td><td>' + badge(st) + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="cl-empty">No positive results</td></tr>';
 
   const head = '<thead><tr><th style="width:150px">No.</th><th style="width:110px">Opened</th><th>Subject</th><th style="width:260px">Effectiveness</th><th style="width:140px">Status</th></tr></thead>';

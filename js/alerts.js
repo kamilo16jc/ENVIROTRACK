@@ -36,10 +36,21 @@ function buildAlerts() {
     pres.slice(0, 3).map(h => '#' + h.sample + ' ' + h.planta + (h.failedPathogensLabel ? ' · ' + h.failedPathogensLabel.replace(/ \(presumptive\)/g, '') : '')).join(', '), 'presumptive');
 
   // 4) Positives (from program start) without a complete CAPA
+  // One CAPA per event: count the CAPAs (primary ids), not every positive they cover.
   if (typeof getCapa === 'function') {
-    const noCapa = hist.filter(h => h.resultado === 'Positive' && h.fecha >= start && ((!h.retestNum && !h.isRetest) || isVectorRec(h)) && !capaComplete(getCapa(h.id)));
-    if (noCapa.length) add('red', noCapa.length + ' positive' + (noCapa.length === 1 ? '' : 's') + ' without a complete CAPA (2.5.C.2)',
-      noCapa.slice(0, 3).map(h => '#' + h.sample + ' ' + h.planta + ' · ' + _alFmt(h.fecha)).join(', '), 'capa');
+    const pos = hist.filter(h => h.resultado === 'Positive' && h.fecha >= start && ((!h.retestNum && !h.isRetest) || isVectorRec(h)));
+    const pids = [...new Set(pos.map(h => capaPrimaryId(h.id)))];
+    const site = id => { const h = hist.find(x => x.id === id) || {}; return '#' + h.sample + ' ' + h.planta; };
+    const undoc = pids.filter(id => !capaComplete(getCapa(id)));
+    const late = undoc.filter(id => { const d = capaDue(id); return d && d <= today; });
+    const soon = undoc.filter(id => !late.includes(id));
+    if (late.length) add('red', late.length + ' CAPA' + (late.length === 1 ? '' : 's') + ' overdue — retest #1 already due (2.5.C.2)',
+      late.slice(0, 3).map(site).join(', '), 'capa');
+    if (soon.length) add('amber', soon.length + ' CAPA' + (soon.length === 1 ? '' : 's') + ' to document before retest #1 (2.5.C.2)',
+      soon.slice(0, 3).map(id => site(id) + (capaDue(id) ? ' · due ' + _alFmt(capaDue(id)) : '')).join(', '), 'capa');
+    const appr = pids.filter(id => capaStatus(id) === 'Awaiting approval');
+    if (appr.length) add('amber', appr.length + ' CAPA' + (appr.length === 1 ? '' : 's') + ' verified — awaiting approval',
+      appr.slice(0, 3).map(site).join(', '), 'capa');
   }
 
   // 5) Program deviation CAPAs not closed
