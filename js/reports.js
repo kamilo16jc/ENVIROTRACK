@@ -51,6 +51,11 @@ function positivePathogens(h) {
   if (!h || h.resultado !== 'Positive') return [];
   const f = Array.isArray(h.failedPathogens) ? h.failedPathogens.filter(Boolean) : [];
   if (f.length) return f;
+  // No failedPathogens, but the lab results are on the record (e.g. imported lab
+  // reports on older records): the tests that came back Positive.
+  const lab = (typeof getLabResults === 'function') ? getLabResults(h) : null;
+  const fromLab = lab ? ['ecoli','listeria','salmonella','saureus'].filter(k => lab[k] && lab[k].r === 'Positive') : [];
+  if (fromLab.length) return fromLab;
   // No failedPathogens recorded (legacy record): only infer when a SINGLE
   // pathogen was tested — then it must be the one that failed. If several were
   // tested we cannot know which, so attribute to none rather than invent
