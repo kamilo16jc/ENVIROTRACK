@@ -207,9 +207,11 @@ function exportHistoryPDF() {
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK); doc.text(v, x + kw, 31);
     x += kw + doc.getTextWidth(v) + 9;
   });
-  const cnt = k => hist.filter(h => h.resultado === k).length;
-  const stats = [['Records', hist.length], ['Negative', cnt('Negative')], ['Positive', cnt('Positive')], ['Pending', cnt('Pending')]];
-  const bw = 26, bx0 = W - M - stats.length * (bw + 3) + 3;
+  // Same split as the Dashboard and Reports: routine tests, retests apart.
+  const routine = hist.filter(h => !h.retestNum && !h.isRetest);
+  const cnt = k => routine.filter(h => h.resultado === k).length;
+  const stats = [['Tests', routine.length], ['Retests', hist.length - routine.length], ['Negative', cnt('Negative')], ['Positive', cnt('Positive')], ['Pending', cnt('Pending')]];
+  const bw = 23, bx0 = W - M - stats.length * (bw + 3) + 3;
   stats.forEach(([k, v], i) => {
     const bx = bx0 + i * (bw + 3);
     doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.rect(bx, 28, bw, 11);

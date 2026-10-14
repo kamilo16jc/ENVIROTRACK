@@ -15,7 +15,9 @@ function searchHistory() {
   if(result==='Presumptive') hist = hist.filter(labIsPresumptive);
   else if(result) hist = hist.filter(h=>h.resultado===result);
   hist.sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.id-a.id);
-  document.getElementById('resultCount').textContent = hist.length;
+  // Same split as the Dashboard and Reports: routine tests + follow-up retests / vector samples.
+  const _fu = hist.filter(h => h.retestNum || h.isRetest).length;
+  document.getElementById('resultCount').textContent = (hist.length - _fu) + ' tests' + (_fu ? ' + ' + _fu + ' retest' + (_fu === 1 ? '' : 's') : '');
   const canEdit = (typeof canEditRecords === 'function') && canEditRecords();
   const tbody = document.getElementById('historyTable');
   clearHistSelection();
