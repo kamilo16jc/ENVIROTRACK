@@ -70,7 +70,7 @@ Object.assign(STORE_MAP, {
   cap_h: {
     cols: ['records'], primary: true,
     fromDocs: c => _vals(c.records).map(r => Object.assign({}, r, { id: _num(r.id), sample: _num(r.sample), zone: _num(r.zone), originalId: _num(r.originalId) || 0 }))
-      .filter(r => r.id).sort((a, b) => a.id - b.id)
+      .filter(r => r.id && !r.voided).sort((a, b) => a.id - b.id)   // voided = annulled duplicate, kept for the audit trail
   },
   cap_rv: {
     cols: ['resolved'], primary: true,
