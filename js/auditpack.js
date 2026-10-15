@@ -14,6 +14,7 @@ const AP_SECTIONS = [
   ['positives', 'Positives & corrective actions'],
   ['recurring', 'Recurring sites (harborage)'],
   ['coverage',  'MASTER coverage'],
+  ['changes',   'Record corrections (audit trail)'],
   ['signoff',   'Verification sign-off']
 ];
 
@@ -245,7 +246,7 @@ function exportAuditPack() {
   const meta = [
     ['Facility', 'Caputo Foods'],
     ['Buildings', d.plants.join(', ')],
-    ['Period', _apFmt(d.from) + ' — ' + _apFmt(d.to)],
+    ['Period', (d.from ? _apFmt(d.from) : 'Program start') + ' — ' + _apFmt(d.to)],
     ['Program SOP', 'SQF #2.4.H · ' + d.emp.sopVersion],
     ['Laboratory', d.emp.lab.name + ' (' + d.emp.lab.body + ' ' + d.emp.lab.cert + ')'],
     ['Prepared by', (CU && CU.displayName ? CU.displayName : '—') + ' · ' + _apFmt(todayLocal())]
@@ -407,10 +408,25 @@ function exportAuditPack() {
       { styles: { fontSize: 8.5, cellPadding: 2.4, textColor: INK, lineColor: [221, 229, 216], lineWidth: 0.2, halign: 'center' }, columnStyles: { 0: { fontStyle: 'bold' } } });
   }
 
-  // ── 7. Sign-off ──
+  // ── 7. Record corrections (audit trail) ──
+  if (on('changes')) {
+    need(40);
+    section('7. Record Corrections (Audit Trail)');
+    const _day = e => todayLocal(new Date(e.at));   // local date of the change (e.at is UTC)
+    const ch = (typeof getRecordChanges === 'function' ? getRecordChanges() : []).filter(e => _day(e) >= (d.from || '') && _day(e) <= d.to);
+    para('Every change to a test record after it was created: who made it, when, what changed and why. The log is append-only (entries cannot be edited or deleted).');
+    if (!ch.length) para('No record corrections in this period.', 9);
+    else table(['When', 'Bldg', 'Sample', 'Action', 'Change', 'Reason', 'By'],
+      ch.map(e => [_apFmt(_day(e)), e.planta, e.sample ? '#' + e.sample + (e.retestNum ? ' ' + e.retestNum : '') : 'All (' + (e.samples || []).length + ')', rcActionLabel(e.action),
+        (e.changes || []).map(c => rcFieldLabel(c.field) + ': ' + (c.from || '-') + ' -> ' + (c.to || '-')).join('\n').slice(0, 400), e.reason || '-', e.byName || e.byEmail]),
+      { styles: { fontSize: 7.2, cellPadding: 1.8, textColor: INK, lineColor: [221, 229, 216], lineWidth: 0.2, overflow: 'linebreak', valign: 'top' },
+        columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 13 }, 2: { cellWidth: 20 }, 3: { cellWidth: 26 }, 6: { cellWidth: 26 } } });
+  }
+
+  // ── 8. Sign-off ──
   if (on('signoff')) {
     need(70); if (y > PH - 90) { doc.addPage(); y = 18; }
-    section('7. Verification & Approval');
+    section('8. Verification & Approval');
     para('Monitoring records are reviewed for accuracy and timeliness by a person in a position of authority (verification), and trends are reviewed by management (validation).');
     y += 4;
     [['Prepared by (QA designee)', CU && CU.displayName ? CU.displayName : ''], ['Verified by (SQF Practitioner)', ''], ['Approved by (Management)', '']].forEach(([role, name]) => {

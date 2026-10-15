@@ -25,6 +25,11 @@ const STORE_MAP = {
     toDocs: v => ({ capa: _byId(Object.entries(v || {}).map(([k, d]) => Object.assign({}, d, { rootId: k })), d => d.rootId) }),
     fromDocs: c => { const o = {}; _vals(c.capa).forEach(d => { const x = Object.assign({}, d); const k = x.rootId; delete x.rootId; o[k] = x; }); return o; }
   },
+  cap_rec_changes: {
+    cols: ['recordChanges'], keep: ['recordChanges'],
+    toDocs: v => ({ recordChanges: _byId(v, c => c.id) }),
+    fromDocs: c => _vals(c.recordChanges).sort((a, b) => String(a.at).localeCompare(String(b.at)))
+  },
   cap_capa_prog: {
     cols: ['programCapas'], keep: ['programCapas'],
     toDocs: v => ({ programCapas: _byId(v, c => c.no) }),
@@ -160,7 +165,7 @@ function storePreload() {
 // ── Local save → write the changed documents ───────────────────
 // Collections whose documents are only ever CREATED from the app: an
 // existing doc is never re-sent (the audit trail is append-only in the rules).
-const STORE_APPEND_ONLY = new Set(['empChangeLog']);
+const STORE_APPEND_ONLY = new Set(['empChangeLog', 'recordChanges']);
 
 function storeSaved(key) {
   if (!STORE.on || !STORE_MAP[key] || STORE_MAP[key].primary) return Promise.resolve();

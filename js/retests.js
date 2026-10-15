@@ -30,7 +30,12 @@ function confirmResult() {
   if(idx<0) return;
 
   if(!labComplete(hist[idx])) { toast('Enter a result for every test','error'); return; }
+  // Changing a result that was already recorded leaves a trace (who, when, why).
+  const _before = recSnap(hist[idx]), _wasFinal = hist[idx].resultado && hist[idx].resultado !== 'Pending';
+  let _why = '';
+  if (_wasFinal) { _why = (prompt('This test already has a recorded result (' + hist[idx].resultado + '). Reason for changing it:') || '').trim(); if (!_why) { toast('A reason is required to change a recorded result', 'error'); return; } }
   applyLabResults(hist[idx], LABRES, document.getElementById('failNotes').value);
+  if (_wasFinal) logRecordChange(hist[idx], 'result', _before, recSnap(hist[idx]), _why, { always: true });
 
   if(FAILRES==='Presumptive') {
     SH(hist);
@@ -400,8 +405,10 @@ function _markRecordsNegative(ids) {
     if (r && r.resultado !== 'Negative') {
       // Negative for every ordered test: "Negative" for pathogen screens,
       // "<10 CFU/sponge" for the E. coli / S. aureus counts.
+      const _b = recSnap(r);
       applyLabResults(r, labDefaultNegative(r));
       r.resultDate = today;
+      logRecordChange(r, 'bulkNegative', _b, recSnap(r), '');
       changed.push(r);
     }
   });
@@ -522,6 +529,7 @@ function closePhotoLightbox() { document.getElementById('photoLightbox').classLi
 // ── Reschedule a retest (change its scheduled date) ───────────────
 let RESCHED_ID = null;
 function openRescheduleModal(id) {
+  const _rr = document.getElementById('rescheduleReason'); if (_rr) _rr.value = '';
   const rec = GH().find(r => r.id === id);
   if (!rec) return;
   RESCHED_ID = id;
@@ -544,9 +552,12 @@ function confirmReschedule() {
   const hist = GH(), rec = hist.find(r => r.id === RESCHED_ID);
   if (!rec) { closeRescheduleModal(); return; }
   if (newDate === rec.fecha) { closeRescheduleModal(); return; }
-  const old = rec.fecha;
+  const why = ((document.getElementById('rescheduleReason') || {}).value || '').trim();
+  if (!why) { toast('Enter the reason for moving the retest', 'error'); return; }
+  const old = rec.fecha, _before = recSnap(rec);
   rec.fecha = newDate;
   SH(hist);
+  logRecordChange(rec, 'reschedule', _before, recSnap(rec), why, { recordDate: old });
   // Mirror to SharePoint (the recordsUpdate flow must map `fecha`→Date, else the
   // next pull would revert it — same pattern as resultDate).
   syncSafe(() => syncUpdateRecord(rec), 'reschedule retest');

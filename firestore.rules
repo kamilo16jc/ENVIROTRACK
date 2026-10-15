@@ -109,6 +109,12 @@ service cloud.firestore {
       allow create, update: if isAdmin() && stamped();
       allow delete: if false;                 // numbers are never reused
     }
+    // Test-record audit trail: who changed what, when and why. Append-only.
+    match /recordChanges/{id} {
+      allow read: if provisioned();
+      allow create: if provisioned() && stamped() && request.resource.data.get('byEmail', '') == request.auth.token.email;
+      allow update, delete: if false;
+    }
     match /empChangeLog/{id} {
       allow read: if provisioned();
       allow create: if isAdmin() && stamped();

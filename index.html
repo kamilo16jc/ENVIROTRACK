@@ -967,12 +967,16 @@
     <div id="rescheduleInfo" class="lr-info"></div>
     <label class="modal-label" style="margin-bottom:6px">New date</label>
     <input type="date" id="rescheduleDate" style="width:100%;padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:var(--font);font-size:14px">
+    <label class="modal-label" style="margin:10px 0 6px">Reason *</label>
+    <input type="text" id="rescheduleReason" class="vec-input" style="width:100%" placeholder="Why is the retest moving? (kept in the change history)">
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeRescheduleModal()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmReschedule()"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Save date</button>
     </div>
   </div>
 </div>
+
+<div class="modal-overlay" id="recChangesModal" onclick="if(event.target===this)this.classList.remove('open')"><div class="modal" style="width:560px;max-height:88vh;overflow-y:auto" id="recChangesBody"></div></div>
 
 <div class="modal-overlay" id="collTimeModal">
   <div class="modal" style="width:420px">
@@ -1029,6 +1033,8 @@
     <div id="aeBadge" style="display:none;padding:10px 14px;border-radius:8px;font-weight:600;font-size:13px;margin-bottom:14px"></div>
     <div class="modal-label">Lab notes</div>
     <textarea id="aeNotes" placeholder="Correction notes..."></textarea>
+    <label class="modal-label" style="margin:10px 0 6px">Reason for the correction *</label>
+    <input type="text" id="aeReason" class="vec-input" style="width:100%" placeholder="Why is this record being corrected? (kept in the change history)">
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeAdminEdit()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmAdminEdit()" id="btnAeSave" disabled><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save Correction</button>
@@ -1223,6 +1229,7 @@
 <script src="js/capa.js"></script>
 <script src="js/retests.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/changelog.js"></script>
 <script src="js/notifications.js"></script>
 <script src="js/kpis.js"></script>
 <script src="js/dashboard.js"></script>

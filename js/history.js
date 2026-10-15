@@ -38,6 +38,8 @@ function searchHistory() {
     } else {
       action = '<button class="rt-btn accent ico" onclick="openFailModal('+h.id+')" title="Record the lab result"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></button>';
     }
+    const _nc = (typeof changesOf === 'function') ? changesOf(h).length : 0;
+    const histBtn = _nc ? '<button class="rt-btn" onclick="openRecordChanges('+h.id+')" title="Change history ('+_nc+')" style="padding:6px 8px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg></button>' : '';
     const editBtn = canEdit ? '<button class="rt-btn" onclick="openAdminEdit('+h.id+')" title="Correct record" style="padding:6px 8px"><svg class="ln ico-inline" width="12" height="12" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>' : '';
 
     return `<tr>
@@ -60,7 +62,7 @@ function searchHistory() {
           ${h.resultado==='Positive'&&h.failedPathogensLabel?'<div style="font-size:10px;color:var(--red);font-weight:600;margin-top:1px">'+esc(h.failedPathogensLabel)+'</div>':''}
           ${h.labNotes?'<div style="font-size:10px;color:var(--gray-400);margin-top:1px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(h.labNotes)+'">'+esc(h.labNotes)+'</div>':''}</td>
       <td class="center">${h.retestNum?'<span class="badge badge-red" style="font-size:10px">'+esc(h.retestNum)+'</span>':dash}</td>
-      <td><div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:nowrap">${action}${editBtn}</div></td>
+      <td><div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:nowrap">${action}${histBtn}${editBtn}</div></td>
     </tr>`;
   }).join('');
 }

@@ -29,6 +29,7 @@ function aeHasChildRetests(id) {
 }
 
 function openAdminEdit(id) {
+  const _r = document.getElementById('aeReason'); if (_r) _r.value = '';
   if (!canEditRecords()) { toast('Administrators only', 'error'); return; }
   const h = GH().find(r => r.id === id);
   if (!h) return;
@@ -141,6 +142,9 @@ function confirmAdminEdit() {
   if (idx < 0) return;
   const rec = hist[idx];
   const locked = aeHasChildRetests(AEID);
+  const reason = ((document.getElementById('aeReason') || {}).value || '').trim();
+  if (!reason) { toast('Enter the reason for the correction', 'error'); return; }
+  const before = recSnap(rec);
 
   const newNotes = document.getElementById('aeNotes').value.trim();
 
@@ -172,6 +176,7 @@ function confirmAdminEdit() {
   }
 
   SH(hist);
+  logRecordChange(rec, 'correction', before, recSnap(rec), reason, { always: true });
   syncSafe(() => syncUpdateRecord(rec), 'admin correct record');
   closeAdminEdit();
   searchHistory(); loadRetests(); refreshDashboard();

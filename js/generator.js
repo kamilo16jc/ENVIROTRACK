@@ -400,6 +400,8 @@ function saveWeek(opts) {
   SH([...hist,...recs]);
   SW([...weeks,{planta,fecha,by,count:TESTS.length,savedAt:new Date().toISOString()}]);
   // Mirror the new week to SharePoint (non-blocking; local save already done).
+  // Site substitutions made in the generator (each one asked for a reason) → change history.
+  (OVRS || []).forEach(o => { const r = recs.find(x => String(x.sample) === String(o.sample)); if (r) logRecordChange(r, 'override', null, null, o.reason, { changes: [{ field: o.field, from: String(o.oldVal), to: String(o.newVal) }], recordDate: fecha }); });
   syncSafe(() => syncPushRecords(recs), 'push new week');
   toast('✅ '+recs.length+' records saved','success');
   document.getElementById('btnSave')?.classList.add('done');
@@ -449,9 +451,14 @@ function saveCollTime() {
   hist.forEach(h => {
     if (h.planta !== COLLT.planta || h.fecha !== COLLT.fecha || h.retestNum || h.isRetest) return;
     if ((h.prodStart || '') === prodStart && (h.collTime || '') === collTime) return;
+    if (!changed.length) COLLT.before = recSnap(h);
     h.prodStart = prodStart; h.collTime = collTime; changed.push(h);
   });
-  if (changed.length) { SH(hist); changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'collection time')); }
+  if (changed.length) {
+    SH(hist); changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'collection time'));
+    // one change-history entry for the building + date (not one per sample)
+    logRecordChange({ id: 0, planta: COLLT.planta, fecha: COLLT.fecha, sample: 0 }, 'collTime', COLLT.before, recSnap(changed[0]), '', { samples: changed.map(r => r.sample) });
+  }
   closeCollTime();
   if (typeof searchHistory === 'function') searchHistory();
   toast(changed.length ? 'Collection time saved for ' + changed.length + ' sample' + (changed.length === 1 ? '' : 's') : 'No changes', changed.length ? 'success' : 'info');
