@@ -711,3 +711,8 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 .capa-rt.bad{color:var(--red);font-weight:600}
 .capa-approved{margin-top:8px;color:var(--green);font-weight:600;font-size:12.5px;display:flex;align-items:center;gap:6px}
 .rt-btn.capa-late{background:var(--red);border-color:var(--red)}
+
+/* Collection time under the date (Test History) */
+.ct-cell{font-size:10.5px;color:var(--gray-400);cursor:pointer;margin-top:2px}
+.ct-cell:hover{color:var(--green);text-decoration:underline}
+.ct-cell.late{color:var(--red);font-weight:600}

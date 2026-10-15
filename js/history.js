@@ -42,7 +42,11 @@ function searchHistory() {
 
     return `<tr>
       <td style="text-align:center">${isPending?`<input type="checkbox" class="hist-check" data-id="${h.id}" onchange="updateHistBulkBar()">`:''}</td>
-      <td style="font-size:12px;white-space:nowrap">${h.fecha}</td>
+      <td style="font-size:12px;white-space:nowrap">${esc(h.fecha)}${(!h.retestNum && !h.isRetest) ? (() => {
+        const g = (typeof collGapMinutes === 'function') ? collGapMinutes(h.prodStart, h.collTime) : null, late = g !== null && g < COLL_MIN_MINUTES;
+        return '<div class="ct-cell' + (late ? ' late' : '') + '" onclick="openCollTime(\'' + esc(h.planta) + '\',\'' + esc(h.fecha) + '\')" title="' + (h.collTime ? 'Production start ' + esc(h.prodStart || '—') + ' · collected ' + esc(h.collTime) + (g !== null ? ' (' + fmtGap(g) + ' after start)' : '') : 'Set the collection time') + '">' +
+          (h.collTime ? esc(h.collTime) + (g !== null ? ' · ' + fmtGap(g) : '') : '+ time') + '</div>';
+      })() : ''}</td>
       <td><span class="badge badge-gray">${h.planta}</span></td>
       <td style="font-weight:700;font-size:14px">${h.sample}</td>
       <td style="text-align:center">${h.zone}</td>

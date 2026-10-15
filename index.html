@@ -372,6 +372,8 @@
               </select></div>
             <div class="field"><label>Sampling date</label><input type="date" id="genDate"></div>
             <div class="field"><label>Collected by</label><input type="text" id="genCollectedBy" placeholder="Name" style="min-width:180px"></div>
+            <div class="field"><label>Production start</label><input type="time" id="genProdStart" title="Time production started on the sampling day"></div>
+            <div class="field"><label>Collection time</label><input type="time" id="genCollTime" title="SOP 2.4.H: no sooner than 3–4 hours after production starts"></div>
             <button class="btn btn-primary" style="align-self:flex-end" onclick="generateTests()"><svg class="ln" width="15" height="15" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Generate Tests</button>
             <style>
               .gen-ico{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:12px;border:none;background:transparent;color:var(--gray-400);cursor:pointer;padding:0;transition:transform .14s ease,color .14s ease}
@@ -968,6 +970,22 @@
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeRescheduleModal()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmReschedule()"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Save date</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="collTimeModal">
+  <div class="modal" style="width:420px">
+    <h3><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Collection time</h3>
+    <div id="collTimeInfo" class="lr-info"></div>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1"><label class="modal-label" style="margin-bottom:6px">Production start</label><input type="time" id="ctProdStart" class="vec-input" style="width:100%"></div>
+      <div style="flex:1"><label class="modal-label" style="margin-bottom:6px">Collection time</label><input type="time" id="ctCollTime" class="vec-input" style="width:100%"></div>
+    </div>
+    <p class="vec-help" style="margin-top:8px">SOP 2.4.H: sponges are collected no sooner than 3–4 hours after production starts. Applies to every routine sample of this building and date.</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeCollTime()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCollTime()">Save</button>
     </div>
   </div>
 </div>

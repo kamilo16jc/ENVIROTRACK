@@ -73,6 +73,14 @@ function exportPDF() {
   doc.text('Samples Collected By/Date:',margin+2,fy);
   doc.setFont('helvetica','normal');
   doc.text('  '+by+' / '+dateStr, margin+2+doc.getTextWidth('Samples Collected By/Date:'),fy);
+  // SOP 2.4.H: collection no sooner than 3–4 h after production starts
+  const ps = (document.getElementById('genProdStart') || {}).value || '', ct = (document.getElementById('genCollTime') || {}).value || '';
+  const tx = W - margin - 120;
+  const lbl = (label, value, x) => {
+    doc.setFont('helvetica','bold'); doc.text(label, x, fy); const w = doc.getTextWidth(label + ' ');   // width in the bold font
+    doc.setFont('helvetica','normal'); doc.text(value || '________', x + w, fy);
+  };
+  lbl('Production start:', ps, tx); lbl('Collection time:', ct, tx + 58);
   pdfDocControl(doc,fy+6,margin);
   pdfFooter(doc,W,margin);
   const pdfName = namePdfGenerator(planta, fecha);

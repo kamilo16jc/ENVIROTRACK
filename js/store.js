@@ -210,7 +210,8 @@ function storeWhenReady(cols, ms) {
 // ── Writes to the primary collections ──────────────────────────
 const RECORD_FIELDS = ['id', 'fecha', 'planta', 'by', 'sample', 'zone', 'area', 'line', 'location', 'ecoli', 'listeria', 'salmonella', 'saureus',
   'resultado', 'retestNum', 'labNotes', 'resultDate', 'failedPathogens', 'failedPathogensLabel', 'labResults', 'isRetest', 'originalId', 'scheduled',
-  'enteredByEmail', 'enteredByName', 'enteredAt'];
+  'enteredByEmail', 'enteredByName', 'enteredAt',
+  'prodStart', 'collTime', 'importSource', 'labResultsImport', 'voided', 'voidReason', 'voidedBy', 'voidedAt'];
 const _recDoc = r => { const o = {}; RECORD_FIELDS.forEach(k => { if (r[k] !== undefined && r[k] !== null) o[k] = r[k]; }); return _clean(o); };
 // The rules compare _by with the token's email, so use the Firebase session's.
 const _fsWho = () => (typeof fbAuth !== 'undefined' && fbAuth.currentUser && fbAuth.currentUser.email) || (CU && CU.email) || '';

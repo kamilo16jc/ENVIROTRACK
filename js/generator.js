@@ -386,9 +386,17 @@ function saveWeek(opts) {
   const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value || todayLocal();
   const by     = document.getElementById('genCollectedBy').value;
+  const prodStart = (document.getElementById('genProdStart') || {}).value || '';
+  const collTime  = (document.getElementById('genCollTime') || {}).value || '';
+  const gap = collGapMinutes(prodStart, collTime);
+  if (gap !== null && gap < COLL_MIN_MINUTES) {
+    const msg = 'Collection is ' + fmtGap(gap) + ' after production start — SOP 2.4.H requires at least 3 hours.';
+    if (opts.skipConfirm) toast(msg, 'error'); else if (!confirm(msg + ' Save anyway?')) return false;
+  }
   const hist   = GH(); const weeks = GW();
   let nextId   = hist.length>0 ? Math.max(...hist.map(h=>h.id))+1 : 1;
-  const recs   = TESTS.map(t => ({id:nextId++,fecha,planta,by,sample:t.sample,zone:t.zone,area:t.area,line:t.line,location:t.location,ecoli:t.ecoli,listeria:t.listeria,salmonella:t.salmonella,saureus:t.saureus,resultado:'Pending',retestNum:'',labNotes:''}));
+  const recs   = TESTS.map(t => Object.assign({id:nextId++,fecha,planta,by,sample:t.sample,zone:t.zone,area:t.area,line:t.line,location:t.location,ecoli:t.ecoli,listeria:t.listeria,salmonella:t.salmonella,saureus:t.saureus,resultado:'Pending',retestNum:'',labNotes:''},
+    prodStart ? { prodStart } : {}, collTime ? { collTime } : {}));
   SH([...hist,...recs]);
   SW([...weeks,{planta,fecha,by,count:TESTS.length,savedAt:new Date().toISOString()}]);
   // Mirror the new week to SharePoint (non-blocking; local save already done).
@@ -410,3 +418,41 @@ function genPinBtn(t) {
     (on ? 'On the map' + (mp.mapAreaName ? ': ' + esc(mp.mapAreaName) : '') : 'Not on the map yet — click to place it') + '" aria-label="Map location"><svg class="ln" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>';
 }
 
+
+// ── Collection time vs production start (SOP 2.4.H) ──────────────
+const COLL_MIN_MINUTES = 180;   // "no sooner than 3–4 hours after production has started"
+function collGapMinutes(prodStart, collTime) {
+  const m = t => { const x = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return x ? +x[1] * 60 + +x[2] : null; };
+  const a = m(prodStart), b = m(collTime);
+  return a === null || b === null ? null : b - a;
+}
+const fmtGap = g => (g < 0 ? '-' : '') + Math.floor(Math.abs(g) / 60) + ' h ' + String(Math.abs(g) % 60).padStart(2, '0') + ' min';
+
+// Complete (or correct) the times later from Records: every routine sample of that building + date.
+let COLLT = null;
+function openCollTime(planta, fecha) {
+  const recs = GH().filter(h => h.planta === planta && h.fecha === fecha && !h.retestNum && !h.isRetest);
+  if (!recs.length) return;
+  COLLT = { planta, fecha };
+  document.getElementById('collTimeInfo').innerHTML = '<strong>' + esc(planta) + '</strong> · ' + esc(fecha) + ' · ' + recs.length + ' routine sample' + (recs.length === 1 ? '' : 's');
+  document.getElementById('ctProdStart').value = recs.find(h => h.prodStart) ? recs.find(h => h.prodStart).prodStart : '';
+  document.getElementById('ctCollTime').value = recs.find(h => h.collTime) ? recs.find(h => h.collTime).collTime : '';
+  document.getElementById('collTimeModal').classList.add('open');
+}
+function closeCollTime() { document.getElementById('collTimeModal').classList.remove('open'); COLLT = null; }
+function saveCollTime() {
+  if (!COLLT) return;
+  const prodStart = document.getElementById('ctProdStart').value || '', collTime = document.getElementById('ctCollTime').value || '';
+  const gap = collGapMinutes(prodStart, collTime);
+  if (gap !== null && gap < COLL_MIN_MINUTES && !confirm('Collection is ' + fmtGap(gap) + ' after production start — SOP 2.4.H requires at least 3 hours. Save anyway?')) return;
+  const hist = GH(), changed = [];
+  hist.forEach(h => {
+    if (h.planta !== COLLT.planta || h.fecha !== COLLT.fecha || h.retestNum || h.isRetest) return;
+    if ((h.prodStart || '') === prodStart && (h.collTime || '') === collTime) return;
+    h.prodStart = prodStart; h.collTime = collTime; changed.push(h);
+  });
+  if (changed.length) { SH(hist); changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'collection time')); }
+  closeCollTime();
+  if (typeof searchHistory === 'function') searchHistory();
+  toast(changed.length ? 'Collection time saved for ' + changed.length + ' sample' + (changed.length === 1 ? '' : 's') : 'No changes', changed.length ? 'success' : 'info');
+}
