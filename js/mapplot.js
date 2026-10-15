@@ -222,6 +222,50 @@ function mapPlacedCount(plant) {
 }
 
 // ── Sampling map PDF (generator) ───────────────────────────────
+// ── 3D snapshot of the facility map (for the printed Sampling Map) ──
+// The confidential 3D map (private/facilityMap) is loaded in an invisible
+// frame, framed on the building with a fixed 3D camera, rendered and read
+// back in black & white; the test locations are projected with the map's
+// own camera so the dots land on the right spot. null → flat plan fallback.
+// Injected INSIDE the map's own scope (its interactive code runs in an arrow-function block).
+const FM_BRIDGE = 'window.__fmSnap=function(o){try{' +
+  'var mt=document.getElementById("f-motion-toggle");if(mt)mt.checked=false;' +
+  'if(o.w&&o.h){stage.style.width=o.w+"px";stage.style.height=o.h+"px";resize();}' +
+  'changeBuilding(o.building||"all",false);animation=null;yaw=o.yaw;pitch=o.pitch;' +
+  'var b=basis(),P=o.frame.map(function(p){return[p[0],0,p[1]]});' +
+  'target=[(Math.min.apply(null,P.map(function(p){return p[0]}))+Math.max.apply(null,P.map(function(p){return p[0]})))/2,0,(Math.min.apply(null,P.map(function(p){return p[2]}))+Math.max.apply(null,P.map(function(p){return p[2]})))/2];' +
+  'half=Math.max.apply(null,P.map(function(p){var v=p.map(function(x,i){return x-target[i]});return Math.max(Math.abs(dot(v,b.u)),Math.abs(dot(v,b.r))*height/width)}))*1.05+1;' +
+  'shadowDirty=true;pickDirty=true;render(performance.now());' +
+  'var c=document.getElementById("f-canvas"),l=document.getElementById("f-labels"),out=document.createElement("canvas");out.width=c.width;out.height=c.height;' +
+  'var x=out.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,out.width,out.height);x.filter="grayscale(1) contrast(1.15) brightness(1.04)";x.drawImage(c,0,0);if(o.labels&&l)x.drawImage(l,0,0);' +
+  'return{url:out.toDataURL("image/jpeg",0.9),w:width,h:height,proj:o.points.map(function(p){return project([p[0],o.y||0.4,p[1]])})};' +
+  '}catch(e){return{error:String(e&&e.message||e)}}};';
+// Light theme inside the frame, whatever the device uses (the snapshot is printed).
+const FM_LIGHT = '<script>(function(){var mm=window.matchMedia.bind(window);window.matchMedia=function(q){return /prefers-color-scheme:\\s*dark/.test(q)?' +
+  '{matches:false,media:q,addEventListener:function(){},removeEventListener:function(){},addListener:function(){},removeListener:function(){}}:mm(q);};})();<\/script>';
+
+async function facilitySnapshot(frame, points, size) {
+  const d = typeof storePrivate === 'function' ? await storePrivate('facilityMap').catch(() => null) : null;
+  if (!d || !d.html || !frame.length) return null;
+  const f = document.createElement('iframe');
+  f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+  const sw = (size && size.w) || 1600, sh = (size && size.h) || 1200;
+  f.style.cssText = 'position:fixed;left:0;top:0;width:' + (sw + 80) + 'px;height:' + (sh + 600) + 'px;opacity:0;pointer-events:none;z-index:-1;border:0';
+  const HOOK = /\(\(\)=>\{(?=\s*const root=document\.getElementById\()/;
+  if (!HOOK.test(d.html)) { console.warn('[map] 3D map structure changed — flat plan'); return null; }
+  f.srcdoc = d.html.replace(/<head[^>]*>/i, m => m + FM_LIGHT).replace(HOOK, m => m + FM_BRIDGE);
+  document.body.appendChild(f);
+  try {
+    await new Promise((res, rej) => { f.onload = res; setTimeout(() => rej(new Error('3D map timeout')), 25000); });
+    for (let i = 0; i < 80 && !(f.contentWindow && f.contentWindow.__fmSnap); i++) await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 600));   // let the scene finish its first frames
+    const r = f.contentWindow.__fmSnap({ yaw: -0.35, pitch: 0.98, frame, points, labels: true, y: 0.4, w: sw, h: sh });
+    if (!r || r.error) { if (r) console.warn('[map] 3D snapshot', r.error); return null; }
+    return r;
+  } catch (e) { console.warn('[map] 3D snapshot', e); return null; }
+  finally { f.remove(); }
+}
+
 // Flat printed form: white / grays / black (Caputo logo in color).
 async function exportTestsMapPDF() {
   if (typeof TESTS === 'undefined' || !TESTS.length) { toast('Generate the tests first', 'error'); return; }
@@ -250,9 +294,20 @@ async function exportTestsMapPDF() {
   txt('Building ' + plant + ' - ' + fmt(fecha) + (by ? ' - Collected by: ' + by : ''), W - M, 16.5, { size: 8.5, color: MUT, align: 'right' });
   doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.line(M, 21, W - M, 21);
 
-  // Plan area (left)
+  // Plan area (left) — realistic 3D view in black & white when the map can render; flat plan otherwise
   const scene = _mpScene(geo, plant), b = scene.box;
   const PX = M, PY = 25, PW = 178, PHh = PH - PY - 17;
+  toast('Rendering the 3D sampling map…', 'info');
+  const frame = scene.buildings.flatMap(bd => bd.polygon);
+  const snap = await facilitySnapshot(frame, placed.map(r => [r.mapX, r.mapZ]), { w: 1600, h: Math.round(1600 * PHh / PW) });
+  let posOf;
+  if (snap) {
+    const k = Math.min(PW / snap.w, PHh / snap.h), iw = snap.w * k, ih = snap.h * k, ix = PX + (PW - iw) / 2, iy = PY + (PHh - ih) / 2;
+    doc.addImage(snap.url, 'JPEG', ix, iy, iw, ih);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.rect(ix, iy, iw, ih);
+    const at = {}; placed.forEach((r, i) => { at[r.sample + '|' + i] = [ix + snap.proj[i][0] / snap.w * iw, iy + snap.proj[i][1] / snap.h * ih]; });
+    posOf = (r, i) => at[r.sample + '|' + i];
+  } else {
   const s = Math.min(PW / b.w, PHh / b.h), ox = PX + (PW - b.w * s) / 2, oy = PY + (PHh - b.h * s) / 2;
   const X = x => ox + (x - b.x0) * s, Y = z => oy + (z - b.z0) * s;
   const poly = (p, style) => {
@@ -276,12 +331,15 @@ async function exportTestsMapPDF() {
     if (doc.getTextWidth(safe(a.name)) > wmm - 1.5) return;
     doc.setTextColor(130, 130, 130); doc.text(safe(a.name), X(a.center[0]), Y(a.center[1]) + size * 0.12, { align: 'center' });
   });
-  // dots: zone 1 white with heavy ring, zone 2 black, zone 3 gray, zone 4 white with thin ring
+    posOf = r => [X(r.mapX), Y(r.mapZ)];
+  }
+  // dots: zone 1 white with heavy ring, zone 2 black, zone 3 gray, zone 4 white with thin ring (white halo → readable on the 3D image)
   const ZDOT = { 1: { fill: [255, 255, 255], ring: 0.9, ink: INK }, 2: { fill: [0, 0, 0], ring: 0.35, ink: [255, 255, 255] },
     3: { fill: [120, 120, 120], ring: 0.35, ink: [255, 255, 255] }, 4: { fill: [255, 255, 255], ring: 0.35, ink: INK } };
   const zd = z => ZDOT[Number(z)] || ZDOT[3];
-  placed.forEach(r => {
-    const cx = X(r.mapX), cy = Y(r.mapZ), st = zd(r.zone);
+  placed.forEach((r, i) => {
+    const [cx, cy] = posOf(r, i), st = zd(r.zone);
+    doc.setFillColor(255, 255, 255); doc.circle(cx, cy, 3.4, 'F');
     doc.setFillColor(...st.fill); doc.setDrawColor(0, 0, 0); doc.setLineWidth(st.ring); doc.circle(cx, cy, 2.6, 'FD');
     txt(String(r.sample), cx, cy + 1, { size: String(r.sample).length > 2 ? 5.2 : 6.2, bold: true, color: st.ink, align: 'center' });
   });
@@ -290,7 +348,7 @@ async function exportTestsMapPDF() {
   (zones.length ? zones : [2, 3, 4]).forEach((z, i) => {
     const lx = PX + i * 24, st = ZDOT[z]; doc.setFillColor(...st.fill); doc.setDrawColor(0, 0, 0); doc.setLineWidth(st.ring * 0.8); doc.circle(lx + 2, ly - 1, 1.8, 'FD'); txt('Zone ' + z, lx + 5.5, ly, { size: 7.5 });
   });
-  txt('Number on the dot = sample #. Same orientation as the Facility Map.', PX + PW, ly, { size: 7, color: MUT, align: 'right' });
+  txt('Number on the dot = sample #. ' + (snap ? '3D view of the Facility Map.' : 'Same orientation as the Facility Map.'), PX + PW, ly, { size: 7, color: MUT, align: 'right' });
 
   // List (right)
   const LX = PX + PW + 6, LW = W - M - LX;
