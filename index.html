@@ -370,7 +370,7 @@
                 <option value="1945">1945</option><option value="1935">1935</option>
                 <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
               </select></div>
-            <div class="field"><label>Sampling date</label><input type="date" id="genDate"></div>
+            <div class="field"><label>Sampling date</label><input type="date" id="genDate" onchange="onGenDateChange()"></div>
             <div class="field"><label>Collected by</label><input type="text" id="genCollectedBy" placeholder="Name" style="min-width:180px"></div>
             <input type="hidden" id="genProdStart"><input type="hidden" id="genCollTime">
             <button class="btn btn-primary" style="align-self:flex-end" onclick="generateTests()"><svg class="ln" width="15" height="15" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Generate Tests</button>
@@ -385,15 +385,17 @@
             <div style="display:flex;gap:6px;margin-left:auto;align-self:flex-end">
               <div class="gt-wrap">
                 <button class="gen-ico gt-btn" id="btnTimes" onclick="toggleTimesPop(event)" title="Sampling times — not set" aria-haspopup="dialog" aria-expanded="false"><svg class="ln" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg><span class="gt-dot"></span></button>
+                <div class="gt-hint" id="gtHint"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>First set the sampling times <span>— click the clock</span></div>
                 <div class="gt-pop" id="timesPop" role="dialog" aria-label="Sampling times">
                   <div class="gt-head"><div><div class="gt-title">Sampling times</div><div class="gt-sub">SOP 2.4.H — collect no sooner than 3 h after production starts</div></div>
                     <button class="gt-x" onclick="closeTimesPop()" aria-label="Close">&times;</button></div>
+                  <div class="gt-need-msg" id="gtNeedMsg">Set both times to generate the tests.</div>
                   <div class="gt-row"><label for="gtStart">Production start</label><input type="time" id="gtStart" oninput="timesChanged()"><button class="gt-now" onclick="setTimeNow('gtStart')">Now</button></div>
                   <div class="gt-row"><label for="gtColl">Collection</label><input type="time" id="gtColl" oninput="timesChanged()"><button class="gt-now" onclick="setTimeNow('gtColl')">Now</button></div>
                   <div class="gt-meter"><div class="gt-track"><div class="gt-ok"></div><div class="gt-mark" id="gtMark"></div></div>
                     <div class="gt-scale"><span>0 h</span><span>3 h</span><span>6 h</span></div></div>
                   <div class="gt-status" id="gtStatus">Set both times to check the SOP window</div>
-                  <div class="gt-foot"><button class="gt-clear" onclick="clearTimes()">Clear</button><button class="btn btn-primary btn-sm" onclick="closeTimesPop()">Done</button></div>
+                  <div class="gt-foot"><button class="gt-clear" onclick="clearTimes()">Clear</button><button class="btn btn-primary btn-sm" id="gtDone" onclick="timesDone()">Done</button></div>
                 </div>
               </div>
               <button class="gen-ico" onclick="exportTestsMapPDF()" id="btnMap" disabled title="Download sampling map"><svg class="ln" viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></button>

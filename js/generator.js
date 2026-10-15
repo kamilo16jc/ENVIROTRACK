@@ -4,6 +4,10 @@
 async function generateTests() {
   const planta   = document.getElementById('genPlant').value;
   if(!planta) { toast('Select a plant','error'); return; }
+  // SOP 2.4.H: the sampling times come first (production start + collection).
+  if (!timesReady()) { requireTimes(); return; }
+  const _gap = collGapMinutes(document.getElementById('genProdStart').value, document.getElementById('genCollTime').value);
+  if (_gap < COLL_MIN_MINUTES && !confirm('Collection is ' + fmtGap(_gap) + ' after production start — SOP 2.4.H requires at least 3 hours. Generate anyway?')) { requireTimes(); return; }
 
   // Drop any previously shown tests IMMEDIATELY (so a different building's tests
   // can't be saved by mistake) and show the loading bar until the new data is ready.
@@ -477,6 +481,24 @@ function toggleTimesPop(ev) {
   document.getElementById('btnTimes').setAttribute('aria-expanded', open ? 'true' : 'false');
   if (open) setTimeout(() => document.getElementById(document.getElementById('gtStart').value ? 'gtColl' : 'gtStart').focus(), 30);
 }
+let GT_PENDING = false;   // a generation is waiting for the times
+const timesReady = () => !!(document.getElementById('genProdStart').value && document.getElementById('genCollTime').value);
+// Guide the user: pulse the clock, open its panel and say what is missing.
+function requireTimes() {
+  GT_PENDING = true;
+  const btn = document.getElementById('btnTimes'); if (!btn) return;
+  btn.classList.remove('gt-shake'); void btn.offsetWidth; btn.classList.add('gt-shake');
+  const pop = document.getElementById('timesPop');
+  if (!pop.classList.contains('open')) toggleTimesPop();
+  timesChanged();
+}
+// "Done": if a generation was waiting and the times are complete, generate now.
+function timesDone() {
+  closeTimesPop();
+  if (GT_PENDING && timesReady()) { GT_PENDING = false; generateTests(); }
+}
+// A new sampling day needs its own times.
+function onGenDateChange() { if (document.getElementById('gtStart')) clearTimes(); else { document.getElementById('genProdStart').value = ''; document.getElementById('genCollTime').value = ''; timesChanged(); } }
 function closeTimesPop() {
   const pop = document.getElementById('timesPop'); if (!pop) return;
   pop.classList.remove('open'); document.getElementById('btnTimes').setAttribute('aria-expanded', 'false');
@@ -493,7 +515,12 @@ function timesChanged() {
   const ps = document.getElementById('genProdStart').value, ct = document.getElementById('genCollTime').value;
   const g = collGapMinutes(ps, ct), late = g !== null && g < COLL_MIN_MINUTES;
   const btn = document.getElementById('btnTimes');
+  const ready = !!(ps && ct);
+  const hint = document.getElementById('gtHint'); if (hint) hint.classList.toggle('show', !ready);
+  const need = document.getElementById('gtNeedMsg'); if (need) need.classList.toggle('show', !ready && GT_PENDING);
+  const done = document.getElementById('gtDone'); if (done) done.textContent = GT_PENDING && ready ? 'Generate tests' : 'Done';
   if (btn) {
+    btn.classList.toggle('gt-need', !ready);
     btn.classList.toggle('gt-set', !!(ps || ct)); btn.classList.toggle('gt-ok', g !== null && !late); btn.classList.toggle('gt-late', late);
     btn.title = !ps && !ct ? 'Sampling times — not set' : 'Production start ' + (ps || '—') + ' · collection ' + (ct || '—') + (g !== null ? ' (' + fmtGap(g) + ')' : '');
   }
@@ -508,3 +535,4 @@ function timesChanged() {
 }
 document.addEventListener('click', e => { const pop = document.getElementById('timesPop'); if (pop && pop.classList.contains('open') && !e.target.closest('.gt-wrap')) closeTimesPop(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTimesPop(); });
+document.addEventListener('DOMContentLoaded', () => { if (document.getElementById('btnTimes')) timesChanged(); });
