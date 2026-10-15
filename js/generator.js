@@ -488,14 +488,19 @@ function requireTimes() {
   GT_PENDING = true;
   const btn = document.getElementById('btnTimes'); if (!btn) return;
   btn.classList.remove('gt-shake'); void btn.offsetWidth; btn.classList.add('gt-shake');
+  btn.addEventListener('animationend', () => btn.classList.remove('gt-shake'), { once: true });
   const pop = document.getElementById('timesPop');
   if (!pop.classList.contains('open')) toggleTimesPop();
   timesChanged();
 }
-// "Done": if a generation was waiting and the times are complete, generate now.
+// "Save": keep the times and close. If a generation was waiting, point at Generate Tests (the user clicks it).
 function timesDone() {
   closeTimesPop();
-  if (GT_PENDING && timesReady()) { GT_PENDING = false; generateTests(); }
+  if (GT_PENDING && timesReady()) {
+    GT_PENDING = false;
+    const g = document.getElementById('btnGenerate');
+    if (g) { g.classList.remove('gen-next'); void g.offsetWidth; g.classList.add('gen-next'); setTimeout(() => g.classList.remove('gen-next'), 2600); }
+  }
 }
 // A new sampling day needs its own times.
 function onGenDateChange() { if (document.getElementById('gtStart')) clearTimes(); else { document.getElementById('genProdStart').value = ''; document.getElementById('genCollTime').value = ''; timesChanged(); } }
@@ -518,7 +523,6 @@ function timesChanged() {
   const ready = !!(ps && ct);
   const hint = document.getElementById('gtHint'); if (hint) hint.classList.toggle('show', !ready);
   const need = document.getElementById('gtNeedMsg'); if (need) need.classList.toggle('show', !ready && GT_PENDING);
-  const done = document.getElementById('gtDone'); if (done) done.textContent = GT_PENDING && ready ? 'Generate tests' : 'Done';
   if (btn) {
     btn.classList.toggle('gt-need', !ready);
     btn.classList.toggle('gt-set', !!(ps || ct)); btn.classList.toggle('gt-ok', g !== null && !late); btn.classList.toggle('gt-late', late);
