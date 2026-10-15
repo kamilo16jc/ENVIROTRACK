@@ -1,9 +1,17 @@
 # Dependencies
 node_modules/
 
-# Local dev / one-time scripts (not part of the deployed app)
-_devserver.js
-_migrate_master.js
+# Local dev / one-time scripts (not part of the deployed app). Any root file
+# starting with '_' is a local script and may hold plant data — NEVER commit.
+/_*
+
+# Data exports and credentials — NEVER commit
+*.xlsx
+*.xlsm
+*.csv
+.runtimeconfig.json
+*adminsdk*.json
+service-account*.json
 
 # Local tooling
 .claude/
