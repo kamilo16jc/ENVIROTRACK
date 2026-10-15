@@ -40,14 +40,14 @@ function openAdminEdit(id) {
   const patsLabel  = testedPats.map(([,n]) => n).join(', ') || '—';
 
   document.getElementById('aeInfo').innerHTML =
-    '<strong>Sample #' + h.sample + '</strong> — ' + esc(h.planta) +
+    '<strong>Sample #' + esc(h.sample) + '</strong> — ' + esc(h.planta) +
     (h.retestNum ? ' &nbsp;·&nbsp; <span class="badge badge-red" style="font-size:10px">' + esc(h.retestNum) + '</span>' : '') +
-    '<br><strong>Area:</strong> ' + esc(h.area) + ' &nbsp;·&nbsp; <strong>Zone:</strong> ' + h.zone +
+    '<br><strong>Area:</strong> ' + esc(h.area) + ' &nbsp;·&nbsp; <strong>Zone:</strong> ' + esc(h.zone) +
     '<br><strong>Location:</strong> ' + esc(h.location) +
     '<br><strong>Pathogens tested:</strong> <span style="font-weight:700;color:var(--navy)">' + esc(patsLabel) + '</span>' +
     '<br><strong>Current result:</strong> <span style="font-weight:700">' + esc(h.resultado) + '</span>' +
     (h.failedPathogensLabel ? ' <span style="color:var(--red)">(' + esc(h.failedPathogensLabel) + ')</span>' : '') +
-    ' &nbsp;·&nbsp; <strong>Date:</strong> ' + h.fecha;
+    ' &nbsp;·&nbsp; <strong>Date:</strong> ' + esc(h.fecha);
 
   // Lock notice + result buttons
   const lockNotice = document.getElementById('aeLockNotice');

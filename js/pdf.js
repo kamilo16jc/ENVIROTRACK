@@ -66,7 +66,7 @@ function exportPDF() {
   doc.text(planta+' Sample Collection Form',W/2,29,{align:'center'});
   doc.setFont('helvetica','normal'); doc.setFontSize(8);
   doc.text('Date Sampled: '+dateStr+' ('+planta+')',margin+2,34);
-  const rows = TESTS.map(t=>[String(t.sample),String(t.zone),t.area,String(t.line),t.location,t.ecoli?'X':'',t.listeria?'X':'',t.salmonella?'X':'',t.saureus?'X':'']);
+  const rows = TESTS.map(t=>[String(t.sample),String(t.zone),t.area,String(t.line||'N/A'),t.location,t.ecoli?'X':'',t.listeria?'X':'',t.salmonella?'X':'',t.saureus?'X':'']);
   pdfMainTable(doc,rows,37,W,margin);
   const fy = doc.lastAutoTable.finalY+5;
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(0,0,0);

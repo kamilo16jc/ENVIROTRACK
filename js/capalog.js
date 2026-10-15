@@ -95,7 +95,9 @@ function renderCapaLog() {
       '<td style="font-size:12px">' + esc(auto ? auto.text : (c.verifyResult || 'Not verified')) + '</td><td>' + badge(pcapaStatus(c)) + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="cl-empty">No program deviations recorded</td></tr>';
 
-  const pos = GH().filter(h => h.resultado === 'Positive' && ((!h.isRetest && !String(h.retestNum || '')) || isVectorRec(h))).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  // Positives from the SQF program start (earlier ones were handled on paper and need no CAPA here).
+  const _start = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
+  const pos = GH().filter(h => h.resultado === 'Positive' && h.fecha >= _start && ((!h.isRetest && !String(h.retestNum || '')) || isVectorRec(h))).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const posRows = pos.map(p => {
     const c = typeof getCapa === 'function' ? getCapa(p.id) : null;
     const eff = typeof capaEventEffect === 'function' ? capaEventEffect(capaPrimaryId(p.id)) : { ok: false, text: '—' };

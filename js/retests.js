@@ -9,12 +9,13 @@ function openFailModal(id) {
   FAILID=id; FAILRES=null;
   const tested = labTestsOf(h).map(k => LAB_TESTS[k].label).join(', ');
   document.getElementById('failInfo').innerHTML =
-    '<strong>'+(h.sample ? 'Sample #'+h.sample : esc(h.location||'Site'))+'</strong> · '+esc(h.planta)+(h.retestNum ? ' · '+esc(h.retestNum) : '')+
-    '<br>'+esc(h.area||'')+(h.location ? ' — '+esc(h.location) : '')+' · Zone '+(h.zone||'—')+' · Collected '+h.fecha+
+    '<strong>'+(h.sample ? 'Sample #'+esc(h.sample) : esc(h.location||'Site'))+'</strong> · '+esc(h.planta)+(h.retestNum ? ' · '+esc(h.retestNum) : '')+
+    '<br>'+esc(h.area||'')+(h.location ? ' — '+esc(h.location) : '')+' · Zone '+esc(h.zone||'—')+' · Collected '+esc(h.fecha)+
     '<br>Tests ordered: <strong>'+esc(tested)+'</strong>';
-  // Pre-fill with what is already on record (editing a result), else blank.
-  const prev = getLabResults(h);
-  LABRES = prev ? JSON.parse(JSON.stringify(prev)) : {};
+  // Pre-fill with what is already on record (editing a result), else blank —
+  // only the tests this record actually ordered.
+  const prev = getLabResults(h) || {};
+  LABRES = {}; labTestsOf(h).forEach(k => { if (prev[k]) LABRES[k] = JSON.parse(JSON.stringify(prev[k])); });
   document.getElementById('labResultRows').innerHTML = labModalRows(h);
   document.getElementById('failNotes').value = labParse(h.labNotes).notes;
   document.getElementById('failModal').classList.add('open');
@@ -366,9 +367,9 @@ function loadRetests() {
         <td style="font-weight:700">${esc(r.sample)}</td>
         <td><span class="badge badge-gray">${esc(r.planta)}</span></td>
         <td>${esc(r.area)}</td>
-        <td style="font-size:12px">${r.originalDate}</td>
-        <td style="font-size:12px">${r.resolvedDate}</td>
-        <td style="text-align:center"><span class="badge ${esc_?'badge-red':'badge-green'}">${r.retestNum||'—'}</span></td>
+        <td style="font-size:12px">${esc(r.originalDate)}</td>
+        <td style="font-size:12px">${esc(r.resolvedDate)}</td>
+        <td style="text-align:center"><span class="badge ${esc_?'badge-red':'badge-green'}">${esc(r.retestNum||'—')}</span></td>
         <td>${outcome}</td>
         <td style="font-size:12px;color:var(--gray-500)">${r.notes||'—'}</td>
       </tr>`;
@@ -391,8 +392,11 @@ function clearRetestSelection() {
 // Returns how many actually changed. Used by both Retests and Test History.
 function _markRecordsNegative(ids) {
   const hist = GH(); const today = todayLocal(); const changed = [];
+  let skipped = 0;
   ids.forEach(id => {
     const r = hist.find(x => x.id === id);
+    // Not yet collected (future date) or presumptive (needs the per-test entry) → skip.
+    if (r && r.resultado !== 'Negative' && (r.fecha > today || (typeof labIsPresumptive === 'function' && labIsPresumptive(r)))) { skipped++; return; }
     if (r && r.resultado !== 'Negative') {
       // Negative for every ordered test: "Negative" for pathogen screens,
       // "<10 CFU/sponge" for the E. coli / S. aureus counts.
@@ -401,6 +405,7 @@ function _markRecordsNegative(ids) {
       changed.push(r);
     }
   });
+  if (skipped) toast(skipped + ' skipped — not collected yet or presumptive (enter those one by one)', 'info');
   if (!changed.length) return 0;
   SH(hist);
   changed.forEach(r => syncSafe(() => syncUpdateRecord(r), 'bulk negative'));
@@ -643,9 +648,9 @@ function openRetestDateModal(origId) {
   RDID = origId;
 
   document.getElementById('retestDateInfo').innerHTML =
-    '<strong>Sample #'+h.sample+'</strong> — '+h.planta+
+    '<strong>Sample #'+esc(h.sample)+'</strong> — '+esc(h.planta)+
     '<br><strong>Area:</strong> '+esc(h.area)+
-    '<br><strong>Positive result:</strong> '+h.fecha;
+    '<br><strong>Positive result:</strong> '+esc(h.fecha);
 
   // Default start date: next weekday from today
   const defaultStart = getNextWeekday(new Date());
@@ -704,6 +709,10 @@ function confirmRetestDates() {
   const origIdx = hist.findIndex(r => r.id === RDID);
   if(origIdx < 0) return;
   const orig = hist[origIdx];
+  // One round at a time: never schedule a second round on top of pending retests.
+  if (hist.some(h => h.originalId === orig.id && h.retestNum && !isVectorRec(h) && h.resultado === 'Pending')) {
+    toast('This positive already has retests pending', 'error'); closeRetestDateModal(); return;
+  }
 
   // Calculate 3 consecutive workdays
   const start = new Date(val + 'T12:00:00');
@@ -739,6 +748,7 @@ function confirmRetestDates() {
       // fresh pending tests — clear any failure data inherited from the parent
       failedPathogens: undefined,
       failedPathogensLabel: undefined,
+      labResults: undefined,
       resultDate: undefined
   }));
   hist.push(...newRetests);

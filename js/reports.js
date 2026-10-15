@@ -356,8 +356,8 @@ function exportReportPDF(opts) {
   const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   // ── Metrics & insights (routine tests, same as the screen) ──────────
-  const resolvedIds = new Set((typeof GRV === 'function' ? GRV() : []).map(r => r.originalId));
-  const openPos = base.filter(h => h.resultado === 'Positive' && !resolvedIds.has(h.id)).length;
+  // Open = positives from the SQF program start not yet closed by 3 negative retests (same rule as the Audit Package).
+  const openPos = base.filter(h => h.resultado === 'Positive' && h.fecha >= SQF_PROGRAM_START && !caseClosed(h.id)).length;
   const bStats = D.buildings.map(b => ({ p: b.id, total: b.total, pos: b.positive, rate: b.total ? b.positive / b.total * 100 : 0, retests: b.retests }));
   const worstB = bStats.filter(b => b.total > 0).sort((a, b) => b.rate - a.rate)[0];
   const patStat = D.pathogens.map(p => ({ k: p.key, n: p.positive })).sort((a, b) => b.n - a.n);
@@ -751,10 +751,11 @@ function buildSQF() {
   const compliantZone4 = allWeeks.filter(w => w.zones.has(4)).length;
 
   // ── 2. Retest response time ────────────────────────────────────────────
-  const positives = hist.filter(h => h.resultado==='Positive' && !h.retestNum);
+  // Positives from the SQF program start (earlier follow-up was handled on paper).
+  const positives = hist.filter(h => h.resultado==='Positive' && !h.retestNum && h.fecha >= SQF_PROGRAM_START);
   let retestOnTime = 0;
   positives.forEach(pos => {
-    const retests = GH().filter(r => r.originalId===pos.id);
+    const retests = GH().filter(r => r.originalId===pos.id && r.retestNum && !isVectorRec(r)).sort((a, b) => a.fecha.localeCompare(b.fecha));
     if(retests.length>0) {
       const posDate = new Date(pos.fecha+'T12:00:00');
       const firstRetest = new Date(retests[0].fecha+'T12:00:00');
@@ -764,9 +765,7 @@ function buildSQF() {
   });
 
   // ── 3. Positive resolution ────────────────────────────────────────────
-  const resolved = GRV();
-  const resolvedIds = new Set(resolved.map(r=>r.originalId));
-  const openPositives = positives.filter(p => !resolvedIds.has(p.id));
+  const openPositives = positives.filter(p => !caseClosed(p.id));
   const resolutionRate = positives.length>0
     ? Math.round((positives.length-openPositives.length)/positives.length*100) : 100;
 
@@ -918,7 +917,9 @@ function buildSQF() {
 
 // ── SQF PDF Export ────────────────────────────────────────────────────────
 function exportSQFpdf() {
-  const year    = document.getElementById('sqfYear').value;
+  // Refresh the compliance screen first: the PDF reads its score and the year list it builds.
+  if (typeof buildSQF === 'function') buildSQF();
+  const year    = document.getElementById('sqfYear').value || String(new Date().getFullYear());
   const plant   = document.getElementById('sqfPlant').value;
   const minT    = parseInt(document.getElementById('sqfMinTests').value)||10;
   const {jsPDF} = window.jspdf;
@@ -929,19 +930,19 @@ function exportSQFpdf() {
   try { doc.addImage(LOGO,'JPEG',M,8,28,14); } catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(0,0,0);
   doc.text('SQF Compliance Report',W/2,13,{align:'center'});
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(192,57,43);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
   doc.text('CAPUTO FOODS',W/2,19,{align:'center'});
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(100,100,100);
   doc.text('Year: '+year+' | Building: '+(plant==='all'?'All':plant)+' | Generated: '+today,W/2,24.5,{align:'center'});
-  doc.setDrawColor(192,57,43); doc.setLineWidth(0.5); doc.line(M,28,W-M,28);
+  doc.setDrawColor(0,0,0); doc.setLineWidth(0.3); doc.line(M,28,W-M,28);
 
   // ── Score box ──────────────────────────────────────────────────────
   const scoreEl = document.getElementById('sqfScoreNum');
-  const overall = scoreEl ? parseInt(scoreEl.textContent) : 0;
-  const scoreColor = overall>=90?[5,150,105]:overall>=75?[217,119,6]:[192,57,43];
-  doc.setFillColor(...scoreColor); doc.setDrawColor(...scoreColor); doc.setLineWidth(0.5);
+  const overall = (scoreEl ? parseInt(scoreEl.textContent, 10) : 0) || 0;
+  // flat printed form: white box, black border and text
+  doc.setFillColor(255,255,255); doc.setDrawColor(0,0,0); doc.setLineWidth(0.4);
   doc.roundedRect(M,31,40,20,3,3,'FD');
-  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(0,0,0);
   doc.text(overall+'%',M+20,42,{align:'center'});
   doc.setFontSize(8); doc.text('COMPLIANCE',M+20,47,{align:'center'});
   doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
@@ -955,8 +956,8 @@ function exportSQFpdf() {
 
   // ── Requirements table ─────────────────────────────────────────────
   const sectionTitle = (t,y) => {
-    doc.setFillColor(26,35,50); doc.rect(M,y,W-M*2,7,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,255,255);
+    doc.setFillColor(242,242,242); doc.setDrawColor(0,0,0); doc.setLineWidth(0.2); doc.rect(M,y,W-M*2,7,'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
     doc.text(t,M+3,y+5); return y+7;
   };
 
@@ -970,7 +971,7 @@ function exportSQFpdf() {
     if(cells.length>=5) {
       const pctText = cells[4].querySelector('span:last-child');
       const val = pctText ? parseInt(pctText.textContent) : 0;
-      const status = val>=90?'✓ CUMPLE':val>=75?'⚠ PARCIAL':'✗ INCUMPLE';
+      const status = val>=90?'Meets':val>=75?'Partial':'Does not meet';
       rows.push([cells[0].textContent.trim(), cells[2].textContent.trim(),
                  cells[3].textContent.trim(), val+'%', status]);
     }
@@ -993,9 +994,7 @@ function exportSQFpdf() {
     didParseCell:d=>{
       if(d.column.index===4&&d.row.index>=0){
         const v=d.cell.raw;
-        if(v&&v.includes('✓')) d.cell.styles.textColor=[5,150,105];
-        else if(v&&v.includes('⚠')) d.cell.styles.textColor=[217,119,6];
-        else if(v&&v.includes('✗')) d.cell.styles.textColor=[192,57,43];
+        if(v&&(v==='Partial'||v==='Does not meet')) d.cell.styles.fontStyle='bold';
       }
     }
   });
@@ -1020,9 +1019,7 @@ function exportSQFpdf() {
     didParseCell:d=>{
       if(d.column.index===4&&d.row.index>=0){
         const v=parseInt(d.cell.raw);
-        if(v>=80) d.cell.styles.textColor=[5,150,105];
-        else if(v>=60) d.cell.styles.textColor=[217,119,6];
-        else d.cell.styles.textColor=[192,57,43];
+        if(v<80) d.cell.styles.fontStyle='bold';
         d.cell.styles.fontStyle='bold';
       }
     }
@@ -1058,10 +1055,10 @@ function exportSQFpdf() {
   for(let i=1;i<=pages;i++){
     doc.setPage(i);
     const fY=doc.internal.pageSize.getHeight()-10;
-    doc.setDrawColor(192,57,43); doc.setLineWidth(0.4); doc.line(M,fY-4,W-M,fY-4);
+    doc.setDrawColor(190,190,190); doc.setLineWidth(0.2); doc.line(M,fY-4,W-M,fY-4);
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
     doc.text('Caputo Foods | SQF Environmental Monitoring Program | Confidential',M,fY);
-    doc.text('Pg. '+i+' de '+pages,W-M,fY,{align:'right'});
+    doc.text('Page '+i+' of '+pages,W-M,fY,{align:'right'});
   }
 
   doc.save('Caputo_SQF_Compliance_'+year+'_'+todayLocal()+'.pdf');

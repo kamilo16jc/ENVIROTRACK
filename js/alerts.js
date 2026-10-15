@@ -90,7 +90,7 @@ function buildAlerts() {
   // 9) Local-only records without a recent backup
   if (typeof backupHasLocalData === 'function' && backupHasLocalData()) {
     const lastBk = localStorage.getItem('cap_backup_last');
-    const age = lastBk ? _alDays(lastBk.slice(0, 10), today) : null;
+    const age = lastBk ? _alDays(todayLocal(new Date(lastBk)), today) : null;
     if (age === null) add('amber', 'No backup of the local records yet', 'CAPAs, EMP, training and reviews live only in this browser — menu → Backup & restore', 'backup');
     else if (age > 7) add('amber', 'Last backup ' + age + ' days ago', 'Download a fresh backup — menu → Backup & restore', 'backup');
   }

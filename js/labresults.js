@@ -108,6 +108,9 @@ function labPositiveText(rec) {
 // Apply per-test results to a record: overall result, failed pathogens
 // (with counts), and the composed lab notes. Mutates and returns rec.
 function applyLabResults(rec, results, userNotes) {
+  const ordered = labTestsOf(rec), only = {};
+  ordered.forEach(k => { if (results && results[k]) only[k] = results[k]; });
+  results = only;
   const pos = LAB_ORDER.filter(k => labIsPos(results[k]));
   const pres = LAB_ORDER.filter(k => labIsPres(results[k]));
   rec.labResults = results;

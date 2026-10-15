@@ -250,7 +250,7 @@ function renderTests() {
           <option ${t.zone==3?'selected':''}>3</option>
           <option ${t.zone==4?'selected':''}>4</option></select></td>
       <td><input type="text" value="${esc(t.area)}" style="width:100%" onchange="chg(${i},'area',this.value,this)"></td>
-      <td><input type="text" value="${esc(t.line)}" style="width:55px" onchange="chg(${i},'line',this.value,this)"></td>
+      <td><input type="text" value="${esc(t.line||'')}" style="width:55px" onchange="chg(${i},'line',this.value,this)"></td>
       <td><input type="text" value="${esc(t.location)}" style="width:100%" onchange="chg(${i},'location',this.value,this)"></td>
       <td class="pat-cell" onclick="togPat(${i},0)">${t.ecoli?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
       <td class="pat-cell" onclick="togPat(${i},1)">${t.listeria?'<span class="pat-dot"></span>':'<span class="pat-none"></span>'}</td>
@@ -384,7 +384,7 @@ function saveWeek(opts) {
   if(!TESTS.length) { toast('No tests to save','error'); return false; }
   if(!opts.skipConfirm && !confirm('Save this week to the history?')) return false;
   const planta = document.getElementById('genPlant').value;
-  const fecha  = document.getElementById('genDate').value;
+  const fecha  = document.getElementById('genDate').value || todayLocal();
   const by     = document.getElementById('genCollectedBy').value;
   const hist   = GH(); const weeks = GW();
   let nextId   = hist.length>0 ? Math.max(...hist.map(h=>h.id))+1 : 1;

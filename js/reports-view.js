@@ -39,7 +39,9 @@ function erReportData(H) {
     (wmap[key] || (wmap[key] = { ws, total: 0, positive: 0 })); wmap[key].total++; if (h.resultado === 'Positive') wmap[key].positive++; });
   const weeks = Object.values(wmap).sort((a, b) => a.ws - b.ws)
     .map(w => ({ label: 'Week of ' + w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), short: w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: w.total, positive: w.positive }));
-  const resolvedCount = (typeof GRV === 'function' ? GRV() : []).length;
+  // Cases closed by 3 negative retests, for the positives in this period (from the SQF program start).
+  const _start = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
+  const resolvedCount = base.filter(h => h.resultado === 'Positive' && h.fecha >= _start && typeof caseClosed === 'function' && caseClosed(h.id)).length;
   const totalTests = base.length;
   return { base, retestRecs, buildings, pathogens, zones, weeks, negC, posC, pendC, totalTests,
     totalRetests: retestRecs.length, resolvedCount,

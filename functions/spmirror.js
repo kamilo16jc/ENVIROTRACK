@@ -290,8 +290,9 @@ exports.spImportScheduled = onSchedule({ schedule: "every 30 minutes", region: R
 
 // Manual run (migration): POST with header x-import-key = IMPORT_KEY (functions/.env).
 exports.spImportNow = onRequest({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (req, res) => {
-  const key = process.env.IMPORT_KEY;
-  if (!key || req.get("x-import-key") !== key) { res.status(403).json({ ok: false }); return; }
+  const key = process.env.IMPORT_KEY || "", got = String(req.get("x-import-key") || "");
+  const same = key.length > 0 && got.length === key.length && require("crypto").timingSafeEqual(Buffer.from(got), Buffer.from(key));
+  if (req.method !== "POST" || !same) { res.status(403).json({ ok: false }); return; }
   try { res.json({ ok: true, imported: await spImport() }); }
-  catch (e) { console.error("[spImport]", e); res.status(500).json({ ok: false, error: String(e && e.message || e).slice(0, 300) }); }
+  catch (e) { console.error("[spImport]", e); res.status(500).json({ ok: false, error: "import failed" }); }
 });

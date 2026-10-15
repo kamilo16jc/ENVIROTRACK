@@ -137,8 +137,21 @@ function confirmVector() {
 // after it — even if that round was recorded under another origin (legacy
 // escalations were logged under the first positive, e.g. 1935 #148 in July).
 function siteRetestedAfter(p, hist) {
+  // A positive RETEST's own later siblings (#2/#3 of the same round) are not a
+  // follow-up of it — only a new round is: retests linked to it, retests of
+  // another case, or a round under the same original that restarts its numbering.
+  const num = r => parseInt(String(r.retestNum || '').replace(/\D/g, ''), 10) || 0;
   return (hist || GH()).some(x => x.planta === p.planta && String(x.sample) === String(p.sample) &&
-    x.retestNum && !isVectorRec(x) && x.id !== p.id && String(x.fecha) > String(p.fecha));
+    x.retestNum && !isVectorRec(x) && x.id !== p.id && String(x.fecha) > String(p.fecha) &&
+    (!p.retestNum || x.originalId === p.id || x.originalId !== p.originalId || num(x) <= num(p)));
+}
+
+// A positive case is CLOSED when its retests confirmed it (3 consecutive
+// negatives) or it was closed manually in the legacy system (a resolved anchor
+// that is not just "retests scheduled"). Same rule for every report.
+function caseClosed(rootId) {
+  if (typeof capaEffectiveness === 'function' && capaEffectiveness(rootId).ok) return true;
+  return (typeof GRV === 'function' ? GRV() : []).some(r => r.originalId === rootId && !r.closedOnGenerate);
 }
 
 // Sites of a building with an OPEN positive follow-up: a positive whose
@@ -368,7 +381,7 @@ function capaRenderVerification() {
   const approved = c.approvedAt || c.verifiedBy;
   box.innerHTML = rows +
     (approved
-      ? '<div class="capa-approved"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approved and closed by ' + esc(c.approvedBy || c.verifiedBy) + ' · ' + esc(c.verifiedDate || (c.approvedAt || '').slice(0, 10)) + '</div>'
+      ? '<div class="capa-approved"><svg class="ln ico-inline" width="13" height="13" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approved and closed by ' + esc(c.approvedBy || c.verifiedBy) + ' · ' + esc(c.verifiedDate || (c.approvedAt ? todayLocal(new Date(c.approvedAt)) : '')) + '</div>'
       : all && canApproveCapa()
         ? '<button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="approveCapa()">Approve &amp; close</button>'
         : '<p class="vec-help" style="margin-top:6px">' + (all ? 'Ready — a Manager or Administrator approves and closes it.' : 'Closes after 3 consecutive negative retests' + (roots.length > 1 ? ' at every site' : '') + ', approved by a Manager or Administrator.') + '</p>');

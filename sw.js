@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v105';
+const CACHE_NAME = 'envirotrack-v106';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
@@ -84,8 +84,11 @@ self.addEventListener('fetch', evt => {
     caches.match(evt.request).then(cached => {
       if (cached) return cached;
       return fetch(evt.request).then(response => {
-        // Cache new successful requests
-        if (response && response.status === 200) {
+        // Cache only GETs of this app's own files and the pinned CDN libraries —
+        // never Firestore / Functions / Microsoft responses (data stays off the device cache).
+        const u = new URL(evt.request.url);
+        const cacheable = evt.request.method === 'GET' && (u.origin === self.location.origin || u.hostname === 'cdnjs.cloudflare.com' || u.hostname === 'www.gstatic.com');
+        if (cacheable && response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(evt.request, clone));
         }

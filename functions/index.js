@@ -76,6 +76,14 @@ const ADMIN_OPS = new Set([
   "masterWrite", "masterPointsWrite", "masterPointsUpdate", "emailmonthly",
 ]);
 
+// Root administrators cannot be disabled, demoted or deleted by other admins.
+async function assertNotRoot(uid) {
+  const u = await admin.auth().getUser(uid).catch(() => null);
+  if (u && ROOT_ADMINS.includes(String(u.email || "").toLowerCase())) {
+    throw new HttpsError("permission-denied", "This account is protected.");
+  }
+}
+
 // Effective role of the caller, or null if the account was not provisioned by
 // an admin. Root admins are always treated as Administrator.
 function roleOf(request) {
@@ -125,7 +133,7 @@ exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request)
     }
     throw new HttpsError("internal", e.message || "Could not create the user.");
   }
-  await admin.auth().setCustomUserClaims(user.uid, { role: role || "Inspector" });
+  await admin.auth().setCustomUserClaims(user.uid, { role: VALID_ROLES.includes(role) ? role : "Inspector" });
   return { uid: user.uid };
 });
 
@@ -137,6 +145,7 @@ exports.adminSetUserActive = onCall({ region: REGION, cors: true }, async (reque
   if (uid === request.auth.uid && active === false) {
     throw new HttpsError("failed-precondition", "You cannot deactivate your own account.");
   }
+  await assertNotRoot(uid);
   await admin.auth().updateUser(uid, { disabled: active === false });
   return { ok: true };
 });
@@ -149,6 +158,7 @@ exports.adminSetRole = onCall({ region: REGION, cors: true }, async (request) =>
   if (!uid || !allowed.includes(role)) {
     throw new HttpsError("invalid-argument", "Invalid user id or role.");
   }
+  if (role !== "Administrator") await assertNotRoot(uid);
   await admin.auth().setCustomUserClaims(uid, { role });
   return { ok: true };
 });
@@ -172,6 +182,7 @@ exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request)
   if (uid === request.auth.uid) {
     throw new HttpsError("failed-precondition", "You cannot delete your own account.");
   }
+  await assertNotRoot(uid);
   await admin.auth().deleteUser(uid);
   return { ok: true };
 });
