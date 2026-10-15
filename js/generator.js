@@ -463,3 +463,48 @@ function saveCollTime() {
   if (typeof searchHistory === 'function') searchHistory();
   toast(changed.length ? 'Collection time saved for ' + changed.length + ' sample' + (changed.length === 1 ? '' : 's') : 'No changes', changed.length ? 'success' : 'info');
 }
+
+// ── Sampling-times panel (clock in the generator toolbar) ─────────
+function toggleTimesPop(ev) {
+  if (ev) ev.stopPropagation();
+  const pop = document.getElementById('timesPop'), open = !pop.classList.contains('open');
+  if (open) {
+    document.getElementById('gtStart').value = document.getElementById('genProdStart').value;
+    document.getElementById('gtColl').value = document.getElementById('genCollTime').value;
+    timesChanged();
+  }
+  pop.classList.toggle('open', open);
+  document.getElementById('btnTimes').setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) setTimeout(() => document.getElementById(document.getElementById('gtStart').value ? 'gtColl' : 'gtStart').focus(), 30);
+}
+function closeTimesPop() {
+  const pop = document.getElementById('timesPop'); if (!pop) return;
+  pop.classList.remove('open'); document.getElementById('btnTimes').setAttribute('aria-expanded', 'false');
+}
+function setTimeNow(id) {
+  const d = new Date(); document.getElementById(id).value = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  timesChanged();
+}
+function clearTimes() { document.getElementById('gtStart').value = ''; document.getElementById('gtColl').value = ''; timesChanged(); }
+// Keeps the hidden fields (read by saveWeek / the PDF), the meter and the clock icon in step.
+function timesChanged() {
+  const s = document.getElementById('gtStart'), c = document.getElementById('gtColl');
+  if (s && c) { document.getElementById('genProdStart').value = s.value; document.getElementById('genCollTime').value = c.value; }
+  const ps = document.getElementById('genProdStart').value, ct = document.getElementById('genCollTime').value;
+  const g = collGapMinutes(ps, ct), late = g !== null && g < COLL_MIN_MINUTES;
+  const btn = document.getElementById('btnTimes');
+  if (btn) {
+    btn.classList.toggle('gt-set', !!(ps || ct)); btn.classList.toggle('gt-ok', g !== null && !late); btn.classList.toggle('gt-late', late);
+    btn.title = !ps && !ct ? 'Sampling times — not set' : 'Production start ' + (ps || '—') + ' · collection ' + (ct || '—') + (g !== null ? ' (' + fmtGap(g) + ')' : '');
+  }
+  const mark = document.getElementById('gtMark'), st = document.getElementById('gtStatus');
+  if (!mark || !st) return;
+  if (g === null) { mark.style.display = 'none'; st.className = 'gt-status'; st.textContent = ps || ct ? 'Set both times to check the SOP window' : 'Set both times to check the SOP window'; return; }
+  mark.style.display = ''; mark.style.left = Math.max(0, Math.min(100, g / 360 * 100)) + '%';
+  mark.className = 'gt-mark' + (late ? ' late' : '');
+  st.className = 'gt-status ' + (late ? 'late' : 'ok');
+  st.textContent = g < 0 ? 'Collection is before production start — check the times'
+    : late ? fmtGap(g) + ' after start — under the 3 h the SOP requires' : fmtGap(g) + ' after start — within the SOP window';
+}
+document.addEventListener('click', e => { const pop = document.getElementById('timesPop'); if (pop && pop.classList.contains('open') && !e.target.closest('.gt-wrap')) closeTimesPop(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTimesPop(); });
