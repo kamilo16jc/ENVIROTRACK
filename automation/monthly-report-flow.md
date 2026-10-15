@@ -34,7 +34,7 @@ The app side is implemented. Build the flow (2 actions) and wire the URL.
   ```
 
 ### 2. Send an email (V2) — Office 365 Outlook
-- **To:** `admin@example.com` (add QA emails later, separated by `;`)
+- **To:** the QA distribution list (addresses separated by `;`)
 - **Subject:** dynamic → `subject`
 - **Body:** switch to code view `</>` and insert dynamic → `bodyHtml`
   (it is already full HTML built by the app).

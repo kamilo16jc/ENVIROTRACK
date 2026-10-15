@@ -33,10 +33,10 @@ fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(() => {});
 // ── Admin: who sees the Settings panel ───────────────────────
 // List here the emails that should see the settings (points
 // management, etc.). If left empty, ALL signed-in users
-// see it. E.g. const ADMIN_EMAILS = ["admin@example.com"];
+// see it. Roles come from the custom claim set by the admin functions.
 // Root admin emails — always treated as admins (matches ROOT_ADMINS in the
 // Cloud Function). Users promoted to the "Administrator" role also count.
-const ADMIN_EMAILS = ["admin@example.com"];
+const ADMIN_EMAILS = [];   // roles come from the Firebase custom claim (no emails in the public repo)
 function isAdmin(email, role) {
   if (role === "Administrator") return true;
   return ADMIN_EMAILS.includes((email || "").toLowerCase());

@@ -48,7 +48,8 @@ function verifyPhotoToken(token, retestId) {
 // admin without needing to set a claim first. Additionally, any user
 // promoted to the "Administrator" role (custom claim) is also an admin.
 // Edit this list to add/remove root admins.
-const ROOT_ADMINS = ["admin@example.com"];
+// Root administrators: functions/.env ROOT_ADMINS (comma separated) — not in the public repo.
+const ROOT_ADMINS = String(process.env.ROOT_ADMINS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
 // Throws unless the caller is an admin. Returns the caller's email.
 function assertAdmin(request) {

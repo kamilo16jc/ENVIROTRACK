@@ -7,6 +7,10 @@
 // a change log. Overrides live in localStorage (cap_emp) until the new
 // backend exists. The SQF audit pack reads getEMP().
 // ═══════════════════════════════════════════════════════════════
+// Document facts (SOP revision, purpose, sampling rules, accredited lab,
+// plan wording, forms) are CONFIDENTIAL: they live in Firestore
+// private/empDefaults (git-ignored private-local/empDefaults.json in dev)
+// and are merged in by empLoadPrivate() after sign-in.
 const EMP_DEFAULTS = {
   clause: 'SQF 2.4.H',
   sopVersion: '', purpose: '', owner: '', frequency: '',
@@ -36,8 +40,33 @@ const EMP_DEFAULTS = {
 function _empStored() {
   try { return JSON.parse(localStorage.getItem('cap_emp') || '{}') || {}; } catch (e) { return {}; }
 }
+// Confidential program facts, cached on this device after sign-in.
+const EMP_PRIV_KEY = 'cap_emp_private', APP_CFG_KEY = 'cap_app_config';
+function _empPrivate() { try { return JSON.parse(localStorage.getItem(EMP_PRIV_KEY) || 'null'); } catch (e) { return null; } }
+function appConfig() { try { return JSON.parse(localStorage.getItem(APP_CFG_KEY) || 'null') || {}; } catch (e) { return {}; } }
+async function empLoadPrivate() {
+  if (typeof storePrivate !== 'function') return;
+  const unwrap = d => d && typeof d.json === 'string' ? JSON.parse(d.json) : d;
+  try { const d = unwrap(await storePrivate('empDefaults')); if (d) localStorage.setItem(EMP_PRIV_KEY, JSON.stringify(d)); } catch (e) { console.warn('[emp] private defaults', e); }
+  try { const c = unwrap(await storePrivate('appConfig')); if (c) localStorage.setItem(APP_CFG_KEY, JSON.stringify(c)); } catch (e) { console.warn('[emp] app config', e); }
+  if (typeof renderEMPConfig === 'function') { try { renderEMPConfig(); } catch (e) {} }
+  if (typeof refreshDashboard === 'function') { try { refreshDashboard(); } catch (e) {} }
+  // lab sender permission depends on the private config → re-apply now that it is here
+  const bls = document.getElementById('btnLabSend');
+  if (bls && typeof CU !== 'undefined' && CU && typeof canSendToLab === 'function') bls.style.display = canSendToLab(CU.email) ? '' : 'none';
+  if (typeof loadRetests === 'function') { try { loadRetests(); } catch (e) {} }
+}
+
 function getEMP() {
   const base = JSON.parse(JSON.stringify(EMP_DEFAULTS));
+  const pv = _empPrivate();
+  if (pv) {
+    ['sopVersion', 'purpose', 'owner', 'frequency'].forEach(k => { if (pv[k]) base[k] = pv[k]; });
+    if (Array.isArray(pv.samplingRules)) base.samplingRules = pv.samplingRules;
+    if (pv.lab) Object.assign(base.lab, pv.lab);
+    if (pv.plants) Object.keys(pv.plants).forEach(p => { if (base.plants[p]) Object.assign(base.plants[p], pv.plants[p]); });
+    if (Array.isArray(pv.forms)) base.forms = pv.forms;
+  }
   const st = _empStored();
   if (st.program) ['sopVersion', 'purpose', 'owner'].forEach(k => { if (st.program[k]) base[k] = st.program[k]; });
   if (st.lab) Object.keys(base.lab).forEach(k => { if (st.lab[k]) base.lab[k] = st.lab[k]; });

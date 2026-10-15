@@ -309,6 +309,7 @@ async function bootSyncThenEnter() {
   // Firestore first: connect before the boot reads so they come from the fast
   // primary store instead of the (slow) SharePoint fallback.
   try { if (typeof storeStart === 'function' && typeof fbAuth !== 'undefined' && fbAuth.currentUser) { storePreload(); storeStart(); } } catch (e) {}
+  if (typeof empLoadPrivate === 'function') empLoadPrivate();   // confidential program facts (private/*)
   const splash = document.getElementById('loadingSplash');
   const fill = document.getElementById('lsFill'), txt = document.getElementById('lsText');
   const spin = splash && splash.querySelector('.ls-spin');

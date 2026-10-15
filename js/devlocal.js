@@ -59,6 +59,7 @@
       if (gd) gd.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
       var sg = document.getElementById('nav-settings-group'); if (sg) sg.classList.add('visible');
       try { if (typeof refreshDashboard === 'function') refreshDashboard(); } catch (e) {}
+      try { if (typeof empLoadPrivate === 'function') empLoadPrivate(); } catch (e) {}
       try { if (typeof searchHistory === 'function') searchHistory(); } catch (e) {}
       try { if (typeof loadRetests === 'function') loadRetests(); } catch (e) {}
       try { if (typeof loadSubmissions === 'function') loadSubmissions(); } catch (e) {}

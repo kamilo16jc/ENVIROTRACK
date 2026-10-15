@@ -12,11 +12,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function isRoot() { return signedIn() && request.auth.token.email in ['admin@example.com']; }
     function provisioned() {
-      return isRoot() || (signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator']);
+      return signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator'];
     }
-    function isAdmin() { return isRoot() || (signedIn() && request.auth.token.get('role', '') == 'Administrator'); }
+    function isAdmin() { return signedIn() && request.auth.token.get('role', '') == 'Administrator'; }
     function stamped() { return request.resource.data._by == request.auth.token.email; }
 
     // ── Core data (was SharePoint-only) ─────────────────────────

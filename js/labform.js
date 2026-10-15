@@ -82,8 +82,8 @@ function labPayloadRetest(rec, retestNum, kind) {
 }
 
 // ── Who can "Send to Lab" (email is tied to Julian's config) ──
-const LAB_SENDER_EMAILS = ['admin@example.com'];
-function canSendToLab(email) { return LAB_SENDER_EMAILS.includes((email || '').toLowerCase()); }
+// Who may email the lab: private/appConfig.labSenders (not in the public repo).
+function canSendToLab(email) { const l = (typeof appConfig === 'function' ? appConfig().labSenders : null) || []; return l.map(x => String(x).toLowerCase()).includes((email || '').toLowerCase()); }
 
 // ── Submit the normal (generator) lab form ────────────────────
 // sendToLab=false → only fill + archive (FOLDER PROVISIONAL).
