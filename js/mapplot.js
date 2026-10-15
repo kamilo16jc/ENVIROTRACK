@@ -231,10 +231,13 @@ function mapPlacedCount(plant) {
 const FM_BRIDGE = 'window.__fmSnap=function(o){try{' +
   'var mt=document.getElementById("f-motion-toggle");if(mt)mt.checked=false;' +
   'if(o.w&&o.h){stage.style.width=o.w+"px";stage.style.height=o.h+"px";resize();}' +
-  'changeBuilding(o.building||"all",false);animation=null;yaw=o.yaw;pitch=o.pitch;' +
-  'var b=basis(),P=o.frame.map(function(p){return[p[0],0,p[1]]});' +
-  'target=[(Math.min.apply(null,P.map(function(p){return p[0]}))+Math.max.apply(null,P.map(function(p){return p[0]})))/2,0,(Math.min.apply(null,P.map(function(p){return p[2]}))+Math.max.apply(null,P.map(function(p){return p[2]})))/2];' +
-  'half=Math.max.apply(null,P.map(function(p){var v=p.map(function(x,i){return x-target[i]});return Math.max(Math.abs(dot(v,b.u)),Math.abs(dot(v,b.r))*height/width)}))*1.05+1;' +
+  'window.__fmExtra=o.extra||[];changeBuilding(o.building||"all",false);animation=null;yaw=o.yaw;pitch=o.pitch;' +
+  // frame in screen space on the floor AND the wall tops (else the far wall is cut off)
+  'var b=basis(),P=[];o.frame.forEach(function(p){P.push([p[0],0,p[1]],[p[0],o.wallTop||5,p[1]])});' +
+  'var U=P.map(function(p){return dot(p,b.u)}),R=P.map(function(p){return dot(p,b.r)}),' +
+  'cu=(Math.min.apply(null,U)+Math.max.apply(null,U))/2,cr=(Math.min.apply(null,R)+Math.max.apply(null,R))/2;' +
+  'target=[0,0,0];[0,1,2].forEach(function(i){target[i]=b.u[i]*cu+b.r[i]*cr});var t=-target[1]/b.f[1];target=target.map(function(x,i){return x+b.f[i]*t});' +
+  'half=Math.max(Math.max.apply(null,U.map(function(u){return Math.abs(u-cu)})),Math.max.apply(null,R.map(function(r){return Math.abs(r-cr)}))*height/width)*1.04+0.5;' +
   'shadowDirty=true;pickDirty=true;render(performance.now());' +
   'var c=document.getElementById("f-canvas"),l=document.getElementById("f-labels"),out=document.createElement("canvas");out.width=c.width;out.height=c.height;' +
   'var x=out.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,out.width,out.height);x.filter="grayscale(1) contrast(1.15) brightness(1.04)";x.drawImage(c,0,0);if(o.labels&&l)x.drawImage(l,0,0);' +
@@ -244,7 +247,7 @@ const FM_BRIDGE = 'window.__fmSnap=function(o){try{' +
 const FM_LIGHT = '<script>(function(){var mm=window.matchMedia.bind(window);window.matchMedia=function(q){return /prefers-color-scheme:\\s*dark/.test(q)?' +
   '{matches:false,media:q,addEventListener:function(){},removeEventListener:function(){},addListener:function(){},removeListener:function(){}}:mm(q);};})();<\/script>';
 
-async function facilitySnapshot(frame, points, size) {
+async function facilitySnapshot(frame, points, size, buildings) {
   const d = typeof storePrivate === 'function' ? await storePrivate('facilityMap').catch(() => null) : null;
   if (!d || !d.html || !frame.length) return null;
   const f = document.createElement('iframe');
@@ -253,13 +256,16 @@ async function facilitySnapshot(frame, points, size) {
   f.style.cssText = 'position:fixed;left:0;top:0;width:' + (sw + 80) + 'px;height:' + (sh + 600) + 'px;opacity:0;pointer-events:none;z-index:-1;border:0';
   const HOOK = /\(\(\)=>\{(?=\s*const root=document\.getElementById\()/;
   if (!HOOK.test(d.html)) { console.warn('[map] 3D map structure changed — flat plan'); return null; }
-  f.srcdoc = d.html.replace(/<head[^>]*>/i, m => m + FM_LIGHT).replace(HOOK, m => m + FM_BRIDGE);
+  const FILTER = "allowedBuilding=b=>building==='all'||b===building";
+  f.srcdoc = d.html.replace(/<head[^>]*>/i, m => m + FM_LIGHT).replace(HOOK, m => m + FM_BRIDGE)
+    .replace(FILTER, FILTER + '||(window.__fmExtra||[]).includes(b)');
   document.body.appendChild(f);
   try {
     await new Promise((res, rej) => { f.onload = res; setTimeout(() => rej(new Error('3D map timeout')), 25000); });
     for (let i = 0; i < 80 && !(f.contentWindow && f.contentWindow.__fmSnap); i++) await new Promise(r => setTimeout(r, 100));
     await new Promise(r => setTimeout(r, 600));   // let the scene finish its first frames
-    const r = f.contentWindow.__fmSnap({ yaw: -0.35, pitch: 0.98, frame, points, labels: true, y: 0.4, w: sw, h: sh });
+    const ids = buildings && buildings.length ? buildings : ['all'];
+    const r = f.contentWindow.__fmSnap({ yaw: 0, pitch: 0.98, building: ids[0], extra: ids.slice(1), frame, points, labels: true, y: 0.4, w: sw, h: sh });
     if (!r || r.error) { if (r) console.warn('[map] 3D snapshot', r.error); return null; }
     return r;
   } catch (e) { console.warn('[map] 3D snapshot', e); return null; }
@@ -299,7 +305,7 @@ async function exportTestsMapPDF() {
   const PX = M, PY = 25, PW = 178, PHh = PH - PY - 17;
   toast('Rendering the 3D sampling map…', 'info');
   const frame = scene.buildings.flatMap(bd => bd.polygon);
-  const snap = await facilitySnapshot(frame, placed.map(r => [r.mapX, r.mapZ]), { w: 1600, h: Math.round(1600 * PHh / PW) });
+  const snap = await facilitySnapshot(frame, placed.map(r => [r.mapX, r.mapZ]), { w: 1600, h: Math.round(1600 * PHh / PW) }, MAP_BUILDINGS_OF[plant] || [plant]);
   let posOf;
   if (snap) {
     const k = Math.min(PW / snap.w, PHh / snap.h), iw = snap.w * k, ih = snap.h * k, ix = PX + (PW - iw) / 2, iy = PY + (PHh - ih) / 2;
