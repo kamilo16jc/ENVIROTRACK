@@ -9,6 +9,9 @@
 // World coordinates are metres: x → east, z → south.
 // ═══════════════════════════════════════════════════════════════
 
+// Distinct colors for the tests of one sampling map (≈10 per day); they repeat only past 12.
+const MAP_TEST_COLORS = [[230, 25, 75], [0, 130, 200], [60, 180, 75], [245, 130, 48], [145, 30, 180], [70, 240, 240],
+  [240, 50, 230], [255, 225, 25], [128, 0, 0], [0, 0, 128], [170, 110, 40], [0, 128, 128]];
 const MAP_BUILDINGS_OF = { '1945': ['1945', 'Docks'], '1935': ['1935'], '1931E': ['1931E'], '1931W': ['1931W'] };
 let MAP_GEO = null;
 
@@ -56,7 +59,6 @@ function mapSuggestedAreas(scene, pt) {
   if (onLine.length) { const refined = onLine.filter(hit); return new Set((refined.length ? refined : onLine).map(a => a.id)); }
   return new Set(scene.areas.filter(hit).map(a => a.id));
 }
-const MAP_ZONE_STYLE = { 1: { fill: '#ffffff', text: '#283d31', stroke: '#283d31', ring: 2 }, 2: { fill: '#283d31', text: '#fff' }, 3: { fill: '#8a9a86', text: '#fff' }, 4: { fill: '#ffffff', text: '#283d31', stroke: '#283d31' } };
 
 // ── SVG plan (app) ─────────────────────────────────────────────
 // opts: { marks:[{x,z,label,zone,muted,id}], highlight:Set(areaIds), labels:bool, interactive:bool }
@@ -98,50 +100,88 @@ function mapSvg(geo, plant, opts) {
 
   if (opts.interactive) {
     let drag = null;
-    const toWorld = ev => { const r = svg.getBoundingClientRect(); return [vb.x + (ev.clientX - r.left) / r.width * vb.w, vb.y + (ev.clientY - r.top) / r.height * vb.h]; };
+    // screen → plan through the SVG's own matrix (the plan is letterboxed inside its box)
+    const toWorld = ev => { const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; const w = p.matrixTransform(svg.getScreenCTM().inverse()); return [w.x, w.y]; };
     svg.addEventListener('wheel', ev => {
       ev.preventDefault();
       const [wx, wz] = toWorld(ev), f = ev.deltaY < 0 ? 0.85 : 1 / 0.85;
       const nw = Math.min(svg._home.w * 1.5, Math.max(svg._home.w / 12, vb.w * f)), k = nw / vb.w;
       vb.x = wx - (wx - vb.x) * k; vb.y = wz - (wz - vb.y) * k; vb.w = nw; vb.h *= k; setVB();
     }, { passive: false });
-    svg.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, moved: false }; svg.setPointerCapture(ev.pointerId); });
+    svg.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, k: svg.getScreenCTM().a, moved: false }; svg.setPointerCapture(ev.pointerId); });
     svg.addEventListener('pointermove', ev => {
       if (!drag) return;
-      const r = svg.getBoundingClientRect(), dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-      if (drag.moved) { vb.x = drag.vx - dx / r.width * vb.w; vb.y = drag.vy - dy / r.height * vb.h; setVB(); }
+      if (drag.moved) { vb.x = drag.vx - dx / drag.k; vb.y = drag.vy - dy / drag.k; setVB(); }
     });
     svg.addEventListener('pointerup', ev => {
       const wasDrag = drag && drag.moved; drag = null;
-      if (!wasDrag && opts.onPick) { const [x, z] = toWorld(ev); opts.onPick(x, z); }
+      if (wasDrag) return;
+      const mk = _mpMarkAt(ev);
+      if (mk) { mapShowTip(svg, mk); return; }          // tap on a dot → show its number, do not move the point
+      mapShowTip(svg, null);
+      if (opts.onPick) { const [x, z] = toWorld(ev); opts.onPick(x, z); }
     });
     svg._zoom = f => { const cx = vb.x + vb.w / 2, cz = vb.y + vb.h / 2; vb.w *= f; vb.h *= f; vb.x = cx - vb.w / 2; vb.y = cz - vb.h / 2; setVB(); };
     svg._reset = () => { Object.assign(vb, svg._home); setVB(); };
+  } else {
+    svg.addEventListener('click', ev => mapShowTip(svg, _mpMarkAt(ev)));
   }
   return svg;
 }
+// Every point is a plain dot; tapping it shows its number (mapShowTip).
 function mapAddMark(svg, m) {
-  const NS = 'http://www.w3.org/2000/svg', u = svg._unit, st = MAP_ZONE_STYLE[m.zone] || MAP_ZONE_STYLE[3];
+  const NS = 'http://www.w3.org/2000/svg', u = svg._unit;
   const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'mp-mark' + (m.muted ? ' mp-muted' : '') + (m.current ? ' mp-current' : ''));
   if (m.id) g.dataset.id = m.id;
-  const r = m.muted ? u * 0.9 : u * 1.9;
-  const c = document.createElementNS(NS, 'circle');
-  c.setAttribute('cx', m.x); c.setAttribute('cy', m.z); c.setAttribute('r', r);
-  c.setAttribute('fill', m.muted ? '#b9c2b4' : (m.current ? '#bd877b' : st.fill)); c.setAttribute('stroke', m.muted ? 'none' : (st.stroke || '#fff')); c.setAttribute('stroke-width', u * (st.ring && !m.current ? 0.7 : 0.3));
-  g.appendChild(c);
-  if (m.label && !m.muted) {
-    const t = document.createElementNS(NS, 'text');
-    t.setAttribute('x', m.x); t.setAttribute('y', m.z); t.setAttribute('font-size', u * (String(m.label).length > 2 ? 1.6 : 2)); t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'central');
-    t.setAttribute('fill', m.current ? '#fff' : st.text); t.textContent = m.label; g.appendChild(t);
-  }
-  if (m.title) { const ti = document.createElementNS(NS, 'title'); ti.textContent = m.title; g.appendChild(ti); }
+  g.dataset.tip = m.tip || (m.label != null ? '#' + m.label : '');
+  g.dataset.x = m.x; g.dataset.z = m.z;
+  const circle = (r, cls) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', m.x); c.setAttribute('cy', m.z); c.setAttribute('r', r); c.setAttribute('class', cls); g.appendChild(c); return c; };
+  circle(u * 1.5, 'mp-hit');                                   // bigger invisible target (fingers)
+  if (m.current) circle(u * 1.6, 'mp-halo');
+  circle(m.current ? u * 1.1 : u * 0.85, 'mp-dot').setAttribute('stroke-width', u * 0.25);
   svg._marks.appendChild(g);
   return g;
 }
+function mapShowTip(svg, g) {
+  const NS = 'http://www.w3.org/2000/svg', old = svg.querySelector('.mp-tip'); if (old) old.remove();
+  if (!g || !g.dataset.tip) return;
+  const k = svg._vb.w / svg._home.w, u = svg._unit * Math.max(0.35, Math.min(1.4, k)), x = Number(g.dataset.x), z = Number(g.dataset.z);
+  const t = document.createElementNS(NS, 'g'); t.setAttribute('class', 'mp-tip');
+  const tx = document.createElementNS(NS, 'text'); tx.textContent = g.dataset.tip;
+  tx.setAttribute('x', x); tx.setAttribute('y', z - u * 3.4); tx.setAttribute('font-size', u * 2.3); tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('dominant-baseline', 'central');
+  t.appendChild(tx); svg.appendChild(t);
+  const bb = tx.getBBox(), pad = u * 0.7, bg = document.createElementNS(NS, 'rect');
+  bg.setAttribute('x', bb.x - pad); bg.setAttribute('y', bb.y - pad * 0.6); bg.setAttribute('width', bb.width + pad * 2); bg.setAttribute('height', bb.height + pad * 1.2);
+  bg.setAttribute('rx', u * 0.6); t.insertBefore(bg, tx);
+}
+function _mpMarkAt(ev) { const h = document.elementFromPoint(ev.clientX, ev.clientY); return h && h.closest ? h.closest('.mp-mark') : null; }
 
 // ── Place a MASTER point on the plan (admin) ───────────────────
 let MP_EDIT = null;   // { plant, sample, x, z, area }
+let MP_QUEUE = null;  // guided placement: { plant, list:[samples], i, vb }
+
+// Points Master → "Place points on the map": walks the active points not yet placed, one after another.
+function startPlaceQueue(plant) {
+  if (!empCanEdit()) return;
+  const list = getMasterPoints().filter(p => p.plant === plant && p.active !== false && p.mapX == null)
+    .map(p => Number(p.sample)).sort((a, b) => a - b);
+  if (!list.length) { toast('All active points of ' + plant + ' are already on the map', 'success'); return; }
+  MP_QUEUE = { plant, list, i: 0, vb: null };
+  openPlaceOnMap(plant, list[0]);
+}
+function _mpQueueOn(plant, sample) { return MP_QUEUE && MP_QUEUE.plant === plant && MP_QUEUE.list[MP_QUEUE.i] === Number(sample); }
+function mpSkip() {
+  if (!MP_QUEUE) return;
+  if (MP_EDIT && MP_EDIT.svg) MP_QUEUE.vb = Object.assign({}, MP_EDIT.svg._vb);
+  _mpNext();
+}
+function _mpNext() {
+  const q = MP_QUEUE; q.i++;
+  if (q.i >= q.list.length) { MP_QUEUE = null; closePlaceOnMap(); toast('Done — no more points to place in this round', 'success'); return; }
+  openPlaceOnMap(q.plant, q.list[q.i]);
+}
 
 async function openPlaceOnMap(plant, sample) {
   const pt = getMasterPoints().find(p => p.plant === plant && Number(p.sample) === Number(sample));
@@ -153,11 +193,14 @@ async function openPlaceOnMap(plant, sample) {
   const scene = _mpScene(geo, plant);
   const hi = mapSuggestedAreas(scene, pt);
   const others = getMasterPoints().filter(p => p.plant === plant && p.mapX != null && Number(p.sample) !== Number(sample))
-    .map(p => ({ x: p.mapX, z: p.mapZ, muted: true, title: '#' + p.sample + ' · ' + (p.area || '') }));
+    .map(p => ({ x: p.mapX, z: p.mapZ, muted: true, tip: '#' + p.sample + (p.area ? ' · ' + p.area : '') }));
 
+  const inQ = admin && _mpQueueOn(plant, sample);
+  if (!inQ) MP_QUEUE = null;
   const body = document.getElementById('mapPlaceBody');
   body.innerHTML =
-    '<div class="mp-head"><div><h3>Sample #' + esc(String(sample)) + ' <span class="badge badge-gray">' + esc(plant) + '</span></h3>' +
+    '<div class="mp-head"><div><h3>Sample #' + esc(String(sample)) + ' <span class="badge badge-gray">' + esc(plant) + '</span>' +
+      (inQ ? '<span class="mp-qcount">' + (MP_QUEUE.i + 1) + ' of ' + MP_QUEUE.list.length + '</span>' : '') + '</h3>' +
       '<div class="ph-sub">Zone ' + esc(String(pt.zone || '—')) + ' · ' + esc(pt.area || '—') + (pt.line && pt.line !== 'N/A' ? ' · Line ' + esc(pt.line) : '') + ' · ' + esc(pt.location || '—') + '</div></div>' +
       '<div class="mp-tools"><button class="emp-edit" onclick="mpZoom(0.75)" title="Zoom in" aria-label="Zoom in">+</button><button class="emp-edit" onclick="mpZoom(1.33)" title="Zoom out" aria-label="Zoom out">−</button>' +
       '<button class="emp-edit" onclick="mpReset()" title="Fit building" aria-label="Fit building"><svg class="ln" width="14" height="14" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div></div>' +
@@ -167,19 +210,22 @@ async function openPlaceOnMap(plant, sample) {
     '<div id="mpStatus" class="mp-status"></div>' +
     '<div class="modal-actions">' +
       (admin && pt.mapX != null ? '<button class="btn btn-outline" style="color:var(--red)" onclick="mpRemove()">Remove location</button>' : '') +
-      '<button class="btn btn-outline" onclick="closePlaceOnMap()">' + (admin ? 'Cancel' : 'Close') + '</button>' +
-      (admin ? '<button class="btn btn-primary" id="mpSave" onclick="mpSave()" disabled>Save location</button>' : '') + '</div>';
+      '<button class="btn btn-outline" onclick="closePlaceOnMap()">' + (inQ ? 'Stop' : admin ? 'Cancel' : 'Close') + '</button>' +
+      (inQ ? '<button class="btn btn-outline" onclick="mpSkip()" title="Leave this point for later">Skip</button>' : '') +
+      (admin ? '<button class="btn btn-primary" id="mpSave" onclick="mpSave()" disabled>' + (inQ ? 'Save &amp; next' : 'Save location') + '</button>' : '') + '</div>';
 
   const svg = mapSvg(geo, plant, { highlight: hi, marks: others, interactive: true,
     onPick: admin ? (x, z) => { MP_EDIT.x = x; MP_EDIT.z = z; _mpDrawCurrent(svg, geo, pt); } : null });
   document.getElementById('mpPlan').appendChild(svg);
   MP_EDIT.svg = svg;
+  if (inQ && MP_QUEUE.vb) { Object.assign(svg._vb, MP_QUEUE.vb); svg.setAttribute('viewBox', [svg._vb.x, svg._vb.y, svg._vb.w, svg._vb.h].join(' ')); }
   if (pt.mapX != null) _mpDrawCurrent(svg, geo, pt, true);
   else document.getElementById('mpStatus').textContent = 'Not placed yet.';
   document.getElementById('mapPlaceModal').classList.add('open');
 }
 function _mpDrawCurrent(svg, geo, pt, initial) {
   const old = svg.querySelector('.mp-current'); if (old) old.remove();
+  mapShowTip(svg, null);
   mapAddMark(svg, { x: MP_EDIT.x, z: MP_EDIT.z, label: String(pt.sample), zone: pt.zone, current: true });
   const a = mapAreaAt(geo, MP_EDIT.x, MP_EDIT.z); MP_EDIT.area = a;
   const st = document.getElementById('mpStatus');
@@ -189,7 +235,10 @@ function _mpDrawCurrent(svg, geo, pt, initial) {
 }
 function mpZoom(f) { if (MP_EDIT && MP_EDIT.svg && MP_EDIT.svg._zoom) MP_EDIT.svg._zoom(f); }
 function mpReset() { if (MP_EDIT && MP_EDIT.svg && MP_EDIT.svg._reset) MP_EDIT.svg._reset(); }
-function closePlaceOnMap() { document.getElementById('mapPlaceModal').classList.remove('open'); MP_EDIT = null; }
+function closePlaceOnMap() {
+  document.getElementById('mapPlaceModal').classList.remove('open'); MP_EDIT = null;
+  if (MP_QUEUE) { MP_QUEUE = null; if (typeof loadMasterTable === 'function' && document.getElementById('masterTable')) loadMasterTable(); }
+}
 
 function _mpSavePoint(changes, msg) {
   const pts = getMasterPoints();
@@ -199,6 +248,10 @@ function _mpSavePoint(changes, msg) {
   Object.keys(changes).forEach(k => { if (changes[k] === null) delete pts[i][k]; });
   saveMasterPoints(pts);
   syncSafe(() => syncUpdatePoint(pts[i]), 'map location');
+  if (MP_QUEUE && _mpQueueOn(MP_EDIT.plant, MP_EDIT.sample)) {   // guided placement → straight to the next point
+    MP_QUEUE.vb = Object.assign({}, MP_EDIT.svg._vb);
+    toast(msg, 'success'); _mpNext(); return;
+  }
   closePlaceOnMap();
   if (typeof loadMasterTable === 'function' && document.getElementById('masterTable')) loadMasterTable();
   if (typeof renderTests === 'function' && typeof TESTS !== 'undefined' && TESTS.length) renderTests();
@@ -339,22 +392,18 @@ async function exportTestsMapPDF() {
   });
     posOf = r => [X(r.mapX), Y(r.mapZ)];
   }
-  // dots: zone 1 white with heavy ring, zone 2 black, zone 3 gray, zone 4 white with thin ring (white halo → readable on the 3D image)
-  const ZDOT = { 1: { fill: [255, 255, 255], ring: 0.9, ink: INK }, 2: { fill: [0, 0, 0], ring: 0.35, ink: [255, 255, 255] },
-    3: { fill: [120, 120, 120], ring: 0.35, ink: [255, 255, 255] }, 4: { fill: [255, 255, 255], ring: 0.35, ink: INK } };
-  const zd = z => ZDOT[Number(z)] || ZDOT[3];
+  // dots: one color per test (the same color sits under its number in the list), white halo → readable on the 3D image
+  const colorOf = {}; placed.forEach((r, i) => { colorOf[r.sample + '|' + r.zone] = MAP_TEST_COLORS[i % MAP_TEST_COLORS.length]; });
+  const inkOn = c => (c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114) > 150 ? INK : [255, 255, 255];
   placed.forEach((r, i) => {
-    const [cx, cy] = posOf(r, i), st = zd(r.zone);
-    doc.setFillColor(255, 255, 255); doc.circle(cx, cy, 3.4, 'F');
-    doc.setFillColor(...st.fill); doc.setDrawColor(0, 0, 0); doc.setLineWidth(st.ring); doc.circle(cx, cy, 2.6, 'FD');
-    txt(String(r.sample), cx, cy + 1, { size: String(r.sample).length > 2 ? 5.2 : 6.2, bold: true, color: st.ink, align: 'center' });
+    const [cx, cy] = posOf(r, i), c = colorOf[r.sample + '|' + r.zone];
+    doc.setFillColor(255, 255, 255); doc.circle(cx, cy, 3.5, 'F');
+    doc.setFillColor(...c); doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.circle(cx, cy, 2.7, 'FD');
+    txt(String(r.sample), cx, cy + 1, { size: String(r.sample).length > 2 ? 5.2 : 6.2, bold: true, color: inkOn(c), align: 'center' });
   });
-  // legend under the plan (only the zones on this map)
-  const ly = PH - 10, zones = [...new Set(placed.map(r => Number(r.zone)).filter(z => ZDOT[z]))].sort();
-  (zones.length ? zones : [2, 3, 4]).forEach((z, i) => {
-    const lx = PX + i * 24, st = ZDOT[z]; doc.setFillColor(...st.fill); doc.setDrawColor(0, 0, 0); doc.setLineWidth(st.ring * 0.8); doc.circle(lx + 2, ly - 1, 1.8, 'FD'); txt('Zone ' + z, lx + 5.5, ly, { size: 7.5 });
-  });
-  txt('Number on the dot = sample #. ' + (snap ? '3D view of the Facility Map.' : 'Same orientation as the Facility Map.'), PX + PW, ly, { size: 7, color: MUT, align: 'right' });
+  const ly = PH - 10;
+  txt('Each test has its own color: the dot on the map matches the color under its number in the list.', PX, ly, { size: 7, color: MUT });
+  txt(snap ? '3D view of the Facility Map.' : 'Same orientation as the Facility Map.', PX + PW, ly, { size: 7, color: MUT, align: 'right' });
 
   // List (right)
   const LX = PX + PW + 6, LW = W - M - LX;
@@ -366,8 +415,14 @@ async function exportTestsMapPDF() {
     theme: 'grid',
     styles: { fontSize: 7, cellPadding: 1.3, textColor: INK, lineColor: LINE, lineWidth: 0.2, overflow: 'linebreak', valign: 'middle' },
     headStyles: { fillColor: [242, 242, 242], textColor: INK, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 9, fontStyle: 'bold', halign: 'center' }, 1: { cellWidth: 7, halign: 'center' }, 3: { cellWidth: 18 } },
-    didParseCell: d => { if (d.section === 'body' && d.column.index === 2 && /not on map/.test(d.cell.raw)) d.cell.styles.textColor = [90, 90, 90]; }
+    columnStyles: { 0: { cellWidth: 10, fontStyle: 'bold', halign: 'center', valign: 'top', fontSize: 8 }, 1: { cellWidth: 7, halign: 'center' }, 3: { cellWidth: 18 } },
+    didParseCell: d => { if (d.section === 'body' && d.column.index === 2 && /not on map/.test(d.cell.raw)) d.cell.styles.textColor = [90, 90, 90]; },
+    didDrawCell: d => {   // color bar under the test number = color of its dot
+      if (d.section !== 'body' || d.column.index !== 0) return;
+      const r = rows[d.row.index], c = r && colorOf[r.sample + '|' + r.zone]; if (!c) return;
+      const w = d.cell.width - 3, h = 2.4, y = d.cell.y + Math.max(5.2, d.cell.height - h - 1.6);
+      doc.setFillColor(...c); doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.15); doc.roundedRect(d.cell.x + 1.5, y, w, h, 0.6, 0.6, 'FD');
+    }
   });
   doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, PH - 6, W - M, PH - 6);
   txt('Caputo Foods - Environmental Monitoring - Sampling map - Confidential', M, PH - 2.5, { size: 6.5, color: MUT });

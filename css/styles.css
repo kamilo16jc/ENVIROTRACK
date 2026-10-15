@@ -683,13 +683,26 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 .mp-a:hover{fill:#e3ecdb}
 .mp-door{stroke:#fbfcf9}
 .mp-labels text{fill:#7a8775;pointer-events:none;font-family:var(--font)}
-.mp-mark text{font-family:var(--font);font-weight:700;pointer-events:none}
+.mp-mark{cursor:pointer}
+.mp-hit{fill:transparent}
+.mp-dot{fill:#283d31;stroke:#fff}
+.mp-muted .mp-dot{fill:#56685a}
+.mp-current .mp-dot{fill:#bd877b}
+.mp-halo{fill:#bd877b;opacity:.28;pointer-events:none;animation:mpHalo 1.6s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes mpHalo{0%{transform:scale(.55);opacity:.45}100%{transform:scale(1.25);opacity:0}}
+.mp-tip{pointer-events:none}
+.mp-tip rect{fill:#1f2d25;opacity:.92}
+.mp-tip text{fill:#fff;font-family:var(--font);font-weight:700}
 .mp-status{font-size:12.5px;color:var(--gray-700);margin-top:8px;min-height:18px}
 .mp-mini{height:190px;border:1px solid var(--gray-200);border-radius:9px;overflow:hidden;background:#fbfcf9;margin-bottom:14px}
 .mp-mini .mp-svg{cursor:default}
 .gen-pin{color:var(--gray-300)}
 .gen-pin.on{color:var(--green)}
 .mp-pinbtn.on{color:var(--green);border-color:var(--green)}
+.mp-qbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--green);background:#eef5ea;color:var(--green);font:600 12.5px var(--font);cursor:pointer;transition:background .15s,box-shadow .15s}
+.mp-qbtn:hover{background:#e0eed8;box-shadow:0 2px 8px rgba(40,61,49,.15)}
+.mp-qbtn b{font-weight:800;margin-left:2px}
+.mp-qcount{font-size:12px;font-weight:600;color:var(--gray-600,#5b6b60);background:var(--gray-100,#f1f4ee);border-radius:999px;padding:2px 9px}
 
 /* CAPA — one per event, guided steps */
 .capa-step{display:flex;align-items:baseline;gap:8px;margin-top:14px}

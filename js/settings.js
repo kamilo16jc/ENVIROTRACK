@@ -72,7 +72,15 @@ function loadMasterTable() {
   const issues = getMasterPoints().filter(p => p.plant === plant && masterIssue(p)).length;
   const note = document.getElementById('masterIssueNote');
   if (note) note.textContent = issues ? issues + (issues === 1 ? ' point needs review' : ' points need review') : '';
-  if (note && typeof mapPlacedCount === 'function') { const mc = mapPlacedCount(plant); note.innerHTML = (note.textContent ? esc(note.textContent) + ' · ' : '') + '<span style="color:var(--green)">Map: ' + mc.placed + ' of ' + mc.total + ' placed</span>'; }
+  if (note && typeof mapPlacedCount === 'function') {
+    const mc = mapPlacedCount(plant), left = mc.total - mc.placed;
+    note.innerHTML = (note.textContent ? esc(note.textContent) + ' · ' : '') +
+      (empCanEdit() && left
+        ? '<button class="mp-qbtn" onclick="startPlaceQueue(\'' + plant + '\')" title="Place the ' + left + ' points not on the map yet, one after another">' +
+          '<svg class="ln" width="15" height="15" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>' +
+          'Place on map <b>' + mc.placed + '/' + mc.total + '</b></button>'
+        : '<span style="color:var(--green)">Map: ' + mc.placed + ' of ' + mc.total + ' placed</span>');
+  }
 
   document.getElementById('masterCount').textContent =
     all.filter(p=>p.active!==false).length+' active / '+all.length+' total';
