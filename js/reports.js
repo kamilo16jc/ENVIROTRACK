@@ -357,7 +357,7 @@ function exportReportPDF(opts) {
 
   // ── Metrics & insights (routine tests, same as the screen) ──────────
   // Open = positives from the SQF program start not yet closed by 3 negative retests (same rule as the Audit Package).
-  const openPos = base.filter(h => h.resultado === 'Positive' && h.fecha >= SQF_PROGRAM_START && !caseClosed(h.id)).length;
+  const openPos = base.filter(h => h.resultado === 'Positive' && h.fecha >= SQF_PROGRAM_START && !caseResolved(h.id)).length;
   const bStats = D.buildings.map(b => ({ p: b.id, total: b.total, pos: b.positive, rate: b.total ? b.positive / b.total * 100 : 0, retests: b.retests }));
   const worstB = bStats.filter(b => b.total > 0).sort((a, b) => b.rate - a.rate)[0];
   const patStat = D.pathogens.map(p => ({ k: p.key, n: p.positive })).sort((a, b) => b.n - a.n);
@@ -464,7 +464,7 @@ function exportReportPDF(opts) {
 
   // ── KPI tiles (same five as the screen + open cases) ────────────────
   const kpis = [['Total tests', String(total), 'Recorded samples', INK], ['Positive rate', posRate + '%', pos + ' positive', RED], ['Negative rate', n1(D.negativeRate) + '%', neg + ' negative', G],
-    ['Retests', String(retests), 'Follow-up tests', [140, 116, 59]], ['Resolved cases', String(D.resolvedCount), 'Retests OK', G], ['Open cases', String(openPos), 'Need follow-up', openPos ? RED : G]];
+    ['Retests', String(retests), 'Follow-up tests', [140, 116, 59]], ['Resolved cases', String(D.resolvedCount), 'of ' + D.caseCount + ' positive cases', G], ['Open cases', String(openPos), 'Need follow-up', openPos ? RED : G]];
   const kw = (W - M * 2 - 5 * 3) / 6, kh = 19;
   ensure(kh + 4);
   kpis.forEach((k, i) => {
@@ -500,7 +500,7 @@ function exportReportPDF(opts) {
     [c => { card(c.x, c.y, cw, ch, 'Weekly trend', D.weeks.length + ' week' + (D.weeks.length === 1 ? '' : 's'));
             trendChart(c.x + 4, c.y + 10, cw - 8, 44, D.weeks.slice(-12));
             legend(c.x + 4, c.y + ch - 3, [['Tests', SERIES], ['Positive', POS]]); },
-     c => { card(c.x, c.y, cw, ch, 'Retests by building', D.resolvedCount + ' resolved - ' + retests + ' retests');
+     c => { card(c.x, c.y, cw, ch, 'Retests by building', D.resolvedCount + ' of ' + D.caseCount + ' cases resolved - ' + retests + ' retests');
             hbars(c.x + 4, c.y + 11, cw - 8, 36, D.buildings.map(b => ({ label: b.id, value: b.retests, color: PEND })));
             legend(c.x + 4, c.y + ch - 5, [['Retests', PEND]]); }]
   ];
@@ -765,7 +765,7 @@ function buildSQF() {
   });
 
   // ── 3. Positive resolution ────────────────────────────────────────────
-  const openPositives = positives.filter(p => !caseClosed(p.id));
+  const openPositives = positives.filter(p => !caseResolved(p.id));
   const resolutionRate = positives.length>0
     ? Math.round((positives.length-openPositives.length)/positives.length*100) : 100;
 

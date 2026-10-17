@@ -153,6 +153,18 @@ function caseClosed(rootId) {
   if (typeof capaEffectiveness === 'function' && capaEffectiveness(rootId).ok) return true;
   return (typeof GRV === 'function' ? GRV() : []).some(r => r.originalId === rootId && !r.closedOnGenerate);
 }
+// Resolved for the counts: closed as above, or — when a retest came back positive
+// and the site was retested again — the LAST round of the whole chain is 3 negatives.
+// Applies to every date, so the history before the SQF program start counts too.
+function caseResolved(rootId) {
+  if (caseClosed(rootId)) return true;
+  const all = GH(), chain = [], seen = new Set([String(rootId)]);
+  for (let i = 0, q = [String(rootId)]; i < q.length; i++)
+    all.forEach(h => { if (h.retestNum && !isVectorRec(h) && String(h.originalId) === q[i] && !seen.has(String(h.id))) { seen.add(String(h.id)); chain.push(h); q.push(String(h.id)); } });
+  const n = s => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
+  const last = chain.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || n(a.retestNum) - n(b.retestNum)).slice(-3);
+  return last.length === 3 && last.every(h => h.resultado === 'Negative');
+}
 
 // Sites of a building with an OPEN positive follow-up: a positive whose
 // retests are not scheduled yet, or whose retests are still pending. The

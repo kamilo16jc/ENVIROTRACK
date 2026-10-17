@@ -39,12 +39,12 @@ function erReportData(H) {
     (wmap[key] || (wmap[key] = { ws, total: 0, positive: 0 })); wmap[key].total++; if (h.resultado === 'Positive') wmap[key].positive++; });
   const weeks = Object.values(wmap).sort((a, b) => a.ws - b.ws)
     .map(w => ({ label: 'Week of ' + w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), short: w.ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: w.total, positive: w.positive }));
-  // Cases closed by 3 negative retests, for the positives in this period (from the SQF program start).
-  const _start = typeof SQF_PROGRAM_START !== 'undefined' ? SQF_PROGRAM_START : '';
-  const resolvedCount = base.filter(h => h.resultado === 'Positive' && h.fecha >= _start && typeof caseClosed === 'function' && caseClosed(h.id)).length;
+  // Positive cases of this period resolved by negative retests — every date, history before the SQF program start included.
+  const posCases = base.filter(h => h.resultado === 'Positive');
+  const resolvedCount = posCases.filter(h => typeof caseResolved === 'function' && caseResolved(h.id)).length;
   const totalTests = base.length;
   return { base, retestRecs, buildings, pathogens, zones, weeks, negC, posC, pendC, totalTests,
-    totalRetests: retestRecs.length, resolvedCount,
+    totalRetests: retestRecs.length, resolvedCount, caseCount: posCases.length,
     positiveRate: totalTests ? posC / totalTests * 100 : 0, negativeRate: totalTests ? negC / totalTests * 100 : 0 };
 }
 
@@ -80,7 +80,7 @@ function renderReportsView() {
     { label: 'Positive rate', value: positiveRate.toFixed(1) + '%', ctx: posC + ' positive result' + (posC === 1 ? '' : 's'), sw: 'positive' },
     { label: 'Negative rate', value: negativeRate.toFixed(1) + '%', ctx: negC + ' negative result' + (negC === 1 ? '' : 's'), sw: '' },
     { label: 'Retests',       value: num(totalRetests),             ctx: 'Follow-up tests', sw: 'pending' },
-    { label: 'Resolved cases',value: num(resolvedCount),            ctx: 'Retests OK' }
+    { label: 'Resolved cases',value: num(resolvedCount),            ctx: 'of ' + num(D.caseCount) + ' positive cases' }
   ];
   $('#er-kpis').innerHTML = kpis.map(k =>
     '<div class="er-kpi"><div class="er-kpi-label">' + (k.sw !== undefined ? '<span class="er-swatch ' + k.sw + '" aria-hidden="true"></span>' : '') + esc(k.label) +
@@ -153,7 +153,7 @@ function renderReportsView() {
     [b.id, num(b.positive), (b.total ? (b.positive / b.total * 100).toFixed(1) : '0.0') + '%'].forEach((v, i) => pr.appendChild(el('td', i ? 'ed-num' : '', v)));
     $('#er-positive-rows').appendChild(pr);
   });
-  $('#er-retest-note').textContent = resolvedCount + ' case' + (resolvedCount === 1 ? '' : 's') + ' resolved · ' + totalRetests + ' retests';
+  $('#er-retest-note').textContent = resolvedCount + ' of ' + D.caseCount + ' positive case' + (D.caseCount === 1 ? '' : 's') + ' resolved · ' + totalRetests + ' retests';
   const nowMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#er-month-caption').textContent = nowMonth + ' · Tests by building';
 
