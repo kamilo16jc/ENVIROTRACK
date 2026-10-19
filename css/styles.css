@@ -245,6 +245,23 @@ tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 .pat-toggle.off{background:var(--gray-50);color:var(--gray-400);}
 
 /* ── TOAST ─────────────────────────────────────────────────── */
+/* New version banner */
+.app-update{position:fixed;top:14px;left:0;right:0;margin:0 auto;width:max-content;transform:translateY(-140%);z-index:10000;display:flex;align-items:center;gap:12px;
+  background:var(--green-dark);color:#fff;padding:10px 10px 10px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(20,40,28,.28);
+  max-width:calc(100vw - 32px);opacity:0;pointer-events:none;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .25s}
+.app-update.show{transform:translateY(0);opacity:1;pointer-events:auto}
+.app-update .au-ico{flex:0 0 auto;opacity:.9}
+.au-txt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.au-txt strong{font-size:13.5px;font-weight:700;white-space:nowrap}
+.au-txt span{font-size:12px;opacity:.8}
+.au-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;background:#fff;color:var(--green-dark);
+  font:700 13px var(--font);padding:9px 16px;cursor:pointer;animation:auPulse 2s ease-in-out infinite}
+.au-btn:hover{background:var(--green-light)}
+.au-btn:disabled{cursor:default;animation:none;opacity:.85}
+.au-btn.busy svg{animation:auSpin .8s linear infinite}
+@keyframes auPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 6px rgba(255,255,255,0)}}
+@keyframes auSpin{to{transform:rotate(360deg)}}
+@media (max-width:520px){.au-txt span{display:none}.app-update{top:10px}}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:var(--white);padding:14px 18px;border-radius:12px;font-size:14px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;transform:translateY(100px);opacity:0;transition:all .3s;max-width:380px;display:flex;align-items:center;gap:10px;}
 .toast.show{transform:translateY(0);opacity:1;}
 .toast.success{border-left:4px solid var(--green);}

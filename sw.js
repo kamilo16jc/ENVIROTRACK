@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════
 // SERVICE WORKER — EnviroTrack PWA
 // ═══════════════════════════════════════════════
-const CACHE_NAME = 'envirotrack-v116';
+const CACHE_NAME = 'envirotrack-v117';
 
 // Relative paths → work under any deploy sub-path (e.g. /ENVIROTRACK/).
 const ASSETS = [
@@ -63,10 +63,14 @@ const ASSETS = [
 self.addEventListener('install', evt => {
   evt.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS))
+      // cache: 'reload' → always the files just published, never a stale copy from the browser cache
+      .then(cache => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
+
+// The page's "Update now" button (for a worker left waiting)
+self.addEventListener('message', evt => { if (evt.data === 'SKIP_WAITING') self.skipWaiting(); });
 
 // Activate — clean old caches
 self.addEventListener('activate', evt => {

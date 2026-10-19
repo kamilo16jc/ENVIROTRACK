@@ -1209,6 +1209,13 @@
 <div class="modal-overlay" id="pointHistModal" onclick="if(event.target===this)closePointHistory()"><div class="modal" style="width:680px;max-width:95vw;max-height:90vh;overflow-y:auto" id="pointHistBody"></div></div>
 
 
+<!-- ══════ NEW VERSION BANNER ══════ -->
+<div id="appUpdate" class="app-update" role="status" aria-live="polite">
+  <svg class="ln au-ico" width="18" height="18" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+  <div class="au-txt"><strong>New version available</strong><span>Tap update to load the latest EnviroTrack.</span></div>
+  <button id="appUpdateBtn" class="au-btn" onclick="applyAppUpdate()"><svg class="ln" width="14" height="14" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span>Update now</span></button>
+</div>
+
 <!-- ══════ SESSION WARNING BANNER ══════ -->
 <div id="sessionWarning" style="display:none">
   <div class="notice">
@@ -1289,11 +1296,35 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
     if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k)));
   } else {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(r => console.log('SW registered'))
-        .catch(e => console.log('SW error:', e));
+    // New version → banner "Update now" (one click, no Ctrl+Shift+R). The new worker
+    // takes over on its own; the open page keeps the old files until it reloads.
+    const _hadSW = !!navigator.serviceWorker.controller;
+    let _swReg = null, _updating = false, _lastCheck = 0;
+    const showUpdate = () => { const b = document.getElementById('appUpdate'); if (b) b.classList.add('show'); };
+    window.applyAppUpdate = () => {
+      const btn = document.getElementById('appUpdateBtn'); if (btn) { btn.disabled = true; btn.classList.add('busy'); btn.lastChild.textContent = 'Updating…'; }
+      _updating = true;
+      if (_swReg && _swReg.waiting) _swReg.waiting.postMessage('SKIP_WAITING');   // → controllerchange → reload
+      else location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_updating) { location.reload(); return; }
+      if (_hadSW) showUpdate();               // first install is not an "update"
     });
+    const check = () => { if (_swReg && Date.now() - _lastCheck > 60000) { _lastCheck = Date.now(); _swReg.update().catch(() => {}); } };
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then(r => {
+        _swReg = r;
+        if (r.waiting && _hadSW) showUpdate();
+        r.addEventListener('updatefound', () => {
+          const w = r.installing; if (!w) return;
+          w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(); });
+        });
+        check();
+      }).catch(e => console.log('SW error:', e));
+    });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });   // app brought back
+    setInterval(check, 30 * 60000);                                                                                  // app left open
   }
 }
 </script>
