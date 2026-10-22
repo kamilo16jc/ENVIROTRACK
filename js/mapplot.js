@@ -293,14 +293,14 @@ const FM_BRIDGE = 'window.__fmSnap=function(o){try{' +
   'half=Math.max(Math.max.apply(null,U.map(function(u){return Math.abs(u-cu)})),Math.max.apply(null,R.map(function(r){return Math.abs(r-cr)}))*height/width)*1.04+0.5;' +
   'shadowDirty=true;pickDirty=true;render(performance.now());' +
   'var c=document.getElementById("f-canvas"),l=document.getElementById("f-labels"),out=document.createElement("canvas");out.width=c.width;out.height=c.height;' +
-  'var x=out.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,out.width,out.height);x.filter="grayscale(1) contrast(1.15) brightness(1.04)";x.drawImage(c,0,0);if(o.labels&&l)x.drawImage(l,0,0);' +
-  'return{url:out.toDataURL("image/jpeg",0.9),w:width,h:height,proj:o.points.map(function(p){return project([p[0],o.y||0.4,p[1]])})};' +
+  'var x=out.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,out.width,out.height);x.filter=o.color?"none":"grayscale(1) contrast(1.15) brightness(1.04)";x.drawImage(c,0,0);if(o.labels&&l)x.drawImage(l,0,0);' +
+  'return{url:out.toDataURL("image/jpeg",o.quality||0.9),w:width,h:height,proj:o.points.map(function(p){return project([p[0],o.y||0.4,p[1]])})};' +
   '}catch(e){return{error:String(e&&e.message||e)}}};';
 // Light theme inside the frame, whatever the device uses (the snapshot is printed).
 const FM_LIGHT = '<script>(function(){var mm=window.matchMedia.bind(window);window.matchMedia=function(q){return /prefers-color-scheme:\\s*dark/.test(q)?' +
   '{matches:false,media:q,addEventListener:function(){},removeEventListener:function(){},addListener:function(){},removeListener:function(){}}:mm(q);};})();<\/script>';
 
-async function facilitySnapshot(frame, points, size, buildings) {
+async function facilitySnapshot(frame, points, size, buildings, opts) {
   const d = typeof storePrivate === 'function' ? await storePrivate('facilityMap').catch(() => null) : null;
   if (!d || !d.html || !frame.length) return null;
   const f = document.createElement('iframe');
@@ -318,11 +318,52 @@ async function facilitySnapshot(frame, points, size, buildings) {
     for (let i = 0; i < 80 && !(f.contentWindow && f.contentWindow.__fmSnap); i++) await new Promise(r => setTimeout(r, 100));
     await new Promise(r => setTimeout(r, 600));   // let the scene finish its first frames
     const ids = buildings && buildings.length ? buildings : ['all'];
-    const r = f.contentWindow.__fmSnap({ yaw: 0, pitch: 0.98, building: ids[0], extra: ids.slice(1), frame, points, labels: true, y: 0.4, w: sw, h: sh });
+    const r = f.contentWindow.__fmSnap(Object.assign({ yaw: 0, pitch: 0.98, building: ids[0], extra: ids.slice(1), frame, points, labels: true, y: 0.4, w: sw, h: sh }, opts || {}));
     if (!r || r.error) { if (r) console.warn('[map] 3D snapshot', r.error); return null; }
     return r;
   } catch (e) { console.warn('[map] 3D snapshot', e); return null; }
   finally { f.remove(); }
+}
+
+// ── Facility Map page → print / PDF of the whole map or one building ──
+let _fmPrinting = false;
+async function printFacilityMap(download) {
+  if (_fmPrinting) return;
+  const what = (document.getElementById('fmPrintWhat') || {}).value || 'all';
+  const color = ((document.getElementById('fmPrintColor') || {}).value || 'color') === 'color';
+  const geo = await mapGeo();
+  if (!geo) { toast('The facility map is available after signing in', 'error'); return; }
+  const btn = document.getElementById('fmPrintBtn');
+  _fmPrinting = true; if (btn) { btn.disabled = true; btn.classList.add('busy'); }
+  try {
+    toast('Preparing the map for printing…', 'info');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+    const W = 279.4, PH = 215.9, M = 8, MUT = [110, 110, 110], LINE = [190, 190, 190];
+    const txt = (s, x, y, o) => { o = o || {}; doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(o.size || 8); doc.setTextColor(...(o.color || [0, 0, 0])); doc.text(String(s), x, y, o.align ? { align: o.align } : undefined); };
+    const title = what === 'all' ? 'Whole facility' : 'Building ' + what;
+    try { doc.addImage(typeof pdfLogo === 'function' ? pdfLogo() : LOGO, 'JPEG', M, 5, 24, 12); } catch (e) {}
+    txt('Facility Map', W - M, 10, { size: 14, bold: true, align: 'right' });
+    txt(title + ' - ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), W - M, 15.5, { size: 8.5, color: MUT, align: 'right' });
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.line(M, 19, W - M, 19);
+    // map area: framed on every building (and the outdoor areas) for the whole facility, or on the chosen building
+    const PX = M, PY = 22, PW = W - 2 * M, PHh = PH - PY - 9;
+    const frame = what === 'all' ? geo.buildings.concat(geo.areas || []).flatMap(x => x.polygon || [])
+      : _mpScene(geo, what).buildings.flatMap(bd => bd.polygon);
+    const snap = await facilitySnapshot(frame, [], { w: 2400, h: Math.round(2400 * PHh / PW) },
+      what === 'all' ? ['all'] : (MAP_BUILDINGS_OF[what] || [what]), { color, quality: 0.92 });
+    if (!snap) { toast('The 3D map could not be rendered — try again', 'error'); return; }
+    const k = Math.min(PW / snap.w, PHh / snap.h), iw = snap.w * k, ih = snap.h * k;
+    doc.addImage(snap.url, 'JPEG', PX + (PW - iw) / 2, PY + (PHh - ih) / 2, iw, ih);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, PH - 6, W - M, PH - 6);
+    txt('Caputo Foods - Environmental Monitoring - Facility map - Confidential', M, PH - 2.5, { size: 6.5, color: MUT });
+    const name = 'Facility Map ' + (what === 'all' ? 'All' : what) + ' ' + todayLocal() + '.pdf';
+    if (download) { doc.save(name); toast('Map downloaded', 'success'); return; }
+    doc.autoPrint();
+    const w = window.open(doc.output('bloburl'), '_blank');
+    if (!w) { doc.save(name); toast('Pop-ups are blocked — the PDF was downloaded; print it from there', 'info'); }
+  } catch (e) { console.warn('[map] print', e); toast('Could not prepare the map: ' + (e.message || e), 'error'); }
+  finally { _fmPrinting = false; if (btn) { btn.disabled = false; btn.classList.remove('busy'); } }
 }
 
 // Flat printed form: white / grays / black (Caputo logo in color).

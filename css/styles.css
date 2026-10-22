@@ -715,6 +715,12 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 .mp-mini .mp-svg{cursor:default}
 .gen-pin{color:var(--gray-300)}
 .gen-pin.on{color:var(--green)}
+.fmp-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0 2px 10px;flex-wrap:wrap}
+.fmp-lbl{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gray-500)}
+.fmp-bar select{padding:7px 10px;font-size:13px}
+.fmp-bar .btn svg{flex:0 0 auto}
+.fmp-go.busy svg{animation:auSpin .9s linear infinite}
+.fmp-dl{padding:7px 10px}
 .mp-pinbtn.on{color:var(--green);border-color:var(--green)}
 .mp-qbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--green);background:#eef5ea;color:var(--green);font:600 12.5px var(--font);cursor:pointer;transition:background .15s,box-shadow .15s}
 .mp-qbtn:hover{background:#e0eed8;box-shadow:0 2px 8px rgba(40,61,49,.15)}

@@ -335,7 +335,25 @@
     <div class="page" id="page-facilitymap">
       <div class="page-header"><div><h1>Facility Map</h1><p>Interactive 3D floor plan</p></div></div>
       <div class="page-body" style="padding:12px">
-        <iframe id="facilityMapFrame" title="Interactive 3D facility map" style="width:100%;height:calc(100vh - 150px);min-height:580px;border:none;border-radius:14px;display:block;background:#eef2e9"></iframe>
+        <div class="fmp-bar">
+          <label class="fmp-lbl" for="fmPrintWhat">Print</label>
+          <select id="fmPrintWhat" aria-label="What to print">
+            <option value="all">Whole facility</option>
+            <option value="1945">Building 1945</option>
+            <option value="1935">Building 1935</option>
+            <option value="1931E">Building 1931E</option>
+            <option value="1931W">Building 1931W</option>
+          </select>
+          <select id="fmPrintColor" aria-label="Print colors">
+            <option value="color">Color</option>
+            <option value="gray">Black &amp; white</option>
+          </select>
+          <button class="btn btn-primary btn-sm fmp-go" id="fmPrintBtn" onclick="printFacilityMap(false)" title="Print the map">
+            <svg class="ln" width="15" height="15" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print</span></button>
+          <button class="btn btn-outline btn-sm fmp-dl" onclick="printFacilityMap(true)" title="Download as PDF" aria-label="Download as PDF">
+            <svg class="ln" width="15" height="15" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <iframe id="facilityMapFrame" title="Interactive 3D facility map" style="width:100%;height:calc(100vh - 200px);min-height:560px;border:none;border-radius:14px;display:block;background:#eef2e9"></iframe>
       </div>
     </div>
 
