@@ -55,13 +55,22 @@ function pdfFooter(doc,W,margin) {
 // { "<plant>": <taller-pdf/v1 template> }). Kept in Firestore, not in the public repo,
 // because the approved forms carry signatures. The template owns its document data
 // (version, revision, supersedes, document control) in its sampleData.
+// Buildings whose approved form is a template: never print the old hand-coded
+// version for them (it is out of date) — retry, then tell the user.
+const SWAB_FORM_PLANTS = ['1945', '1935', '1931E', '1931W'];
 async function swabFormTemplate(planta) {
   if (typeof PdfTemplate === 'undefined' || typeof storePrivate !== 'function') return null;
-  try {
-    const d = await storePrivate('swabForms');
-    const all = d ? (typeof d.json === 'string' ? JSON.parse(d.json) : d) : null;
-    return (all && all[planta]) || null;
-  } catch (e) { console.warn('[pdf] swab form template', e); return null; }
+  for (let i = 0; i < 4; i++) {          // right after opening the app the data layer may not be ready yet
+    try {
+      const d = await storePrivate('swabForms');
+      const all = d ? (typeof d.json === 'string' ? JSON.parse(d.json) : d) : null;
+      if (all && all[planta]) return all[planta];
+      if (all && !SWAB_FORM_PLANTS.includes(planta)) return null;
+    } catch (e) { console.warn('[pdf] swab form template', e); }
+    if (typeof _privCache !== 'undefined') delete _privCache.swabForms;   // forms updated while the app was open → read them again
+    if (i < 3) await new Promise(r => setTimeout(r, i ? 1200 : 0));
+  }
+  return null;
 }
 
 async function exportPDF() {
@@ -71,6 +80,7 @@ async function exportPDF() {
   const by     = document.getElementById('genCollectedBy').value;
   const sqf    = SQF_NUMS[planta]||'2.4.H';
   const tpl = await swabFormTemplate(planta);
+  if (!tpl && SWAB_FORM_PLANTS.includes(planta)) { toast('Could not load the ' + planta + ' form — check the connection and try again', 'error'); return; }
   if (tpl) {
     const meta = tpl.sampleData || {};
     const data = {
@@ -92,7 +102,7 @@ async function exportPDF() {
       toast('✅ PDF exported','success');
       document.getElementById('btnPDF')?.classList.add('done');
       return;
-    } catch (e) { console.warn('[pdf] template render failed — standard form', e); }
+    } catch (e) { console.warn('[pdf] template render failed', e); toast('Could not create the PDF — try again', 'error'); return; }
   }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'landscape',unit:'mm',format:'letter'});
