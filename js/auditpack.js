@@ -413,12 +413,12 @@ function exportAuditPack() {
     need(40);
     section('7. Record Corrections (Audit Trail)');
     const _day = e => todayLocal(new Date(e.at));   // local date of the change (e.at is UTC)
-    const ch = (typeof getRecordChanges === 'function' ? getRecordChanges() : []).filter(e => _day(e) >= (d.from || '') && _day(e) <= d.to);
+    const ch = (typeof recordAuditTrail === 'function' ? recordAuditTrail() : []).filter(e => _day(e) >= (d.from || '') && _day(e) <= d.to);
     para('Every change to a test record after it was created: who made it, when, what changed and why. The log is append-only (entries cannot be edited or deleted).');
     if (!ch.length) para('No record corrections in this period.', 9);
     else table(['When', 'Bldg', 'Sample', 'Action', 'Change', 'Reason', 'By'],
       ch.map(e => [_apFmt(_day(e)), e.planta, e.sample ? '#' + e.sample + (e.retestNum ? ' ' + e.retestNum : '') : 'All (' + (e.samples || []).length + ')', rcActionLabel(e.action),
-        (e.changes || []).map(c => rcFieldLabel(c.field) + ': ' + (c.from || '-') + ' -> ' + (c.to || '-')).join('\n').slice(0, 400), e.reason || '-', e.byName || e.byEmail]),
+        (e.changes || []).map(c => rcFieldLabel(c.field) + ': ' + (c.from || '-') + ' -> ' + (c.to || '-')).join('\n').slice(0, 400), e.reason || (e.source === 'server' ? 'No reason given' : '-'), e.byName || e.byEmail]),
       { styles: { fontSize: 7.2, cellPadding: 1.8, textColor: INK, lineColor: [221, 229, 216], lineWidth: 0.2, overflow: 'linebreak', valign: 'top' },
         columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 13 }, 2: { cellWidth: 20 }, 3: { cellWidth: 26 }, 6: { cellWidth: 26 } } });
   }

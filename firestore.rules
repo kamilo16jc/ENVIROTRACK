@@ -31,6 +31,26 @@ service cloud.firestore {
         && d.get('prodStart', '') is string && d.get('prodStart', '').matches('^([0-2][0-9]:[0-5][0-9])?$')
         && d.get('collTime', '') is string && d.get('collTime', '').matches('^([0-2][0-9]:[0-5][0-9])?$');
     }
+    // Same value before and after the write (a missing field and null count as the default).
+    function sameVal(f, dflt) {
+      let a = request.resource.data.get(f, dflt);
+      let b = resource.data.get(f, dflt);
+      return a == b || ((a == null || a == dflt) && (b == null || b == dflt));
+    }
+    // A result already recorded (Negative / Positive) is changed only by a Manager /
+    // Administrator; entering the result of a Pending test is open to every user.
+    function resultEditable() {
+      return resource == null || resource.data.get('resultado', 'Pending') == 'Pending'
+        || role() in ['Manager', 'Administrator']
+        || (sameVal('resultado', 'Pending') && sameVal('resultDate', '') && sameVal('labNotes', '')
+            && sameVal('failedPathogens', []) && sameVal('failedPathogensLabel', '') && sameVal('labResults', null));
+    }
+    // Voiding a record (or bringing it back) is an administrator correction.
+    function voidUnchanged() {
+      return resource == null
+        ? request.resource.data.get('voided', false) == false
+        : sameVal('voided', false) && sameVal('voidReason', '') && sameVal('voidedBy', '') && sameVal('voidedAt', '');
+    }
     // Bulk history imports flag documents for a gradual SharePoint copy; clients may not set it.
     function noClientDefer() {
       return request.resource.data.get('_spDefer', false) == false
@@ -46,6 +66,17 @@ service cloud.firestore {
           && n.get('approvedByEmail', null) == resource.data.get('approvedByEmail', null)
           && n.get('verifiedBy', null) == resource.data.get('verifiedBy', null);
     }
+    // A CAPA is closed once approved / verified. A closed CAPA — and the positives
+    // linked to it — can then be changed by an Administrator only.
+    function capaClosed(d) { return d.get('approvedAt', null) != null || d.get('verifiedBy', null) != null; }
+    function primaryClosed(link) {
+      return link != null && link != '' && exists(/databases/$(database)/documents/capa/$(string(link)))
+        && capaClosed(get(/databases/$(database)/documents/capa/$(string(link))).data);
+    }
+    function capaOpen() {
+      return (resource == null || (!capaClosed(resource.data) && !primaryClosed(resource.data.get('linkedTo', ''))))
+        && !primaryClosed(request.resource.data.get('linkedTo', ''));
+    }
     function canApprove() {
       return role() in ['Manager', 'Administrator']
         && request.resource.data.get('approvedByEmail', '') == request.auth.token.email;
@@ -54,7 +85,8 @@ service cloud.firestore {
     // ── Core data (was SharePoint-only) ─────────────────────────
     match /records/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped() && validRecord() && noClientDefer();
+      allow create, update: if provisioned() && stamped() && validRecord() && noClientDefer()
+        && resultEditable() && (isAdmin() || voidUnchanged());
       allow delete: if false;
     }
     match /resolved/{id} {
@@ -76,7 +108,8 @@ service cloud.firestore {
     // ── Program records ─────────────────────────────────────────
     match /capa/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped() && (approvalUnchanged() || canApprove());
+      allow create, update: if provisioned() && stamped() && (approvalUnchanged() || canApprove())
+        && (isAdmin() || capaOpen());
       allow delete: if isAdmin();
     }
     match /labStatus/{id} {
@@ -112,7 +145,9 @@ service cloud.firestore {
     // Test-record audit trail: who changed what, when and why. Append-only.
     match /recordChanges/{id} {
       allow read: if provisioned();
-      allow create: if provisioned() && stamped() && request.resource.data.get('byEmail', '') == request.auth.token.email;
+      // Entries with source 'server' are written only by the auditRecords function.
+      allow create: if provisioned() && stamped() && request.resource.data.get('byEmail', '') == request.auth.token.email
+        && request.resource.data.get('source', '') != 'server';
       allow update, delete: if false;
     }
     match /empChangeLog/{id} {

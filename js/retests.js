@@ -6,6 +6,7 @@
 function openFailModal(id) {
   const h = GH().find(r=>r.id===id);
   if(!h) return;
+  if (h.resultado && h.resultado !== 'Pending' && !canChangeResult()) { toast('This test already has a recorded result — only a Manager or Administrator can change it', 'error'); return; }
   FAILID=id; FAILRES=null;
   const tested = labTestsOf(h).map(k => LAB_TESTS[k].label).join(', ');
   document.getElementById('failInfo').innerHTML =
@@ -21,6 +22,9 @@ function openFailModal(id) {
   document.getElementById('failModal').classList.add('open');
   labRefresh();
 }
+
+// Changing a result already recorded (Negative / Positive): Manager / Administrator only (the rules enforce it too).
+function canChangeResult() { return !!(typeof CU !== 'undefined' && CU && (CU.role === 'Manager' || (typeof isAdmin === 'function' && isAdmin(CU.email, CU.role)))); }
 
 function closeFailModal() { document.getElementById('failModal').classList.remove('open'); FAILID=null; FAILRES=null; LABRES={}; }
 

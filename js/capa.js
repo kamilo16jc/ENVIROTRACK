@@ -246,6 +246,9 @@ function capaPrimaryId(rootId) { const e = getCapaAll()[rootId]; return e && e.l
 function getCapa(rootId) { const c = getCapaAll()[capaPrimaryId(rootId)]; return _capaEmpty(c) ? null : c; }
 function capaRootsOf(primaryId) { const c = getCapaAll()[primaryId]; return [primaryId].concat(((c && c.roots) || []).filter(id => id !== primaryId)); }
 function capaComplete(c) { return !!(c && c.rootCause && c.correction && c.preventive && c.disposition); }
+// A closed (approved) CAPA is read-only except for Administrators — the rules enforce it too.
+function capaIsClosed(c) { return !!(c && (c.approvedAt || c.verifiedBy)); }
+function capaLockedFor(c) { return capaIsClosed(c) && !(typeof CU !== 'undefined' && CU && typeof isAdmin === 'function' && isAdmin(CU.email, CU.role)); }
 function canApproveCapa() { return !!(typeof CU !== 'undefined' && CU && (CU.role === 'Manager' || (typeof isAdmin === 'function' && isAdmin(CU.email, CU.role)))); }
 
 // Efficacy per SOP: 3 consecutive negative retests at the original site.
@@ -302,6 +305,7 @@ function openCapaModal(rootId) {
   const root = GH().find(h => h.id === rootId); if (!root) return;
   CAPAROOT = rootId;
   const c = getCapaAll()[rootId] || {};
+  const locked = capaLockedFor(c);
   const linked = new Set(c.roots || []);
   const cands = capaEventCandidates(root);
   const acts = new Set(c.actions || []);
@@ -342,10 +346,16 @@ function openCapaModal(rootId) {
     (c.updatedAt ? '<p class="vec-help" style="margin-top:10px">Last updated ' + new Date(c.updatedAt).toLocaleString('en-US') + (c.updatedBy ? ' by ' + esc(c.updatedBy) : '') + '</p>' : '') +
     '<div class="modal-actions">' +
       '<button class="btn btn-outline" onclick="exportCapaPDF(' + rootId + ')" title="Download the 2.5.C.2 form" style="margin-right:auto"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>' +
-      '<button class="btn btn-outline" onclick="closeCapaModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveCapa()">Save CAPA</button></div>';
+      (locked
+        ? '<span class="vec-help" style="align-self:center">Closed — only an Administrator can change it</span><button class="btn btn-outline" onclick="closeCapaModal()">Close</button></div>'
+        : '<button class="btn btn-outline" onclick="closeCapaModal()">Cancel</button>' +
+          '<button class="btn btn-primary" onclick="saveCapa()">Save CAPA</button></div>');
   capaPrevRule(c);
   capaRenderVerification();
+  if (locked) {
+    document.querySelectorAll('#capaModalBody input, #capaModalBody select, #capaModalBody textarea').forEach(el => { el.disabled = true; });
+    document.querySelectorAll('#capaModalBody .capa-hint').forEach(el => { el.style.display = 'none'; });
+  }
   document.getElementById('capaModal').classList.add('open');
 }
 
@@ -421,6 +431,7 @@ function _capaFromModal() {
 
 function saveCapa() {
   if (!CAPAROOT) return;
+  if (capaLockedFor(getCapaAll()[CAPAROOT])) { toast('This CAPA is closed — only an Administrator can change it', 'error'); return; }
   const f = _capaFromModal();
   if (f.rootCat === 'other' && !f.rootNote) { toast('Describe the root cause', 'error'); return; }
   const all = getCapaAll(), prev = all[CAPAROOT] || {};
