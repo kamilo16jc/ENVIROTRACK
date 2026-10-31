@@ -51,12 +51,49 @@ function pdfFooter(doc,W,margin) {
   doc.text('Confidential',W-margin,y+5,{align:'right'});
 }
 
-function exportPDF() {
+// Sample Collection Form designed in Taller PDF, one per building (private/swabForms:
+// { "<plant>": <taller-pdf/v1 template> }). Kept in Firestore, not in the public repo,
+// because the approved forms carry signatures. The template owns its document data
+// (version, revision, supersedes, document control) in its sampleData.
+async function swabFormTemplate(planta) {
+  if (typeof PdfTemplate === 'undefined' || typeof storePrivate !== 'function') return null;
+  try {
+    const d = await storePrivate('swabForms');
+    const all = d ? (typeof d.json === 'string' ? JSON.parse(d.json) : d) : null;
+    return (all && all[planta]) || null;
+  } catch (e) { console.warn('[pdf] swab form template', e); return null; }
+}
+
+async function exportPDF() {
   if(!TESTS.length) { toast('Generate tests first','error'); return; }
   const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value;
   const by     = document.getElementById('genCollectedBy').value;
   const sqf    = SQF_NUMS[planta]||'2.4.H';
+  const tpl = await swabFormTemplate(planta);
+  if (tpl) {
+    const meta = tpl.sampleData || {};
+    const data = {
+      plant: planta, sqf, version: meta.version || '', revision: meta.revision || '', supersedes: meta.supersedes || '',
+      docControl: Array.isArray(meta.docControl) ? meta.docControl : [],
+      date: fecha ? new Date(fecha+'T12:00:00').toLocaleDateString('en-US') : '',
+      collectedBy: by,
+      prodStart: (document.getElementById('genProdStart') || {}).value || '',
+      collTime: (document.getElementById('genCollTime') || {}).value || '',
+      tests: TESTS.map(t => ({ sample: String(t.sample), zone: String(t.zone), area: t.area || '', line: String(t.line || 'N/A'), location: t.location || '',
+        ecoli: t.ecoli ? 'X' : '', listeria: t.listeria ? 'X' : '', salmonella: t.salmonella ? 'X' : '', saureus: t.saureus ? 'X' : '' }))
+    };
+    try {
+      const doc = await PdfTemplate.render(tpl, data);
+      if (doc.templateWarnings && doc.templateWarnings.length) console.warn('[pdf] template', doc.templateWarnings);
+      const pdfName = namePdfGenerator(planta, fecha);
+      doc.save(pdfName + '.pdf');
+      syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save generator pdf');
+      toast('✅ PDF exported','success');
+      document.getElementById('btnPDF')?.classList.add('done');
+      return;
+    } catch (e) { console.warn('[pdf] template render failed — standard form', e); }
+  }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'landscape',unit:'mm',format:'letter'});
   const W=279.4, margin=10;
