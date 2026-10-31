@@ -70,6 +70,9 @@ function assertAdmin(request) {
 // this check — which is exactly what blocks anonymous data access.
 const VALID_ROLES = ["Inspector", "Manager", "Administrator"];
 
+// Same lab form within this window = duplicate (see spProxy).
+const LABFORM_REPEAT_MS = 2 * 60 * 1000;
+
 // Operations only administrators may perform (master-list / sampling-point
 // management + the monthly email). Mirrors the admin-only gating in the UI.
 const ADMIN_OPS = new Set([
@@ -254,6 +257,23 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (op === "photoUploadUrl") {
     return { url: "https://" + REGION + "-envirotrack-5173f.cloudfunctions.net/photoUpload" };
   }
+  // labform: an identical form (same file, rows and send/fill) arriving again within
+  // 2 minutes — a double click, or two devices — does not run the flow a second time.
+  let lockRef = null;
+  if (op === "labform") {
+    const b = body || {};
+    const key = crypto.createHash("sha256")
+      .update([b.fileName, !!b.sendToLab, b.building, b.collectionDate, b.rowsJson].join("|")).digest("hex");
+    lockRef = admin.firestore().collection("opLocks").doc("labform_" + key);
+    const first = await admin.firestore().runTransaction(async (tx) => {
+      const d = await tx.get(lockRef);
+      if (d.exists && Date.now() - (d.data().at || 0) < LABFORM_REPEAT_MS) return false;
+      tx.set(lockRef, { at: Date.now(), by: String(request.auth.token.email || ""), fileName: String(b.fileName || "") });
+      return true;
+    });
+    if (!first) return { duplicate: true };
+  }
+  const releaseLock = () => (lockRef ? lockRef.delete().catch(() => {}) : null);   // a failed run may be retried at once
   let res;
   try {
     res = await fetch(url, {
@@ -262,10 +282,12 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
       body: JSON.stringify(body || {}),
     });
   } catch (e) {
+    await releaseLock();
     throw new HttpsError("unavailable", "Could not reach the SharePoint flow.");
   }
   const text = await res.text();
   if (!res.ok) {
+    await releaseLock();
     throw new HttpsError("internal", "Flow returned HTTP " + res.status);
   }
   // photoContent / templateRead return the raw base64 of a file (not JSON).

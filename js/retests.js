@@ -436,12 +436,16 @@ async function sendAllCaseForms(originalId) {
   const pend = GH().filter(r => r.originalId === originalId && r.retestNum &&
     r.resultado === 'Pending' && retestLabStatus(r) !== 'sent');
   if (!pend.length) { toast('No pending forms to send for this case', 'info'); return; }
+  if (typeof _labBusy !== 'undefined' && _labBusy) { _labBusyMsg(); return; }
   if (!confirm('Send ' + pend.length + ' retest form(s) for this case to the lab?')) return;
   let ok = 0;
-  for (const r of pend) {
-    try { await submitRetestLabForm(r.id, true, { skipConfirm: true, silent: true }); ok++; }
-    catch (e) { console.error('[sendAll] failed for', r.id, e); }
-  }
+  _labBusy = true;   // one send at a time: no second click / other form while this runs
+  try {
+    for (const r of pend) {
+      try { await submitRetestLabForm(r.id, true, { skipConfirm: true, silent: true, bulk: true }); ok++; }
+      catch (e) { console.error('[sendAll] failed for', r.id, e); }
+    }
+  } finally { _labBusy = false; }
   loadRetests();
   toast(ok + ' of ' + pend.length + ' form(s) sent to the lab', ok === pend.length ? 'success' : 'error');
 }
