@@ -433,8 +433,10 @@ function saveCapa() {
     else if (all[h.id] && all[h.id].linkedTo === CAPAROOT) all[h.id] = { linkedTo: '', updatedAt: rec.updatedAt };
   });
   localStorage.setItem(CAPA_KEY, JSON.stringify(all)); if (typeof storeSaved === 'function') storeSaved(CAPA_KEY);
+  const savedId = CAPAROOT;
   closeCapaModal(); loadRetests(); if (typeof renderCapaLog === 'function') renderCapaLog();
   const ok = capaComplete(rec);
+  if (ok) archiveCapaPDF(savedId, 'Documented');   // each documented revision is kept in SharePoint
   toast(ok ? 'CAPA saved — documented' + (f.roots.length > 1 ? ' for ' + f.roots.length + ' positives' : '') : 'CAPA saved — required steps still missing', ok ? 'success' : 'info');
 }
 
@@ -453,17 +455,38 @@ function approveCapa() {
     updatedAt: new Date().toISOString(), updatedBy: who
   });
   localStorage.setItem(CAPA_KEY, JSON.stringify(all)); if (typeof storeSaved === 'function') storeSaved(CAPA_KEY);
+  const approvedId = CAPAROOT;
   closeCapaModal(); loadRetests(); if (typeof renderCapaLog === 'function') renderCapaLog();
+  archiveCapaPDF(approvedId, 'Approved');
   toast('CAPA approved and closed', 'success');
 }
 
 // ── PDF — form 2.5.C.2 (flat printed form, Caputo logo in color) ──
+// File name the SharePoint "Auto Organize" flow understands (same shape as the
+// retest PDFs): "CAPA - <bldg> (sample N) - <positive date>[ - <stage> <stamp>]"
+// → Envirotrack/<bldg>/CAPA/<year>/<MM - Month>.
+function capaFileName(root, stage) {
+  const b = typeof labBuilding === 'function' ? labBuilding(root.planta) : root.planta;
+  return 'CAPA - ' + b + ' (sample ' + (root.sample || root.id) + ') - ' + root.fecha +
+    (stage ? ' - ' + stage + ' ' + (typeof _stamp === 'function' ? _stamp(new Date()) : todayLocal()) : '');
+}
+// Download (button in the CAPA form). Archiving to SharePoint is automatic: see archiveCapaPDF.
 function exportCapaPDF(rootId) {
+  const r = _buildCapaDoc(rootId);
+  if (r) r.doc.save(capaFileName(r.root) + '.pdf');
+}
+// Archive a revision to SharePoint when the CAPA is documented and when it is approved.
+function archiveCapaPDF(rootId, stage) {
+  if (typeof syncSafe !== 'function' || typeof savePdfToSharePoint !== 'function') return;
+  const r = _buildCapaDoc(rootId);
+  if (r) syncSafe(() => savePdfToSharePoint(capaFileName(r.root, stage), r.doc), 'archive capa pdf');
+}
+function _buildCapaDoc(rootId) {
   const pid = capaPrimaryId(rootId);
   const open = CAPAROOT === pid && document.getElementById('capaModal').classList.contains('open');
   const c = Object.assign({}, getCapaAll()[pid] || {}, open ? _capaFromModal() : {});   // what is on screen, even unsaved
   const H = GH(), roots = (c.roots && c.roots.length ? c.roots : capaRootsOf(pid)).map(id => H.find(h => h.id === id)).filter(Boolean);
-  if (!roots.length) return;
+  if (!roots.length) return null;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const W = 215.9, PH = doc.internal.pageSize.getHeight(), M = 12, INK = [0, 0, 0], MUT = [110, 110, 110], LINE = [190, 190, 190], HEAD = [242, 242, 242];
@@ -526,9 +549,7 @@ function exportCapaPDF(rootId) {
     doc.text('Caputo Foods - SQF 2.5.C.2 Corrective Action Preventative Action - Confidential', M, PH - 5);
     doc.text('Page ' + i + ' of ' + pages, W - M, PH - 5, { align: 'right' });
   }
-  const name = 'CAPA ' + root.planta + ' sample ' + (root.sample || root.id) + ' ' + root.fecha;
-  doc.save(name + '.pdf');
-  if (typeof syncSafe === 'function' && typeof savePdfToSharePoint === 'function') syncSafe(() => savePdfToSharePoint(name, doc), 'save capa pdf');
+  return { doc, root };
 }
 
 // Header chips + buttons for a case card in the Retests view.

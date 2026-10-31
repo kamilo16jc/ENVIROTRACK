@@ -603,6 +603,7 @@ async function _buildPrevMonthReport() {
   if (!res || !res.doc) return null;
   return {
     doc: res.doc, tag: tag, fileName: 'Monthly_Report_'+tag,
+    archiveName: 'Monthly Report - All Buildings (' + firstPrev.toLocaleDateString('en-US', { month:'long', year:'numeric' }) + ') - ' + ymd(firstPrev),
     monthLabel:  firstPrev.toLocaleDateString('en-US', { month:'long', year:'numeric' }),
     periodStart: firstPrev.toLocaleDateString('en-US', longOpts),
     periodEnd:   lastPrev.toLocaleDateString('en-US', longOpts),
@@ -650,7 +651,7 @@ async function emailMonthlyReport() {
       bodyHtml: monthlyEmailBodyHtml(r)
     });
     toast('Monthly report for ' + r.monthLabel + ' sent to QA','success');
-    syncSafe(() => savePdfToSharePoint(r.fileName, r.doc, 'Monthly Reports'), 'archive monthly'); // best-effort archive
+    syncSafe(() => savePdfToSharePoint(r.archiveName, r.doc), 'archive monthly'); // best-effort archive (Auto Organize files it)
   } catch (e) {
     console.error('[monthly] email failed:', e);
     toast('Could not send monthly report — check your connection','error');
@@ -664,7 +665,7 @@ async function saveMonthlyReportToSharePoint() {
   if (!r) { toast('No data recorded for last month — nothing to save','error'); return; }
   try {
     toast('Saving monthly report…','info');
-    await savePdfToSharePoint(r.fileName, r.doc, 'Monthly Reports');
+    await savePdfToSharePoint(r.archiveName, r.doc);
     toast('Monthly report for ' + r.tag + ' saved to SharePoint','success');
   } catch (e) {
     console.error('[monthly] save failed:', e);
