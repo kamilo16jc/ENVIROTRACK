@@ -584,10 +584,14 @@ function exportReportPDF(opts) {
 // pre-formatted date strings. Restores the user's current Reports view after.
 // Returns null when there is no data for last month.
 async function _buildPrevMonthReport() {
+  const now = new Date();
+  return _buildMonthReport(new Date(now.getFullYear(), now.getMonth()-1, 1));
+}
+// Same report for any month (firstPrev = 1st day of that month).
+async function _buildMonthReport(firstPrev) {
   const rf = document.getElementById('repFrom'), rt = document.getElementById('repTo'), rp = document.getElementById('reportPeriod');
   const now = new Date();
-  const firstPrev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-  const lastPrev  = new Date(now.getFullYear(), now.getMonth(),   0);
+  const lastPrev  = new Date(firstPrev.getFullYear(), firstPrev.getMonth()+1, 0);
   const ymd = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   const tag = firstPrev.getFullYear()+'-'+String(firstPrev.getMonth()+1).padStart(2,'0'); // "2026-06"
   const longOpts = { month:'long', day:'numeric', year:'numeric' };
@@ -656,6 +660,53 @@ async function emailMonthlyReport() {
     console.error('[monthly] email failed:', e);
     toast('Could not send monthly report — check your connection','error');
   }
+}
+
+// ONE-OFF backfill (admin, from the browser console): archive to SharePoint the
+// monthly reports of past months and every documented / approved CAPA, so the
+// whole chain (SavePdf → Provisional → ToShared → Auto Organize) files them.
+// Nothing is emailed. Usage:  archiveReportsBackfill()   or
+//   archiveReportsBackfill({ from: '2026-01', to: '2026-09', capa: true, gapMs: 6000 })
+async function archiveReportsBackfill(opts) {
+  opts = opts || {};
+  if (typeof isAdmin === 'function' && !(CU && isAdmin(CU.email, CU.role))) { toast('Administrators only', 'error'); return; }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const gap = opts.gapMs || 6000, log = [];
+  if (typeof showPage === 'function') showPage('reports');     // charts need the Reports page on screen
+  await sleep(800);
+  const months = [], now = new Date();
+  const first = opts.from || (GH().map(h => h.fecha).filter(Boolean).sort()[0] || '').slice(0, 7);
+  const last = opts.to || (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'))(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  for (let d = new Date(+first.slice(0, 4), +first.slice(5, 7) - 1, 1); ; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    const tag = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    if (tag > last) break;
+    months.push(d);
+  }
+  for (const d of months) {
+    const r = await _buildMonthReport(d);
+    if (!r) { log.push('monthly ' + d.toISOString().slice(0, 7) + ': no data, skipped'); continue; }
+    try { await savePdfToSharePoint(r.archiveName, r.doc); log.push('monthly ' + r.tag + ': sent "' + r.archiveName + '"'); }
+    catch (e) { log.push('monthly ' + r.tag + ': FAILED ' + (e.message || e)); }
+    toast('Archived ' + r.monthLabel, 'info'); await sleep(gap);
+  }
+  if (opts.capa !== false && typeof getCapaAll === 'function') {
+    const all = getCapaAll();
+    for (const id of Object.keys(all)) {
+      const c = all[id];
+      if (!c || c.linkedTo || !capaComplete(c)) continue;          // only documented primaries (linked positives share the event's CAPA)
+      for (const stage of (c.approvedAt ? ['Documented', 'Approved'] : ['Documented'])) {
+        const b = _buildCapaDoc(isNaN(+id) ? id : +id);
+        if (!b) { log.push('capa ' + id + ': not found'); break; }
+        const name = capaFileName(b.root, stage);
+        try { await savePdfToSharePoint(name, b.doc); log.push('capa: sent "' + name + '"'); }
+        catch (e) { log.push('capa ' + id + ': FAILED ' + (e.message || e)); }
+        await sleep(gap);
+      }
+    }
+  }
+  console.log('[backfill]\n' + log.join('\n'));
+  toast('Backfill done — ' + log.filter(l => /sent/.test(l)).length + ' file(s) sent to SharePoint', 'success');
+  return log;
 }
 
 // Kept for archival-only use (saves to SharePoint without emailing).
