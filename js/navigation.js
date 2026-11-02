@@ -54,7 +54,7 @@ function showPage(p) {
   if(p==='history')   searchHistory();
   if(p==='retests')   loadRetests();
   if(p==='submissions') { loadSubmissions(); refreshSubmissions(); }
-  if(p==='completed') loadCompleted();
+  if(p==='completed') openCompleted();
   if(p==='reports')   { switchRepTab('stats'); }
   if(p==='settings')  { loadUsersTable(); switchCfgTab('users'); }
 }

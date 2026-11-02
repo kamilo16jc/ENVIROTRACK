@@ -44,7 +44,6 @@ async function refreshLiveData(opts) {
     else if (id === 'page-history'     && typeof searchHistory   === 'function') searchHistory();
     else if (id === 'page-retests'     && typeof loadRetests     === 'function') loadRetests();
     else if (id === 'page-submissions' && typeof loadSubmissions === 'function') loadSubmissions();
-    else if (id === 'page-completed'   && typeof loadCompleted   === 'function') loadCompleted();
     if (typeof updateNotifBadge === 'function') updateNotifBadge();
 
     _lastSyncAt = Date.now();
