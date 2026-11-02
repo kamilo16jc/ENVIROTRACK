@@ -27,7 +27,7 @@ function showPage(p) {
 
   // Reflect the current page name in the top bar.
   const _titles = { dashboard:'Dashboard', history:'Test History', retests:'Retests',
-    submissions:'Lab Submissions', generator:'Generate Tests', reports:'Reports',
+    submissions:'Lab Submissions', completed:'Completed Forms', generator:'Generate Tests', reports:'Reports',
     facilitymap:'Facility Map', settings:'Settings' };
   const _pt = document.getElementById('pageTitle');
   if(_pt && _titles[p]) _pt.textContent = _titles[p];
@@ -37,7 +37,7 @@ function showPage(p) {
 
   // Highlight parent group button for dropdown items
   const groupMap = {
-    'history': 'nav-records', 'retests': 'nav-records', 'submissions': 'nav-records',
+    'history': 'nav-records', 'retests': 'nav-records', 'submissions': 'nav-records', 'completed': 'nav-records',
     'generator': 'nav-testing', 'reports': 'nav-testing', 'facilitymap': 'nav-testing',
     'settings': 'nav-settings'
   };
@@ -54,6 +54,7 @@ function showPage(p) {
   if(p==='history')   searchHistory();
   if(p==='retests')   loadRetests();
   if(p==='submissions') { loadSubmissions(); refreshSubmissions(); }
+  if(p==='completed') loadCompleted();
   if(p==='reports')   { switchRepTab('stats'); }
   if(p==='settings')  { loadUsersTable(); switchCfgTab('users'); }
 }

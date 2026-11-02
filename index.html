@@ -14,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js" integrity="sha384-VA0FoBFnoj52hvJgGJB/86X6Ymgc+m/+C9RHXKKzH0qDAaY6MHnY5C97eYjQIqRj" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz" crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
@@ -176,6 +177,10 @@
         <div class="dd-item" onclick="showPage('submissions')" id="nav-submissions">
           <div class="dd-icon" style="background:#E8F8EE;color:#1E8E4E"><svg class="ln" width="18" height="18" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2z"/></svg></div>
           <div><div class="dd-name">Lab Submissions</div><div class="dd-desc">What was sent or generated</div></div>
+        </div>
+        <div class="dd-item" onclick="showPage('completed')" id="nav-completed">
+          <div class="dd-icon" style="background:#F2F2F7;color:#6B7280"><svg class="ln" width="18" height="18" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></div>
+          <div><div class="dd-name">Completed Forms</div><div class="dd-desc">Download forms of confirmed tests</div></div>
         </div>
       </div>
     </div>
@@ -646,6 +651,42 @@
           <div class="table-wrap"><table>
             <thead><tr><th>When</th><th style="text-align:center">Building</th><th>Sample</th><th>Type</th><th style="text-align:center">Status</th><th>Sent by</th><th>File</th></tr></thead>
             <tbody id="submissionsList"><tr><td colspan="7" style="text-align:center;color:var(--gray-500);padding:40px">No lab submissions yet</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-completed">
+      <div class="page-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+          <div class="card" style="text-align:center;padding:18px"><div style="font-size:28px;font-weight:800;color:var(--navy)" id="cfCountTotal">0</div><div style="font-size:12px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Completed forms</div></div>
+          <div class="card" style="text-align:center;padding:18px"><div style="font-size:28px;font-weight:800;color:var(--green)" id="cfCountWeekly">0</div><div style="font-size:12px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Weekly</div></div>
+          <div class="card" style="text-align:center;padding:18px"><div style="font-size:28px;font-weight:800;color:var(--gray-500)" id="cfCountRetest">0</div><div style="font-size:12px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Retests &amp; vectors</div></div>
+        </div>
+        <div class="card" style="padding:18px 24px">
+          <div class="filter-row">
+            <div class="filter-field"><label>Building</label>
+              <select id="cfBuilding" style="min-width:150px">
+                <option value="">All</option><option value="1945">1945</option><option value="1935">1935</option>
+                <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
+              </select></div>
+            <div class="filter-field"><label>Type</label>
+              <select id="cfType" style="min-width:130px">
+                <option value="">All</option><option value="Weekly">Weekly</option><option value="Retest">Retest</option><option value="Vector">Vector</option>
+              </select></div>
+            <div class="filter-field"><label>Sample #</label><input type="text" id="cfSample" placeholder="e.g. 303" style="width:110px"></div>
+            <div class="filter-field"><label>From</label><input type="date" id="cfFrom"></div>
+            <div class="filter-field"><label>To</label><input type="date" id="cfTo"></div>
+            <button type="button" class="btn btn-primary filter-search" onclick="loadCompleted()" title="Search" aria-label="Search" style="margin-top:18px"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+            <button class="btn btn-outline btn-sm" onclick="clearCompletedFilters()" style="margin-top:18px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>
+            <button class="btn btn-outline btn-sm" id="cfAllBtn" onclick="downloadAllCompleted()" style="margin-top:18px;margin-left:auto"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download all (ZIP)</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:14px">Forms <span id="cfCount" style="background:var(--gray-100);color:var(--gray-500);padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px">0</span></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Form</th><th style="text-align:center">Building</th><th>Sampled</th><th>Detail</th><th>Confirmed</th><th style="text-align:center">Download</th></tr></thead>
+            <tbody id="completedList"></tbody>
           </table></div>
         </div>
       </div>
@@ -1257,6 +1298,7 @@
 <script src="js/labfill.js"></script>
 <script src="js/labform.js"></script>
 <script src="js/submissions.js"></script>
+<script src="js/completed.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/navigation.js"></script>
 <script src="js/generator.js"></script>

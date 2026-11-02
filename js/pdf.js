@@ -73,6 +73,19 @@ async function swabFormTemplate(planta) {
   return null;
 }
 
+// The Sample Collection Form: the building's template + the week's tests (X on the tested pathogens).
+function swabFormDoc(tpl, planta, fecha, by, prodStart, collTime, tests) {
+  const meta = tpl.sampleData || {};
+  return PdfTemplate.render(tpl, {
+    plant: planta, sqf: SQF_NUMS[planta]||'2.4.H', version: meta.version || '', revision: meta.revision || '', supersedes: meta.supersedes || '',
+    docControl: Array.isArray(meta.docControl) ? meta.docControl : [],
+    date: fecha ? new Date(fecha+'T12:00:00').toLocaleDateString('en-US') : '',
+    collectedBy: by, prodStart: prodStart || '', collTime: collTime || '',
+    tests: tests.map(t => ({ sample: String(t.sample), zone: String(t.zone), area: t.area || '', line: String(t.line || 'N/A'), location: t.location || '',
+      ecoli: t.ecoli ? 'X' : '', listeria: t.listeria ? 'X' : '', salmonella: t.salmonella ? 'X' : '', saureus: t.saureus ? 'X' : '' }))
+  });
+}
+
 async function exportPDF() {
   if(!TESTS.length) { toast('Generate tests first','error'); return; }
   const planta = document.getElementById('genPlant').value;
@@ -82,19 +95,8 @@ async function exportPDF() {
   const tpl = await swabFormTemplate(planta);
   if (!tpl && SWAB_FORM_PLANTS.includes(planta)) { toast('Could not load the ' + planta + ' form — check the connection and try again', 'error'); return; }
   if (tpl) {
-    const meta = tpl.sampleData || {};
-    const data = {
-      plant: planta, sqf, version: meta.version || '', revision: meta.revision || '', supersedes: meta.supersedes || '',
-      docControl: Array.isArray(meta.docControl) ? meta.docControl : [],
-      date: fecha ? new Date(fecha+'T12:00:00').toLocaleDateString('en-US') : '',
-      collectedBy: by,
-      prodStart: (document.getElementById('genProdStart') || {}).value || '',
-      collTime: (document.getElementById('genCollTime') || {}).value || '',
-      tests: TESTS.map(t => ({ sample: String(t.sample), zone: String(t.zone), area: t.area || '', line: String(t.line || 'N/A'), location: t.location || '',
-        ecoli: t.ecoli ? 'X' : '', listeria: t.listeria ? 'X' : '', salmonella: t.salmonella ? 'X' : '', saureus: t.saureus ? 'X' : '' }))
-    };
     try {
-      const doc = await PdfTemplate.render(tpl, data);
+      const doc = await swabFormDoc(tpl, planta, fecha, by, (document.getElementById('genProdStart') || {}).value, (document.getElementById('genCollTime') || {}).value, TESTS);
       if (doc.templateWarnings && doc.templateWarnings.length) console.warn('[pdf] template', doc.templateWarnings);
       const pdfName = namePdfGenerator(planta, fecha);
       doc.save(pdfName + '.pdf');
@@ -141,9 +143,21 @@ async function exportPDF() {
 // PDF — RETEST FORM
 // ═══════════════════════════════════════════════
 function exportRetestPDF(id) {
-  const hist = GH();
-  const h = hist.find(r => r.id===id);
+  const h = GH().find(r => r.id===id);
   if(!h) return;
+  // Result confirmed by the lab: the form only comes from Completed Forms, with the watermark.
+  if (h.resultado === 'Negative' || h.resultado === 'Positive') { toast('Result confirmed — download this form from Completed Forms', 'info'); return; }
+  const { doc, rn, kind } = buildRetestDoc(h);
+  const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn, kind);
+  doc.save(pdfName + '.pdf');
+  if (typeof markRetestPdf === 'function') { markRetestPdf(h); if (typeof loadRetests === 'function') loadRetests(); }
+  syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
+  toast('✅ '+kind+' #'+rn+' PDF exported for Sample #'+(h.sample||h.location),'success');
+}
+
+// opts.plain: the form as it was collected — X on the tested pathogens, no lab results.
+function buildRetestDoc(h, opts) {
+  const hist = GH();
 
   // Get the original positive record
   const orig = h.originalId ? hist.find(r => r.id===h.originalId) : null;
@@ -197,7 +211,7 @@ function exportRetestPDF(id) {
 
   // ── Table ─────────────────────────────────────────────────────────────
   // Tested pathogens show "X" until the lab result is recorded, then the result itself.
-  const res  = (typeof labResultsForPrint === 'function') ? labResultsForPrint(h) : null;
+  const res  = !(opts && opts.plain) && (typeof labResultsForPrint === 'function') ? labResultsForPrint(h) : null;
   const cell = k => res && res[k] ? labCellText(k, res[k]) : (h[k] ? 'X' : '');
   const rows = [[String(h.sample),String(h.zone),h.area,String(h.line||'N/A'),h.location,
     cell('ecoli'), cell('listeria'), cell('salmonella'), cell('saureus')]];
@@ -211,12 +225,7 @@ function exportRetestPDF(id) {
   const tableEnd = doc.lastAutoTable.finalY + 4;
   pdfDocControl(doc, tableEnd+4, M);
   pdfFooter(doc, W, M);
-
-  const pdfName = namePdfRetest(h.planta, h.fecha, h.sample, rn, kind);
-  doc.save(pdfName + '.pdf');
-  if (typeof markRetestPdf === 'function') { markRetestPdf(h); if (typeof loadRetests === 'function') loadRetests(); }
-  syncSafe(() => savePdfToSharePoint(pdfName, doc), 'save retest pdf');
-  toast('✅ '+kind+' #'+rn+' PDF exported for Sample #'+(h.sample||h.location),'success');
+  return { doc, rn, kind };
 }
 
 // ═══════════════════════════════════════════════
