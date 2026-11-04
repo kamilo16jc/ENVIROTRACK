@@ -19,6 +19,7 @@ function searchHistory() {
   const _fu = hist.filter(h => h.retestNum || h.isRetest).length;
   document.getElementById('resultCount').textContent = (hist.length - _fu) + ' tests' + (_fu ? ' + ' + _fu + ' retest' + (_fu === 1 ? '' : 's') : '');
   const canEdit = (typeof canEditRecords === 'function') && canEditRecords();
+  const _ffBtn = document.getElementById('btnFormFix'); if (_ffBtn) _ffBtn.style.display = canEdit ? '' : 'none';
   const tbody = document.getElementById('historyTable');
   clearHistSelection();
   if(!hist.length) {

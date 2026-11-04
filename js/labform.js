@@ -115,14 +115,17 @@ function _labRepeatOK(prior, sendToLab, what) {
 
 async function submitLabForm(sendToLab) {
   if (!TESTS || !TESTS.length) { toast('Generate tests first', 'error'); return; }
-  if (_labBusy) { _labBusyMsg(); return; }
-  _labBusy = true;
-  try { await _submitLabForm(sendToLab); } finally { _labBusy = false; }
-}
-async function _submitLabForm(sendToLab) {
   const planta = document.getElementById('genPlant').value;
   const fecha  = document.getElementById('genDate').value || todayLocal();
-  const p = labPayloadNormal(planta, fecha, TESTS);
+  return submitLabFormFor(planta, fecha, TESTS, sendToLab, document.getElementById(sendToLab ? 'btnLabSend' : 'btnLabFill'));
+}
+async function submitLabFormFor(planta, fecha, tests, sendToLab, btn) {
+  if (_labBusy) { _labBusyMsg(); return; }
+  _labBusy = true;
+  try { await _submitLabForm(planta, fecha, tests, sendToLab, btn); } finally { _labBusy = false; }
+}
+async function _submitLabForm(planta, fecha, tests, sendToLab, btn) {
+  const p = labPayloadNormal(planta, fecha, tests);
   if (!p.rows.length) { toast('The tests have no pathogens selected', 'error'); return; }
   const prior = _labPrior(s => s.type !== 'Retest' && s.fileName === p.fileName);
   if (!_labRepeatOK(prior, sendToLab, 'The ' + p.building + ' lab form of ' + fecha)) return;
@@ -137,9 +140,8 @@ async function _submitLabForm(sendToLab) {
   const body = Object.assign(
     { fileName: p.fileName, building: p.building, collectionDate: p.collectionDate,
       rowsJson: JSON.stringify(p.rows), contentBase64: contentBase64, sendToLab: !!sendToLab },
-    submissionMeta('Generator', String(TESTS.map(t => t.sample).join(', ')), '', sendToLab)
+    submissionMeta('Generator', String(tests.map(t => t.sample).join(', ')), '', sendToLab)
   );
-  const btn = document.getElementById(sendToLab ? 'btnLabSend' : 'btnLabFill');
   try {
     if (btn) btn.disabled = true;   // icon-only: dim while busy, keep the icon
     toast(sendToLab ? 'Sending to lab…' : 'Filling lab form…', 'info');

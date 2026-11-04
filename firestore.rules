@@ -51,6 +51,12 @@ service cloud.firestore {
         ? request.resource.data.get('voided', false) == false
         : sameVal('voided', false) && sameVal('voidReason', '') && sameVal('voidedBy', '') && sameVal('voidedAt', '');
     }
+    // The date of a weekly form is corrected by an Administrator only. Retests keep their
+    // own control: anyone working the case may move a scheduled retest.
+    function dateEditable() {
+      return resource == null || isAdmin() || sameVal('fecha', '')
+        || resource.data.get('retestNum', '') != '' || resource.data.get('isRetest', false) == true;
+    }
     // Bulk history imports flag documents for a gradual SharePoint copy; clients may not set it.
     function noClientDefer() {
       return request.resource.data.get('_spDefer', false) == false
@@ -86,7 +92,7 @@ service cloud.firestore {
     match /records/{id} {
       allow read: if provisioned();
       allow create, update: if provisioned() && stamped() && validRecord() && noClientDefer()
-        && resultEditable() && (isAdmin() || voidUnchanged());
+        && resultEditable() && dateEditable() && (isAdmin() || voidUnchanged());
       allow delete: if false;
     }
     match /resolved/{id} {

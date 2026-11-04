@@ -259,6 +259,16 @@ async function fsUpdateRecord(rec) {
   if (!rec || !rec.id) return;
   await STORE.db.collection('records').doc(String(rec.id)).set(Object.assign(_recDoc(rec), _fsStamp()));
 }
+// Several records in one write: all of them change, or none.
+async function fsUpdateRecords(recs) {
+  if (!STORE.on) {
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;   // dev without a session: local copy only
+    throw new Error('offline-store');
+  }
+  const b = STORE.db.batch();
+  recs.forEach(r => b.set(STORE.db.collection('records').doc(String(r.id)), Object.assign(_recDoc(r), _fsStamp())));
+  await b.commit();
+}
 async function fsAddResolved(items) {
   const b = STORE.db.batch(), now = new Date().toISOString();
   (items || []).forEach((r, i) => {

@@ -500,7 +500,8 @@
               </select></div>
             <button type="button" class="btn btn-primary filter-search" onclick="searchHistory()" title="Search" aria-label="Search" style="margin-top:18px"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
             <button class="btn btn-outline btn-sm" onclick="clearFilters()" style="margin-top:18px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>
-            <button class="btn btn-outline btn-sm" style="margin-top:18px;margin-left:auto" onclick="exportHistoryPDF()"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Export PDF</button>
+            <button class="btn btn-outline btn-sm" id="btnFormFix" style="margin-top:18px;margin-left:auto;display:none" onclick="openFormFix()" title="Administrators: correct the date of a saved form and make its forms again"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Correct a form</button>
+            <button class="btn btn-outline btn-sm" style="margin-top:18px" onclick="exportHistoryPDF()"><svg class="ln ico-inline" width="15" height="15" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Export PDF</button>
           </div>
         </div>
         <div class="card">
@@ -1115,6 +1116,54 @@
   </div>
 </div>
 
+<!-- ══════ CORRECT A FORM (administrators) ══════ -->
+<div class="modal-overlay" id="formFixModal">
+  <div class="modal" style="width:680px;max-height:90vh;overflow-y:auto">
+    <h3><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Correct a Form</h3>
+    <div class="filter-row" style="margin-bottom:14px">
+      <div class="filter-field"><label>Building</label>
+        <select id="ffBuilding" style="min-width:150px">
+          <option value="">Choose</option><option value="1945">1945</option><option value="1935">1935</option>
+          <option value="1931E">1931 East</option><option value="1931W">1931 West</option>
+        </select></div>
+      <div class="filter-field"><label>Date on the form</label><input type="date" id="ffFecha"></div>
+      <button type="button" class="btn btn-primary filter-search" onclick="ffSearch()" title="Search" aria-label="Search" style="margin-top:18px"><svg class="ln" width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+    </div>
+    <div id="ffStatus" style="color:var(--gray-500);font-size:13px;padding:14px 0"></div>
+    <div id="ffForm" style="display:none">
+      <div id="ffInfo" class="lr-info"></div>
+      <div class="table-wrap" style="margin-bottom:14px"><table>
+        <thead><tr><th>Sample #</th><th style="text-align:center">Zone</th><th>Location</th><th>Pathogens</th><th>Result</th></tr></thead>
+        <tbody id="ffTests"></tbody>
+      </table></div>
+      <div id="ffLocked" style="display:none;margin-bottom:14px;font-size:12.5px;font-weight:600;line-height:1.6;color:var(--yellow)">This form already has a lab result, so its date cannot be changed here. Its form comes from Records › Completed Forms when every test is confirmed.</div>
+      <div id="ffChange">
+        <div class="modal-label" style="margin-bottom:8px">Change the collection date</div>
+        <div class="filter-row" style="margin-bottom:10px">
+          <div class="filter-field"><label>Correct date *</label><input type="date" id="ffNewDate"></div>
+          <div class="filter-field" style="flex:1;min-width:220px"><label>Reason *</label><input type="text" id="ffReason" class="vec-input" style="width:100%" placeholder="Kept in the change history"></div>
+          <button class="btn btn-primary" id="ffSaveBtn" onclick="ffSaveDate()" style="margin-top:18px"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save date</button>
+        </div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Samples and pathogens stay the same. Nothing is sent or filled until you use the buttons below.</div>
+      </div>
+      <div id="ffOld" style="display:none;margin-bottom:14px;padding:12px 14px;border:1px solid var(--gray-200);border-radius:8px;font-size:12.5px;line-height:1.6">
+        <strong>The old files stay in SharePoint.</strong> Remove them by hand:
+        <ul id="ffOldFiles" style="margin:6px 0 0 18px"></ul>
+        <div id="ffOldSent" style="display:none;margin-top:8px;font-weight:600;color:var(--red)">The old lab form was already sent to the laboratory. Tell the lab which one is correct.</div>
+      </div>
+      <div id="ffMake">
+        <div class="modal-label" style="margin-bottom:8px">Make the forms again</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <button class="btn btn-outline" id="ffSwab" onclick="ffMakeSwab()"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Collection form</button>
+          <button class="btn btn-outline" id="ffLabFill" onclick="ffMakeLab(false)"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Lab form (no email)</button>
+          <button class="btn btn-outline" id="ffLabSend" onclick="ffMakeLab(true)" style="display:none"><svg class="ln ico-inline" width="14" height="14" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send to lab</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeFormFix()">Close</button></div>
+  </div>
+</div>
+
 <!-- ══════ PHOTO LIGHTBOX ══════ -->
 <div id="photoLightbox" onclick="closePhotoLightbox()" style="position:fixed;inset:0;z-index:10000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(11,11,13,.9);padding:24px;cursor:zoom-out">
   <img id="plbImg" alt="photo" style="max-width:94vw;max-height:82vh;object-fit:contain;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
@@ -1311,6 +1360,7 @@
 <script src="js/capa.js"></script>
 <script src="js/retests.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/formfix.js"></script>
 <script src="js/changelog.js"></script>
 <script src="js/notifications.js"></script>
 <script src="js/kpis.js"></script>
