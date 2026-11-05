@@ -70,7 +70,9 @@ function mapSvg(geo, plant, opts) {
   svg.setAttribute('class', 'mp-svg');
   const vb = { x: b.x0 - pad, y: b.z0 - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
   svg._home = Object.assign({}, vb); svg._vb = vb;
-  const setVB = () => svg.setAttribute('viewBox', [vb.x, vb.y, vb.w, vb.h].join(' '));
+  // The dots keep the same size on screen at any zoom (they are drawn in plan metres).
+  const setVB = () => { svg.setAttribute('viewBox', [vb.x, vb.y, vb.w, vb.h].join(' ')); if (svg._marks) _mpScaleMarks(svg); };
+  svg._setVB = setVB;
   setVB();
   const el = (t, a, parent) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); (parent || svg).appendChild(n); return n; };
   const pts = poly => poly.map(p => p.join(',')).join(' ');
@@ -138,11 +140,19 @@ function mapAddMark(svg, m) {
   g.dataset.tip = m.tip || (m.label != null ? '#' + m.label : '');
   g.dataset.x = m.x; g.dataset.z = m.z;
   const circle = (r, cls) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', m.x); c.setAttribute('cy', m.z); c.setAttribute('r', r); c.setAttribute('class', cls); g.appendChild(c); return c; };
-  circle(u * 1.5, 'mp-hit');                                   // bigger invisible target (fingers)
-  if (m.current) circle(u * 1.6, 'mp-halo');
-  circle(m.current ? u * 1.1 : u * 0.85, 'mp-dot').setAttribute('stroke-width', u * 0.25);
+  circle(u * 1.4, 'mp-hit').dataset.r = 1.4;                  // bigger invisible target (fingers)
+  if (m.current) circle(u * 1.1, 'mp-halo').dataset.r = 1.1;
+  const dot = circle(u, 'mp-dot'); dot.dataset.r = m.current ? 0.62 : 0.48; dot.dataset.sw = 0.16;
   svg._marks.appendChild(g);
+  _mpScaleMarks(svg, g);
   return g;
+}
+function _mpScaleMarks(svg, only) {
+  const k = Math.max(svg._minK || 0, Math.min(1, svg._vb.w / svg._home.w)), u = svg._unit * k;
+  (only ? [only] : svg._marks.querySelectorAll('.mp-mark')).forEach(g => g.querySelectorAll('circle').forEach(c => {
+    c.setAttribute('r', u * Number(c.dataset.r || 1));
+    if (c.dataset.sw) c.setAttribute('stroke-width', u * Number(c.dataset.sw));
+  }));
 }
 function mapShowTip(svg, g) {
   const NS = 'http://www.w3.org/2000/svg', old = svg.querySelector('.mp-tip'); if (old) old.remove();
@@ -218,7 +228,7 @@ async function openPlaceOnMap(plant, sample) {
     onPick: admin ? (x, z) => { MP_EDIT.x = x; MP_EDIT.z = z; _mpDrawCurrent(svg, geo, pt); } : null });
   document.getElementById('mpPlan').appendChild(svg);
   MP_EDIT.svg = svg;
-  if (inQ && MP_QUEUE.vb) { Object.assign(svg._vb, MP_QUEUE.vb); svg.setAttribute('viewBox', [svg._vb.x, svg._vb.y, svg._vb.w, svg._vb.h].join(' ')); }
+  if (inQ && MP_QUEUE.vb) { Object.assign(svg._vb, MP_QUEUE.vb); svg._setVB(); }
   if (pt.mapX != null) _mpDrawCurrent(svg, geo, pt, true);
   else document.getElementById('mpStatus').textContent = 'Not placed yet.';
   document.getElementById('mapPlaceModal').classList.add('open');
@@ -482,7 +492,8 @@ async function mapMiniInto(host, plant, sample) {
   const svg = mapSvg(geo, plant, { labels: false, marks: [{ x: pt.mapX, z: pt.mapZ, label: String(sample), zone: pt.zone, current: true }] });
   // zoom around the point
   const u = svg._unit, vb = svg._vb; vb.w = u * 45; vb.h = u * 28; vb.x = pt.mapX - vb.w / 2; vb.y = pt.mapZ - vb.h / 2;
-  svg.setAttribute('viewBox', [vb.x, vb.y, vb.w, vb.h].join(' '));
+  svg._minK = 0.8;                            // the mini plan is small: keep its dot visible
+  svg._setVB();
   host.innerHTML = '<div class="ph-sec">On the plan' + (pt.mapAreaName ? ' · ' + esc(pt.mapAreaName) : '') + '</div>';
   const box = document.createElement('div'); box.className = 'mp-mini'; box.appendChild(svg); host.appendChild(box);
 }
