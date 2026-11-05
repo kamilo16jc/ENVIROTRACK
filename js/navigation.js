@@ -33,7 +33,7 @@ function showPage(p) {
   if(_pt && _titles[p]) _pt.textContent = _titles[p];
 
   // Lazy-load the facility map iframe the first time it's opened.
-  if(p==='facilitymap') loadFacilityMap();
+  if(p==='facilitymap') { loadFacilityMap(); fmSendPoints(); }
 
   // Highlight parent group button for dropdown items
   const groupMap = {
