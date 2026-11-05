@@ -13,11 +13,10 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
-const admin = require("firebase-admin");
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 const REGION = "us-central1";
-const db = () => admin.firestore();
+const db = () => getFirestore();
 const nowIso = () => new Date().toISOString();
 
 async function callFlow(envKey, body) {

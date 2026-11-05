@@ -6,7 +6,8 @@
 // with no app entry shows up as "no reason given".
 // ═══════════════════════════════════════════════════════════════
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
-const admin = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
 const REGION = "us-central1";
 const AUDIT_FIELDS = ["fecha", "planta", "sample", "retestNum", "zone", "area", "location", "prodStart", "collTime",
@@ -20,7 +21,7 @@ const _names = {};
 async function nameOf(email) {
   if (!email || !email.includes("@")) return email || "";
   if (_names[email] === undefined) {
-    _names[email] = await admin.auth().getUserByEmail(email).then(u => u.displayName || "", () => "");
+    _names[email] = await getAuth().getUserByEmail(email).then(u => u.displayName || "", () => "");
   }
   return _names[email] || email;
 }
@@ -36,12 +37,12 @@ exports.auditRecords = onDocumentWritten({ document: "records/{id}", region: REG
     && changes.every(c => RESULT_FIELDS.has(c.field));
   const by = String(after._by || "");
   const id = "srv_" + ev.params.id + "_" + Date.now();
-  await admin.firestore().collection("recordChanges").doc(id).set({
+  await getFirestore().collection("recordChanges").doc(id).set({
     id, source: "server",
     recordId: Number(ev.params.id) || 0, planta: after.planta || "", sample: after.sample || 0,
     recordDate: after.fecha || "", retestNum: after.retestNum || "",
     action: entered ? "entered" : "edit", changes, reason: "", samples: [],
     byEmail: by, byName: await nameOf(by), at: new Date().toISOString(),
-    _by: "server", _at: admin.firestore.FieldValue.serverTimestamp(),
+    _by: "server", _at: FieldValue.serverTimestamp(),
   });
 });

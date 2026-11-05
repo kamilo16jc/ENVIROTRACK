@@ -7,10 +7,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore } = require("firebase-admin/firestore");
 const crypto = require("crypto");
 
-admin.initializeApp();
+initializeApp();
 
 // ── Photo upload tokens ────────────────────────────────────────────
 // The phone (capture.html) has no Firebase auth, so the upload endpoint is
@@ -81,7 +83,7 @@ const ADMIN_OPS = new Set([
 
 // Root administrators cannot be disabled, demoted or deleted by other admins.
 async function assertNotRoot(uid) {
-  const u = await admin.auth().getUser(uid).catch(() => null);
+  const u = await getAuth().getUser(uid).catch(() => null);
   if (u && ROOT_ADMINS.includes(String(u.email || "").toLowerCase())) {
     throw new HttpsError("permission-denied", "This account is protected.");
   }
@@ -102,7 +104,7 @@ const REGION = "us-central1";
 // List all users (email, name, role, active status, dates).
 exports.adminListUsers = onCall({ region: REGION, cors: true }, async (request) => {
   assertAdmin(request);
-  const result = await admin.auth().listUsers(1000);
+  const result = await getAuth().listUsers(1000);
   return result.users.map((u) => ({
     uid: u.uid,
     email: u.email || "",
@@ -126,7 +128,7 @@ exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request)
   }
   let user;
   try {
-    user = await admin.auth().createUser({ email, password, displayName: name || "" });
+    user = await getAuth().createUser({ email, password, displayName: name || "" });
   } catch (e) {
     if (e.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "A user with that email already exists.");
@@ -136,7 +138,7 @@ exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request)
     }
     throw new HttpsError("internal", e.message || "Could not create the user.");
   }
-  await admin.auth().setCustomUserClaims(user.uid, { role: VALID_ROLES.includes(role) ? role : "Inspector" });
+  await getAuth().setCustomUserClaims(user.uid, { role: VALID_ROLES.includes(role) ? role : "Inspector" });
   return { uid: user.uid };
 });
 
@@ -149,7 +151,7 @@ exports.adminSetUserActive = onCall({ region: REGION, cors: true }, async (reque
     throw new HttpsError("failed-precondition", "You cannot deactivate your own account.");
   }
   await assertNotRoot(uid);
-  await admin.auth().updateUser(uid, { disabled: active === false });
+  await getAuth().updateUser(uid, { disabled: active === false });
   return { ok: true };
 });
 
@@ -162,7 +164,7 @@ exports.adminSetRole = onCall({ region: REGION, cors: true }, async (request) =>
     throw new HttpsError("invalid-argument", "Invalid user id or role.");
   }
   if (role !== "Administrator") await assertNotRoot(uid);
-  await admin.auth().setCustomUserClaims(uid, { role });
+  await getAuth().setCustomUserClaims(uid, { role });
   return { ok: true };
 });
 
@@ -173,7 +175,7 @@ exports.adminResetPassword = onCall({ region: REGION, cors: true }, async (reque
   if (!uid || !password || String(password).length < 6) {
     throw new HttpsError("invalid-argument", "Password must be at least 6 characters.");
   }
-  await admin.auth().updateUser(uid, { password });
+  await getAuth().updateUser(uid, { password });
   return { ok: true };
 });
 
@@ -186,7 +188,7 @@ exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request)
     throw new HttpsError("failed-precondition", "You cannot delete your own account.");
   }
   await assertNotRoot(uid);
-  await admin.auth().deleteUser(uid);
+  await getAuth().deleteUser(uid);
   return { ok: true };
 });
 
@@ -264,8 +266,8 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     const b = body || {};
     const key = crypto.createHash("sha256")
       .update([b.fileName, !!b.sendToLab, b.building, b.collectionDate, b.rowsJson].join("|")).digest("hex");
-    lockRef = admin.firestore().collection("opLocks").doc("labform_" + key);
-    const first = await admin.firestore().runTransaction(async (tx) => {
+    lockRef = getFirestore().collection("opLocks").doc("labform_" + key);
+    const first = await getFirestore().runTransaction(async (tx) => {
       const d = await tx.get(lockRef);
       if (d.exists && Date.now() - (d.data().at || 0) < LABFORM_REPEAT_MS) return false;
       tx.set(lockRef, { at: Date.now(), by: String(request.auth.token.email || ""), fileName: String(b.fileName || "") });

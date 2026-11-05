@@ -73,7 +73,7 @@ async function _pcLoadPhoto(pt) {
   const show = src => _pcShow('<img id="pcImg" alt="Sampling spot of sample ' + esc(String(pt.sample)) + '" src="' + src + '" style="max-width:100%;max-height:72vh;display:block;border-radius:10px">');
   if (_pcPhotos[file]) { show(_pcPhotos[file]); return; }
   const open = _pcOpen;
-  _pcShow(msg('Loading photo…'));
+  _pcShow('<div class="pc-load" role="status">Loading photo…<div class="pc-load-bar"></div></div>');
   try {
     const r = await _spPost('photoContent', { fileName: file });
     const b64 = r && r.content;
