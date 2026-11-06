@@ -247,9 +247,13 @@ const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || "caput
   .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const APP_URL = String(process.env.APP_URL || "https://kamilo16jc.github.io/ENVIROTRACK/").replace(/\/?$/, "/");
 const INVITE_MS = 72 * 3600 * 1000;
+// Single addresses allowed outside those domains (ALLOWED_EMAILS in functions/.env,
+// comma separated — kept out of the public repo).
+const ALLOWED_EMAILS = String(process.env.ALLOWED_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 function assertCompanyEmail(email) {
   const e = String(email || "").trim().toLowerCase();
   const m = /^[^\s@]+@([a-z0-9.-]+)$/.exec(e);
+  if (m && ALLOWED_EMAILS.includes(e)) return e;
   if (!m || !ALLOWED_EMAIL_DOMAINS.includes(m[1])) {
     throw new HttpsError("invalid-argument", "Only " + ALLOWED_EMAIL_DOMAINS.map(d => "@" + d).join(" / ") + " e-mails can have an account.");
   }
