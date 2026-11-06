@@ -10,7 +10,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const crypto = require("crypto");
 
 initializeApp();
@@ -86,6 +86,7 @@ function assertAdmin(request) {
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Only administrators can manage users.");
   }
+  assertAdminMfa(request);
   return email;
 }
 
@@ -97,11 +98,9 @@ const VALID_ROLES = ["Inspector", "Manager", "Administrator"];
 // Same lab form within this window = duplicate (see spProxy).
 const LABFORM_REPEAT_MS = 2 * 60 * 1000;
 
-// Operations only administrators may perform (master-list / sampling-point
-// management + the monthly email). Mirrors the admin-only gating in the UI.
-const ADMIN_OPS = new Set([
-  "masterWrite", "masterPointsWrite", "masterPointsUpdate", "emailmonthly",
-]);
+// Operations only administrators may perform (the monthly email). Sampling
+// points are managed in Firestore, where the rules allow administrators only.
+const ADMIN_OPS = new Set(["emailmonthly"]);
 
 // Root administrators cannot be disabled, demoted or deleted by other admins.
 async function assertNotRoot(uid) {
@@ -121,7 +120,23 @@ function roleOf(request) {
   return VALID_ROLES.includes(role) ? role : null;
 }
 
+// ── Two-step verification ──────────────────────────────────────────
+// Administrators must have signed in with their authenticator app (TOTP).
+// Their ID token then carries firebase.sign_in_second_factor. Safety valve:
+// ADMIN_MFA=off in functions/.env turns the check off (only for an emergency).
+const ADMIN_MFA = String(process.env.ADMIN_MFA || "on").toLowerCase() !== "off";
+function signedInWithMfa(request) {
+  const f = (request.auth && request.auth.token && request.auth.token.firebase) || {};
+  return !!f.sign_in_second_factor;
+}
+function assertAdminMfa(request) {
+  if (ADMIN_MFA && !signedInWithMfa(request)) {
+    throw new HttpsError("failed-precondition", "mfa-required: Administrators must sign in with two-step verification.");
+  }
+}
+
 const REGION = "us-central1";
+const db = () => getFirestore();
 
 // List all users (email, name, role, active status, dates).
 exports.adminListUsers = onCall({ region: REGION, cors: true }, async (request) => {
@@ -133,6 +148,7 @@ exports.adminListUsers = onCall({ region: REGION, cors: true }, async (request) 
     name: u.displayName || "",
     role: (u.customClaims && u.customClaims.role) || "Inspector",
     active: !u.disabled,
+    mfa: !!(u.multiFactor && u.multiFactor.enrolledFactors && u.multiFactor.enrolledFactors.length),
     created: u.metadata.creationTime || "",
     lastSignIn: u.metadata.lastSignInTime || "",
   }));
@@ -150,7 +166,9 @@ exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request)
   }
   let user;
   try {
-    user = await getAuth().createUser({ email, password, displayName: name || "" });
+    // emailVerified: the administrator vouches for the work email; Firebase
+    // only lets verified accounts turn on two-step verification.
+    user = await getAuth().createUser({ email, password, displayName: name || "", emailVerified: true });
   } catch (e) {
     if (e.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "A user with that email already exists.");
@@ -201,6 +219,32 @@ exports.adminResetPassword = onCall({ region: REGION, cors: true }, async (reque
   return { ok: true };
 });
 
+// Turn off a user's two-step verification (lost or new phone). They set it up
+// again at their next sign-in. Every open session of that user is closed.
+exports.adminResetMfa = onCall({ region: REGION, cors: true }, async (request) => {
+  assertAdmin(request);
+  const { uid } = request.data || {};
+  if (!uid) throw new HttpsError("invalid-argument", "Missing user id.");
+  if (uid === request.auth.uid) {
+    throw new HttpsError("failed-precondition", "Another administrator must reset your own two-step verification.");
+  }
+  await assertNotRoot(uid);
+  await getAuth().updateUser(uid, { multiFactor: { enrolledFactors: null } });
+  await getAuth().revokeRefreshTokens(uid);
+  return { ok: true };
+});
+
+// Before setting up two-step verification: Firebase requires a verified email.
+// Accounts exist only because an administrator created them (sign-up is off),
+// so a provisioned account's email is marked verified here.
+exports.mfaPrepare = onCall({ region: REGION, cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must sign in.");
+  if (!roleOf(request)) throw new HttpsError("permission-denied", "This account is not provisioned.");
+  rateLimit("admin:" + request.auth.uid, LIMITS.admin);
+  if (!request.auth.token.email_verified) await getAuth().updateUser(request.auth.uid, { emailVerified: true });
+  return { ok: true };
+});
+
 // Delete an account.
 exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request) => {
   assertAdmin(request);
@@ -216,26 +260,41 @@ exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request)
 
 // ── SharePoint proxy ───────────────────────────────────────────────
 // Hides the Power Automate flow URLs (kept in functions/.env, never in the
-// public client JS) and only lets SIGNED-IN users trigger them.
+// public client JS) and only lets SIGNED-IN, provisioned users trigger them.
+// Data is written to Firestore first; SharePoint only receives copies made by
+// the server (spmirror.js). So the proxy no longer offers the old direct
+// writes or reads of Records / ResolvedRetests / MasterPoints / Submissions —
+// only files (lab form, PDFs, photos) and the monthly email.
 const FLOW_ENV = {
-  recordsWrite:       "FLOW_RECORDS_WRITE",
-  recordsRead:        "FLOW_RECORDS_READ",
-  recordsUpdate:      "FLOW_RECORDS_UPDATE",
-  resolvedWrite:      "FLOW_RESOLVED_WRITE",
-  resolvedRead:       "FLOW_RESOLVED_READ",
-  masterWrite:        "FLOW_MASTER_WRITE",
-  masterRead:         "FLOW_MASTER_READ",
-  masterPointsRead:   "FLOW_MASTERPOINTS_READ",
-  masterPointsWrite:  "FLOW_MASTERPOINTS_WRITE",
-  masterPointsUpdate: "FLOW_MASTERPOINTS_UPDATE",
   labform:            "FLOW_LABFORM",
   templateRead:       "FLOW_TEMPLATE_READ",
   savepdf:            "FLOW_SAVEPDF",
-  submissionsRead:    "FLOW_SUBMISSIONS_READ",
   emailmonthly:       "FLOW_EMAIL_MONTHLY",
   photoUploadUrl:     "FLOW_PHOTO_UPLOAD",
   photosRead:         "FLOW_PHOTOS_READ",
   photoContent:       "FLOW_PHOTO_CONTENT",
+};
+
+// Who may email the laboratory: private/appConfig.labSenders (Firestore, not
+// in the public repo). Read on the server, so hiding the button is not the
+// only gate. Cached for a minute.
+let _senders = { at: 0, list: [] };
+async function labSenders() {
+  if (Date.now() - _senders.at < 60000) return _senders.list;
+  const d = await db().collection("private").doc("appConfig").get();
+  let c = d.exists ? d.data() : {};
+  if (c && typeof c.json === "string") { try { c = JSON.parse(c.json); } catch (e) { c = {}; } }
+  const list = (Array.isArray(c && c.labSenders) ? c.labSenders : []).map(x => String(x).trim().toLowerCase()).filter(Boolean);
+  _senders = { at: Date.now(), list };
+  return list;
+}
+
+const str = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").slice(0, max || 200);
+// A file name the flows may create (they add the extension): no folders,
+// no control characters.
+const safeFileName = (n) => {
+  const s = String(n || "").trim();
+  return s.length > 0 && s.length <= 180 && !/[\\/:*?"<>|\u0000-\u001f]/.test(s) && !s.includes("..");
 };
 
 exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
@@ -252,11 +311,13 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     );
   }
   rateLimit("proxy:" + request.auth.uid, LIMITS.proxy);
-  const { op, body } = request.data || {};
+  const email = String(request.auth.token.email || "").toLowerCase();
+  const { op } = request.data || {};
+  const body = Object.assign({}, (request.data && request.data.body) || {});
   // photoToken: mint a short-lived, retest-scoped upload token for the QR. Only
   // a signed-in, provisioned user (checked above) can get one.
   if (op === "photoToken") {
-    const rid = String((body && body.retestId) || "");
+    const rid = String(body.retestId || "");
     if (!rid) throw new HttpsError("invalid-argument", "Missing retestId");
     return { token: signPhotoToken(rid) };
   }
@@ -265,11 +326,15 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     throw new HttpsError("invalid-argument", "Unknown operation: " + op);
   }
   // Sensitive operations require the Administrator role.
-  if (ADMIN_OPS.has(op) && role !== "Administrator") {
-    throw new HttpsError(
-      "permission-denied",
-      "Only administrators can perform this operation."
-    );
+  if (ADMIN_OPS.has(op)) {
+    if (role !== "Administrator") {
+      throw new HttpsError("permission-denied", "Only administrators can perform this operation.");
+    }
+    assertAdminMfa(request);
+  }
+  // Only photos the upload function created can be read back.
+  if (op === "photoContent" && !/^photo_[0-9A-Za-z]+_[0-9]+\.(jpg|png)$/.test(String(body.fileName || ""))) {
+    throw new HttpsError("invalid-argument", "Not a photo of this app.");
   }
   const url = process.env[envKey];
   if (!url) {
@@ -282,37 +347,66 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
   if (op === "photoUploadUrl") {
     return { url: "https://" + REGION + "-envirotrack-5173f.cloudfunctions.net/photoUpload" };
   }
-  // labform: an identical form (same file, rows and send/fill) arriving again within
-  // 2 minutes — a double click, or two devices — does not run the flow a second time.
-  let lockRef = null;
+  // PDFs are archived in the flow's own folder: a plain .pdf name and real PDF content.
+  if (op === "savepdf") {
+    if (!safeFileName(body.fileName)) throw new HttpsError("invalid-argument", "Invalid file name.");
+    const b64 = String(body.contentBase64 || "");
+    if (!b64.startsWith("JVBERi0")) throw new HttpsError("invalid-argument", "Only PDF files are archived.");
+    if (b64.length > 20 * 1024 * 1024) throw new HttpsError("invalid-argument", "The PDF is too large.");
+    delete body.folder;
+  }
+  // labform: checked and logged HERE, in Firestore, before the flow runs.
+  //  · Emailing the lab needs to be in labSenders (checked on the server).
+  //  · Who sent it comes from the sign-in, not from what the page says.
+  //  · An identical form (same file, rows and send/fill) arriving again within
+  //    2 minutes — a double click, or two devices — does not run the flow twice.
+  let lockRef = null, subRef = null;
   if (op === "labform") {
-    const b = body || {};
+    if (!safeFileName(body.fileName)) throw new HttpsError("invalid-argument", "Invalid file name.");
+    if (body.sendToLab && !(await labSenders()).includes(email)) {
+      throw new HttpsError("permission-denied", "Your account is not allowed to send forms to the laboratory.");
+    }
+    body.submittedByEmail = email;
+    body.submittedByName = str(request.auth.token.name || body.submittedByName || email.split("@")[0], 120);
+    body.submittedAt = new Date().toISOString();
+    body.status = body.sendToLab ? "Sent to lab" : "Generated";
     const key = crypto.createHash("sha256")
-      .update([b.fileName, !!b.sendToLab, b.building, b.collectionDate, b.rowsJson].join("|")).digest("hex");
-    lockRef = getFirestore().collection("opLocks").doc("labform_" + key);
-    const first = await getFirestore().runTransaction(async (tx) => {
+      .update([body.fileName, !!body.sendToLab, body.building, body.collectionDate, body.rowsJson].join("|")).digest("hex");
+    lockRef = db().collection("opLocks").doc("labform_" + key);
+    const first = await db().runTransaction(async (tx) => {
       const d = await tx.get(lockRef);
       if (d.exists && Date.now() - (d.data().at || 0) < LABFORM_REPEAT_MS) return false;
-      tx.set(lockRef, { at: Date.now(), by: String(request.auth.token.email || ""), fileName: String(b.fileName || "") });
+      tx.set(lockRef, { at: Date.now(), by: email, fileName: str(body.fileName) });
       return true;
     });
     if (!first) return { duplicate: true };
+    subRef = db().collection("submissions").doc();
+    await subRef.set({
+      building: str(body.building, 20), sample: str(body.sample, 400), type: str(body.type || "Generator", 20),
+      retestNum: str(body.retestNum, 20), status: body.status, fileName: str(body.fileName),
+      collectionDate: str(body.collectionDate, 20), submittedByEmail: email, submittedByName: body.submittedByName,
+      submittedAt: body.submittedAt, _by: email, _at: FieldValue.serverTimestamp(), _src: "server",
+    });
   }
-  const releaseLock = () => (lockRef ? lockRef.delete().catch(() => {}) : null);   // a failed run may be retried at once
+  // A failed run is undone: the log entry goes and it may be retried at once.
+  const undo = () => Promise.all([
+    lockRef ? lockRef.delete().catch(() => {}) : null,
+    subRef ? subRef.delete().catch(() => {}) : null,
+  ]);
   let res;
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
+      body: JSON.stringify(body),
     });
   } catch (e) {
-    await releaseLock();
+    await undo();
     throw new HttpsError("unavailable", "Could not reach the SharePoint flow.");
   }
   const text = await res.text();
   if (!res.ok) {
-    await releaseLock();
+    await undo();
     throw new HttpsError("internal", "Flow returned HTTP " + res.status);
   }
   // photoContent / templateRead return the raw base64 of a file (not JSON).
@@ -322,7 +416,7 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     if (c[0] === '"') { try { c = JSON.parse(c); } catch (e) {} }
     return { content: c };
   }
-  return text ? JSON.parse(text) : null;
+  try { return text ? JSON.parse(text) : null; } catch (e) { return null; }
 });
 
 // ── Public photo upload (CORS) ─────────────────────────────────────

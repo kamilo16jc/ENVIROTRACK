@@ -242,6 +242,8 @@ function fnError(e) {
   if (code === 'functions/permission-denied')  return 'Only administrators can manage users.';
   if (code === 'functions/unauthenticated')    return 'Please sign in again.';
   if (code === 'functions/resource-exhausted') return 'Too many requests right now. Wait a minute and try again.';
+  if (code === 'functions/failed-precondition' && /mfa-required/.test((e && e.message) || ''))
+    return 'Administrators need two-step verification. Sign out and sign in again to set it up.';
   if (code === 'functions/not-found' || code === 'functions/internal')
     return 'User management is unavailable. If you just set this up, deploy the Cloud Functions first.';
   if (code === 'functions/unavailable')        return 'Could not reach the server. Check your connection.';
@@ -257,12 +259,22 @@ function doLogin_dynamic() {
 
   err.textContent = 'Verifying…';
   fbAuth.signInWithEmailAndPassword(email, pw)
+    // Two-step verification on: the 6-digit code from the authenticator app (js/mfa.js).
+    .catch(e => {
+      if (e && e.code === 'auth/multi-factor-auth-required' && e.resolver) { err.textContent = ''; return mfaAskSignInCode(e.resolver); }
+      throw e;
+    })
     .then(async cred => {
       const user = cred.user;
       // Read the role from the token's custom claims (set by an admin).
-      let role = 'Inspector';
-      try { const tok = await user.getIdTokenResult(); if (tok.claims && tok.claims.role) role = tok.claims.role; } catch(e){}
+      let role = 'Inspector', tok = null;
+      try { tok = await user.getIdTokenResult(); if (tok.claims && tok.claims.role) role = tok.claims.role; } catch(e){}
       if (isAdmin(user.email) && role === 'Inspector') role = 'Administrator';
+      // An administrator without two-step verification sets it up now, then signs in again with the code.
+      if (mfaRequiredFor(role) && !mfaSignedIn(tok)) {
+        err.textContent = '';
+        if (await mfaSetupThenSignInAgain({ required: true })) return;
+      }
       const name = user.displayName || user.email.split('@')[0];
       CU = { id:user.uid, uid:user.uid, name, displayName:name,
              email:user.email, role, active:true };
@@ -296,7 +308,10 @@ function doLogin_dynamic() {
       document.getElementById('loginScreen').classList.remove('active');
       bootSyncThenEnter();
     })
-    .catch(e => { err.textContent = fbAuthError(e); });
+    .catch(e => {
+      if (e && e.cancelled) { err.textContent = e.msg || ''; return; }
+      err.textContent = (e && e.mfaMsg) ? e.message : fbAuthError(e);
+    });
 }
 
 // Startup sync jobs. `critical:true` = the app's core data; if one of these
@@ -396,17 +411,18 @@ function enterAnyway() { finishBootEnter(); }
 
 function loadUsersTable() {
   const tbody = document.getElementById('usersTable');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-500);padding:32px">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray-500);padding:32px">Loading…</td></tr>';
   userFn('adminListUsers')().then(res => {
     const users = (res.data || []).slice().sort((a,b)=>(a.email||'').localeCompare(b.email||''));
     USERS_CACHE = users;
     if(!users.length) {
-      tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-500);padding:32px">No users</td></tr>';
+      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--gray-500);padding:32px">No users</td></tr>';
       return;
     }
     const svgEdit   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
     const svgPause  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
     const svgPlay   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+    const svgPhone  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>';
     const svgTrash  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
     tbody.innerHTML = users.map(u => {
       const isMe = CU && u.uid === CU.uid;
@@ -416,19 +432,28 @@ function loadUsersTable() {
       <td style="font-size:13px;color:var(--gray-700)">${esc(u.email)}</td>
       <td><span class="badge ${u.role==='Administrator'?'badge-red':u.role==='Manager'?'badge-yellow':'badge-gray'}">${esc(u.role)}</span></td>
       <td><span style="font-size:12px;font-weight:600;color:${u.active?'var(--green)':'var(--gray-400)'}">${u.active?'Active':'Inactive'}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:${u.mfa?'var(--green)':(u.role==='Administrator'?'var(--red)':'var(--gray-400)')}" title="${u.mfa?'Signs in with a code from an authenticator app':(u.role==='Administrator'?'Will set it up at the next sign-in':'Not turned on')}">${u.mfa?'On':'Off'}</span></td>
       <td style="font-size:12px;color:var(--gray-500)">${created}</td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-outline btn-sm" onclick="editUser('${u.uid}')" title="Edit role / reset password">${svgEdit}</button>
           <button class="btn btn-outline btn-sm" onclick="toggleUser('${u.uid}',${u.active})" style="color:${u.active?'var(--red)':'var(--green)'}" title="${u.active?'Deactivate':'Activate'}"${isMe&&u.active?' disabled':''}>${u.active?svgPause:svgPlay}</button>
+          ${u.mfa&&!isMe?`<button class="btn btn-outline btn-sm" onclick="resetUserMfa('${u.uid}','${esc(u.email)}')" title="Reset two-step verification (lost or new phone)">${svgPhone}</button>`:''}
           ${isMe?'':`<button class="btn btn-outline btn-sm" onclick="deleteUser('${u.uid}','${esc(u.email)}')" style="color:var(--red)" title="Delete">${svgTrash}</button>`}
         </div>
       </td>
     </tr>`;
     }).join('');
   }).catch(e => {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">'+esc(fnError(e))+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:24px">'+esc(fnError(e))+'</td></tr>';
   });
+}
+
+// Lost or new phone: the user sets two-step verification up again at the next sign-in.
+function resetUserMfa(uid, email) {
+  if (!confirm('Reset two-step verification for ' + email + '?\n\nTheir sessions are closed. At the next sign-in they will scan a new code (administrators must).')) return;
+  userFn('adminResetMfa')({ uid }).then(() => { toast('Two-step verification reset for ' + email, 'success'); loadUsersTable(); })
+    .catch(e => toast(fnError(e), 'error'));
 }
 
 function openUserModal(uid) {

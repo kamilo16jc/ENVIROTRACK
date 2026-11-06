@@ -147,7 +147,6 @@ async function _submitLabForm(planta, fecha, tests, sendToLab, btn) {
     toast(sendToLab ? 'Sending to lab…' : 'Filling lab form…', 'info');
     const res = await _spPost('labform', body);
     if (res && res.duplicate) { toast('This form was just submitted — it was not sent again', 'info'); return; }
-    if (typeof fsAddSubmission === 'function') fsAddSubmission(body).catch(e => console.warn('[labform] submission log', e));
     toast(sendToLab ? 'Lab form sent to the laboratory' : 'Lab form filled and archived', 'success');
     if (btn) btn.classList.add('done');   // turn the icon green
     if (typeof refreshSubmissions === 'function') refreshSubmissions();
@@ -160,11 +159,9 @@ async function _submitLabForm(planta, fecha, tests, sendToLab, btn) {
 }
 
 // ── Save a generated PDF (jsPDF doc) to SharePoint (FOLDER PROVISIONAL) ──
-async function savePdfToSharePoint(fileName, doc, folder) {
+async function savePdfToSharePoint(fileName, doc) {
   const b64 = doc.output('datauristring').split('base64,')[1];
-  const body = { fileName: fileName, contentBase64: b64 };
-  if (folder) body.folder = folder;   // optional destination subfolder (flow may honor it)
-  await _spPost('savepdf', body);
+  await _spPost('savepdf', { fileName: fileName, contentBase64: b64 });
 }
 
 // ── Submit the RETEST lab form (from the Retests view) ────────
@@ -212,7 +209,6 @@ async function _submitRetestLabForm(retestId, sendToLab, opts) {
       if (!opts.silent) { if (typeof loadRetests === 'function') loadRetests(); toast('This form was just submitted — it was not sent again', 'info'); }
       return;
     }
-    if (typeof fsAddSubmission === 'function') fsAddSubmission(body).catch(e => console.warn('[labform] submission log', e));
     // Mark sent/filled in the DURABLE store (survives Records pulls → no green
     // flicker). Only set AFTER the request completes = confirmed it fired.
     if (typeof setLabStatusFlag === 'function') setLabStatusFlag(rec, sendToLab ? 'sent' : 'filled');
@@ -230,9 +226,10 @@ async function _submitRetestLabForm(retestId, sendToLab, opts) {
   }
 }
 
-// Submission metadata added to the labform payload so the flow can log a row
-// in the Submissions list: who did it, when, and whether it was sent or only
-// generated. "Sent to lab" is recorded when the user clicked Send (the form is
+// Submission metadata added to the labform payload. The spProxy function logs
+// the submission in Firestore (who comes from the sign-in, not from here)
+// before the flow runs; the flow writes the SharePoint copy. Whether it was
+// sent or only generated. "Sent to lab" is recorded when the user clicked Send (the form is
 // staged in PENDING AUTOMATION); "Generated" when it was only filled/archived.
 function submissionMeta(type, sample, retestNum, sendToLab) {
   return {

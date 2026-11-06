@@ -283,13 +283,7 @@ async function fsSetPoint(p) {
     enteredByEmail: p.enteredByEmail || (CU && CU.email) || '', enteredByName: p.enteredByName || (CU && CU.displayName) || '', enteredAt: p.enteredAt || new Date().toISOString() });
   await STORE.db.collection('masterPoints').doc(doc.plant + '_' + doc.sample).set(Object.assign(doc, _fsStamp()));
 }
-// Lab-form log entry (the labform flow writes the SharePoint copy itself).
-async function fsAddSubmission(s) {
-  if (!STORE.on) return;
-  const doc = _clean({ building: s.building || '', sample: String(s.sample || ''), type: s.type || 'Generator', retestNum: String(s.retestNum || ''), status: s.status || 'Generated',
-    fileName: s.fileName || '', collectionDate: s.collectionDate || '', submittedByEmail: s.submittedByEmail || '', submittedByName: s.submittedByName || '', submittedAt: s.submittedAt || new Date().toISOString() });
-  await STORE.db.collection('submissions').add(Object.assign(doc, _fsStamp()));
-}
+// Lab-form log entries are written by the spProxy function (server), not here.
 
 // ── Server-side consecutive numbers ────────────────────────────
 // prefix e.g. 'TRN-2026' → 'TRN-2026-004'. `floor` = highest number already

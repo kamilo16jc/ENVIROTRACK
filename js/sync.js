@@ -1,23 +1,24 @@
 // ═══════════════════════════════════════════════════════════════
-// SYNC — SharePoint bridge (via the Firebase Cloud Function `spProxy`)
-// SharePoint is the source of truth; localStorage is a local cache.
-//   · Before generating tests → PULL Records (fresh anti-repetition data)
-//   · On save / result / retests / master → PUSH to SharePoint
-// The secret Power Automate flow URLs live SERVER-SIDE (functions/.env);
-// this client only calls `spProxy` — NO flow URL is exposed here.
+// SYNC — data goes to Firestore first; SharePoint gets a copy from the server
+//   · Records, retest cases, sampling points and the lab-form log are written
+//     to Firestore only (js/store.js). The spMirror Cloud Functions copy every
+//     change to SharePoint; nothing is read back from SharePoint.
+//   · The SharePoint proxy (Cloud Function `spProxy`) is only used for files:
+//     the lab form, archived PDFs, retest photos, and the monthly email. The
+//     secret Power Automate flow URLs live server-side (functions/.env).
 // ═══════════════════════════════════════════════════════════════
 
 const SYNC_ENABLED = true;
 
-// Firestore is the primary store once the session is up (js/store.js): reads
-// come from live listeners and writes go to Firestore; the spMirror Cloud
-// Functions copy every change to SharePoint. The SharePoint paths below stay
-// as the fallback (no session yet / local dev).
+// Firestore is connected once the session is up (js/store.js).
 const FS_PRIMARY = () => typeof storeActive === 'function' && storeActive();
+function _needStore() {
+  if (FS_PRIMARY()) return true;
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return false;   // dev without a session: local copy only
+  throw new Error('offline-store');
+}
 
 // ── Low-level call → Cloud Function proxy ──────────────────────
-// Sends { op, body } to spProxy, which resolves the secret flow URL,
-// POSTs to SharePoint, and returns the flow's JSON response.
 async function _spPost(op, body) {
   const call = fbFunctions.httpsCallable('spProxy');
   const res = await call({ op, body: body || {} });
@@ -25,107 +26,50 @@ async function _spPost(op, body) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// OUTBOX — durable write queue (offline-safe)
-// Every write is enqueued in localStorage BEFORE hitting the network and
-// only removed once SharePoint confirms it. This prevents the data-loss
-// window where a failed push (offline / flow down) would be wiped by the
-// next destructive pull. Order is preserved and the flush stops on the
-// first failure so dependent ops (create → update) never run out of order.
+// OLD WRITE QUEUE — versions before Firestore queued unsent writes here
+// (cap_outbox) for SharePoint. SharePoint no longer accepts writes from the
+// app, so anything still waiting on this device is saved to Firestore once,
+// then removed. Rules apply as for any other write.
 // ═══════════════════════════════════════════════════════════════
-
 const OUTBOX_KEY = 'cap_outbox';
-const getOutbox   = () => { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); } catch (e) { return []; } };
-const _setOutbox  = q  => localStorage.setItem(OUTBOX_KEY, JSON.stringify(q));
-
-// Enqueue a write. `body` must be a plain, already-mapped payload snapshot.
-function outboxAdd(op, body) {
-  const q = getOutbox();
-  q.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), op, body, ts: new Date().toISOString(), attempts: 0 });
-  _setOutbox(q);
-  updateSyncBadge();
-}
-
-// Drain the queue in order. Returns true when empty (fully synced), false if
-// items remain (still offline / failing). De-duped: concurrent callers share
-// the same in-flight flush and get the real result (no race on pulls).
-let _flushPromise = null;
-function flushOutbox() {
-  if (!SYNC_ENABLED) return Promise.resolve(getOutbox().length === 0);
-  if (_flushPromise) return _flushPromise;
-  _flushPromise = _doFlush().finally(() => { _flushPromise = null; });
-  return _flushPromise;
-}
-// Integer columns in SharePoint. An entry queued by an OLDER build (before the
-// sample/zone coercion fix) can carry a STRING here — the flow trigger then
-// rejects the whole payload with HTTP 400 (TriggerInputSchemaMismatch) and,
-// since the flush stops on the first failure, the entire queue stalls forever.
-// Coerce these on the way out so a poisoned entry drains instead of blocking.
-const _INT_FIELDS = ['id', 'sample', 'zone', 'originalId'];
-function _sanitizeForSend(body) {
-  if (body && Array.isArray(body.items)) {
-    body.items.forEach(it => {
-      if (it && typeof it === 'object') {
-        _INT_FIELDS.forEach(f => { if (it[f] !== undefined && it[f] !== '') it[f] = _spInt(it[f]); });
-      }
-    });
-  }
-  return body;
-}
-
-async function _doFlush() {
-  while (true) {
-    const q = getOutbox();
-    if (!q.length) { updateSyncBadge(); return true; }
-    const entry = q[0];
-    _sanitizeForSend(entry.body);  // repair legacy string-in-int payloads in place
-    _setOutbox(q);                 // persist the cleaned payload before sending
-    try {
-      await _spPost(entry.op, entry.body);
-    } catch (e) {
-      const q2 = getOutbox();
-      if (q2[0]) { q2[0].attempts = (q2[0].attempts || 0) + 1; _setOutbox(q2); }
-      console.warn('[outbox] flush stopped at ' + entry.op + ' (attempt ' + ((q2[0] && q2[0].attempts) || '?') + '):', e);
-      updateSyncBadge();
-      return false;
+const getOutbox = () => { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); } catch (e) { return []; } };
+const _outNum = v => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : v; };
+const _fromSP = it => {
+  const r = Object.assign({}, it);
+  if (r.department !== undefined) { r.planta = r.department; delete r.department; }
+  if (typeof r.failedPathogens === 'string') r.failedPathogens = r.failedPathogens ? r.failedPathogens.split(',').map(x => x.trim()).filter(Boolean) : [];
+  return r;
+};
+let _drainBusy = false;
+async function drainOldOutbox() {
+  if (_drainBusy || !FS_PRIMARY()) return;
+  const q = getOutbox(); if (!q.length) return;
+  _drainBusy = true;
+  try {
+    const left = [];
+    for (const entry of q) {
+      try {
+        const items = ((entry.body && entry.body.items) || []).map(_fromSP);
+        if (entry.op === 'recordsWrite') {
+          await fsCreateRecords(items.filter(r => !GH().some(h => String(h.id) === String(r.id))).map(r => Object.assign(r, { id: _outNum(r.id), sample: _outNum(r.sample), zone: _outNum(r.zone) })));
+        } else if (entry.op === 'recordsUpdate') {
+          for (const u of items) { const cur = GH().find(h => String(h.id) === String(u.id)); if (cur) await fsUpdateRecord(Object.assign({}, cur, u, { id: cur.id })); }
+        } else if (entry.op === 'resolvedWrite') {
+          await fsAddResolved(items);
+        } else if (entry.op === 'masterPointsWrite' || entry.op === 'masterPointsUpdate') {
+          for (const p of items) {
+            const plant = p.planta, cur = getMasterPoints().find(x => x.plant === plant && String(x.sample) === String(p.sample));
+            await fsSetPoint(Object.assign({}, cur || {}, p, { plant }));
+          }
+        }   // anything else was a SharePoint-only call: nothing to save
+      } catch (e) { console.warn('[outbox] could not save an old queued change', entry.op, e && e.code); left.push(entry); }
     }
-    // Success → remove this exact entry (by id, in case the queue shifted).
-    const q3 = getOutbox();
-    const idx = q3.findIndex(x => x.id === entry.id);
-    if (idx >= 0) { q3.splice(idx, 1); _setOutbox(q3); }
-    updateSyncBadge();
-  }
+    if (left.length) localStorage.setItem(OUTBOX_KEY, JSON.stringify(left)); else localStorage.removeItem(OUTBOX_KEY);
+  } finally { _drainBusy = false; }
 }
+if (typeof fbAuth !== 'undefined') fbAuth.onAuthStateChanged(u => { if (u) setTimeout(() => drainOldOutbox().catch(() => {}), 15000); });
 
-// Discreet floating indicator: shows only when writes are still pending.
-// Clicking it forces a retry. Created lazily so no HTML changes are needed.
-function updateSyncBadge() {
-  if (typeof document === 'undefined' || !document.body) return;
-  let el = document.getElementById('syncBadge');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'syncBadge';
-    el.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:#C0392B;color:#fff;' +
-      'padding:8px 14px;border-radius:20px;font-family:var(--font,sans-serif);font-size:12px;font-weight:600;' +
-      'box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;display:none;align-items:center;gap:8px;user-select:none';
-    el.title = 'Some changes have not reached SharePoint yet. Click to retry.';
-    el.onclick = () => { el.textContent = 'Syncing…'; flushOutbox().then(updateSyncBadge); };
-    document.body.appendChild(el);
-  }
-  const n = getOutbox().length;
-  if (n > 0) {
-    el.textContent = n + (n > 1 ? ' changes' : ' change') + ' not synced — Retry';
-    el.style.display = 'flex';
-  } else {
-    el.style.display = 'none';
-  }
-}
-
-// Auto-retry the moment connectivity returns.
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => { flushOutbox().then(updateSyncBadge); });
-}
-
-// ── Value helpers (SharePoint quirks) ──────────────────────────
+// ── Value helpers (SharePoint quirks, for the photo list) ──────
 // Choice columns come back as { Value: "1935" }; plain columns as strings.
 const _val  = v => (v && typeof v === 'object' && 'Value' in v) ? v.Value : v;
 // Pick the first defined key (SharePoint internal names vary in casing).
@@ -133,217 +77,26 @@ const _pick = (o, ...keys) => {
   for (const k of keys) if (o[k] !== undefined && o[k] !== null) return o[k];
   return undefined;
 };
-const _arr  = s => Array.isArray(s) ? s : (s ? String(s).split(',').map(x=>x.trim()).filter(Boolean) : []);
 
 // ═══════════════════════════════════════════════════════════════
-// MAPPERS
+// READ — live Firestore listeners fill the local cache (js/store.js)
 // ═══════════════════════════════════════════════════════════════
-
-// SharePoint item → app record (READ). Tolerant to internal-name casing.
-function spToRecord(it) {
-  return {
-    id:         Number(_pick(it, 'id0', 'id', 'ID')),
-    fecha:      _pick(it, 'Date', 'fecha') || '',
-    planta:     _val(_pick(it, 'Departament', 'department', 'planta')) || '',
-    by:         _pick(it, 'by', 'By') || '',
-    sample:     Number(_pick(it, 'sample', 'Sample')) || 0,
-    zone:       Number(_pick(it, 'zone', 'Zone')) || 0,
-    area:       _pick(it, 'Area', 'area') || '',
-    line:       _pick(it, 'Line', 'line') || '',
-    location:   _pick(it, 'Location', 'location') || '',
-    ecoli:      Number(_pick(it, 'ecoli', 'Ecoli')) || 0,
-    listeria:   Number(_pick(it, 'listeria', 'Listeria')) || 0,
-    salmonella: Number(_pick(it, 'salmonella', 'Salmonella')) || 0,
-    saureus:    Number(_pick(it, 'saureus', 'Saureus')) || 0,
-    resultado:  _val(_pick(it, 'results', 'resultado', 'Resultado')) || 'Pending',
-    retestNum:  _pick(it, 'retestNum', 'RetestNum') || '',
-    labNotes:   _pick(it, 'LabNotes', 'labNotes') || '',
-    resultDate: _pick(it, 'ResultDate', 'resultDate') || '',
-    failedPathogens:      _arr(_pick(it, 'failedPathogens', 'FailedPathogens')),
-    failedPathogensLabel: _pick(it, 'failedPathogensLabel', 'FailedPathogensLabel') || '',
-    isRetest:   !!_pick(it, 'isRetest', 'IsRetest'),
-    originalId: Number(_pick(it, 'originalId', 'OriginalId')) || 0,
-    scheduled:  !!_pick(it, 'scheduled', 'Scheduled'),
-    enteredByEmail: _pick(it, 'enteredByEmail', 'EnteredByEmail') || '',
-    enteredByName:  _pick(it, 'enteredByName', 'EnteredByName') || '',
-    enteredAt:      _pick(it, 'enteredAt', 'EnteredAt') || ''
-  };
-}
-
-// Coerce to an integer the SharePoint flow schema will accept. A cell edited in
-// the generator comes back as a STRING; the recordsWrite flow trigger types
-// id/sample/zone as integers and rejects a string with HTTP 400
-// (TriggerInputSchemaMismatch) — NO run is created, so the whole batch silently
-// fails to save. Keep the original value when it isn't numeric so the problem
-// stays visible rather than turning into null.
-function _spInt(v) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : v;
-}
-
-// app record → SharePoint payload (WRITE / create). Seals audit fields.
-function recordToSP(r) {
-  return {
-    id: _spInt(r.id), fecha: r.fecha, department: r.planta, by: r.by || '',
-    sample: _spInt(r.sample), zone: _spInt(r.zone), area: r.area || '', line: r.line || '',
-    location: r.location || '',
-    ecoli: r.ecoli ? 1 : 0, listeria: r.listeria ? 1 : 0,
-    salmonella: r.salmonella ? 1 : 0, saureus: r.saureus ? 1 : 0,
-    resultado: r.resultado || 'Pending', retestNum: r.retestNum || '',
-    labNotes: r.labNotes || '', isRetest: !!r.isRetest,
-    originalId: _spInt(r.originalId) || 0, scheduled: !!r.scheduled,
-    enteredByEmail: (CU && CU.email) || '',
-    enteredByName:  (CU && CU.displayName) || '',
-    enteredAt: new Date().toISOString()
-  };
-}
-
-// app record → SharePoint UPDATE payload (only the result fields change).
-function recordUpdateToSP(r) {
-  return {
-    id: r.id,
-    // The scheduled/collection date. Sent so a reschedule persists; the flow must
-    // map `fecha`→Date. Never empty (Date columns reject '' — breaks Update item).
-    fecha: r.fecha || todayLocal(),
-    resultado: r.resultado || '',
-    // The SharePoint ResultDate is a Date column: sending '' (or null/omitted)
-    // makes the flow's "Update item" fail SILENTLY — it returns 202 but persists
-    // nothing, so a later pull reverts the change. When clearing the result
-    // (re-open to Pending) we therefore fall back to a valid date instead of ''.
-    resultDate: r.resultDate || r.fecha || todayLocal(),
-    labNotes: r.labNotes || '',
-    failedPathogens: Array.isArray(r.failedPathogens) ? r.failedPathogens.join(',') : (r.failedPathogens || ''),
-    failedPathogensLabel: r.failedPathogensLabel || ''
-  };
-}
-
-// app resolved-retest → SharePoint payload
-function resolvedToSP(r) {
-  return {
-    originalId: r.originalId, sample: r.sample, department: r.planta,
-    area: r.area || '', location: r.location || '',
-    originalDate: r.originalDate || '', resolvedDate: r.resolvedDate || '',
-    retestNum: r.retestNum || '', notes: r.notes || '',
-    closedOnGenerate: !!r.closedOnGenerate,
-    enteredByEmail: (CU && CU.email) || '',
-    enteredByName:  (CU && CU.displayName) || '',
-    enteredAt: new Date().toISOString()
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PULL — bring SharePoint into the local cache
-// ═══════════════════════════════════════════════════════════════
-
-// Pull all Records → overwrite local cap_h. Returns true on success.
-// Guarded: flush pending writes FIRST; if any remain unsynced, skip the
-// overwrite so un-pushed local changes are never clobbered.
-async function syncPullRecords() {
-  if (FS_PRIMARY()) return storeWhenReady(['records']);
-  if (!SYNC_ENABLED) return false;
-  if (!(await flushOutbox())) { console.warn('[sync] pull Records skipped — pending local writes'); return false; }
-  const data = await _spPost('recordsRead', {});
-  const rows = Array.isArray(data) ? data : (data && data.value) || [];
-  const recs = rows.map(spToRecord).filter(r => r.id);
-  SH(recs);
-  return true;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PUSH — send local changes to SharePoint
-// ═══════════════════════════════════════════════════════════════
-
-// All pushes ENQUEUE (durable) then trigger a flush. The payload is a mapped
-// snapshot taken now, so audit fields (who/when) reflect the action time even
-// if it flushes later. Never throws — pending state is shown via the badge.
-function syncPushRecords(recs) {
-  if (FS_PRIMARY()) return fsCreateRecords(recs);
-  if (!SYNC_ENABLED || !recs || !recs.length) return Promise.resolve();
-  outboxAdd('recordsWrite', { list: 'Records', action: 'create', items: recs.map(recordToSP) });
-  return flushOutbox();
-}
-
-function syncUpdateRecord(rec) {
-  if (FS_PRIMARY()) return fsUpdateRecord(rec);
-  if (!SYNC_ENABLED || !rec) return Promise.resolve();
-  outboxAdd('recordsUpdate', { list: 'Records', action: 'update', items: [recordUpdateToSP(rec)] });
-  return flushOutbox();
-}
-
-function syncPushResolved(resolvedItems) {
-  if (FS_PRIMARY()) return fsAddResolved(resolvedItems);
-  if (!SYNC_ENABLED || !resolvedItems || !resolvedItems.length) return Promise.resolve();
-  outboxAdd('resolvedWrite', { list: 'ResolvedRetests', action: 'create', items: resolvedItems.map(resolvedToSP) });
-  return flushOutbox();
-}
-
-// SharePoint ResolvedRetests item → app resolved entry (READ).
-function spToResolved(it) {
-  return {
-    originalId:       Number(_pick(it, 'originalId', 'OriginalId')) || 0,
-    sample:           Number(_pick(it, 'sample', 'Sample')) || 0,
-    planta:           _val(_pick(it, 'Departament', 'department', 'planta')) || '',
-    area:             _pick(it, 'Area', 'area') || '',
-    location:         _pick(it, 'Location', 'location') || '',
-    originalDate:     _pick(it, 'originalDate', 'OriginalDate') || '',
-    resolvedDate:     _pick(it, 'resolvedDate', 'ResolvedDate') || '',
-    retestNum:        _pick(it, 'retestNum', 'RetestNum') || '',
-    notes:            _pick(it, 'notes', 'Notes') || '',
-    closedOnGenerate: !!_pick(it, 'closedOnGenerate', 'ClosedOnGenerate'),
-    enteredByEmail:   _pick(it, 'enteredByEmail', 'EnteredByEmail') || '',
-    enteredByName:    _pick(it, 'enteredByName', 'EnteredByName') || '',
-    enteredAt:        _pick(it, 'enteredAt', 'EnteredAt') || ''
-  };
-}
-
-// Pull all ResolvedRetests → overwrite local cap_rv. Returns true on success.
-// Without this, resolved/closed rounds live only in the session that created
-// them: on the next login the anchoring entries vanish, closed positives
-// resurface as "Generate retests", and their retests become orphaned.
-async function syncPullResolved() {
-  if (FS_PRIMARY()) return storeWhenReady(['resolved']);
-  if (!SYNC_ENABLED) return false;
-  if (!(await flushOutbox())) { console.warn('[sync] pull Resolved skipped — pending local writes'); return false; }
-  const data = await _spPost('resolvedRead', {});
-  const rows = Array.isArray(data) ? data : (data && data.value) || [];
-  const recs = rows.map(spToResolved).filter(r => r.originalId);
-  SRV(recs);
-  return true;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SUBMISSIONS — audit log of lab forms filled / sent (source of truth
-// = SharePoint `Submissions`; the labform flow writes the row).
-// ═══════════════════════════════════════════════════════════════
-
-// SharePoint Submissions item → app submission. Text columns → simple reads.
-function spToSubmission(it) {
-  return {
-    building:        _val(_pick(it, 'building', 'Building', 'Departament', 'department')) || '',
-    sample:          _pick(it, 'sample', 'Sample') || '',
-    type:            _pick(it, 'type', 'Type', 'TypeForm') || 'Generator',
-    retestNum:       _pick(it, 'retestNum', 'RetestNum') || '',
-    status:          _val(_pick(it, 'status', 'Status')) || 'Generated',
-    fileName:        _pick(it, 'fileName', 'FileName') || '',
-    collectionDate:  _pick(it, 'collectionDate', 'CollectionDate') || '',
-    submittedByEmail:_pick(it, 'submittedByEmail', 'SubmittedByEmail') || '',
-    submittedByName: _pick(it, 'submittedByName', 'SubmittedByName') || '',
-    submittedAt:     _pick(it, 'submittedAt', 'SubmittedAt') || ''
-  };
-}
-
-// Pull all Submissions → local cache (cap_submissions). Returns true on success.
-async function syncPullSubmissions() {
-  if (FS_PRIMARY()) return storeWhenReady(['submissions']);
-  if (!SYNC_ENABLED) return false;
-  const data = await _spPost('submissionsRead', {});
-  const rows = Array.isArray(data) ? data : (data && data.value) || [];
-  const recs = rows.map(spToSubmission).filter(r => r.fileName || r.sample);
-  localStorage.setItem('cap_submissions', JSON.stringify(recs));
-  return true;
-}
+async function syncPullRecords()      { return FS_PRIMARY() ? storeWhenReady(['records']) : false; }
+async function syncPullResolved()     { return FS_PRIMARY() ? storeWhenReady(['resolved']) : false; }
+async function syncPullSubmissions()  { return FS_PRIMARY() ? storeWhenReady(['submissions']) : false; }
+async function syncPullMasterPoints() { return FS_PRIMARY() ? storeWhenReady(['masterPoints']) : false; }
 
 const getSubmissions = () => JSON.parse(localStorage.getItem('cap_submissions') || '[]');
+const getMasterPoints = () => JSON.parse(localStorage.getItem('cap_masterpoints') || '[]');
+
+// ═══════════════════════════════════════════════════════════════
+// WRITE — Firestore only (the server copies to SharePoint)
+// ═══════════════════════════════════════════════════════════════
+async function syncPushRecords(recs)   { if (recs && recs.length && _needStore()) return fsCreateRecords(recs); }
+async function syncUpdateRecord(rec)   { if (rec && _needStore()) return fsUpdateRecord(rec); }
+async function syncPushResolved(items) { if (items && items.length && _needStore()) return fsAddResolved(items); }
+async function syncPushPoint(point)    { if (point && _needStore()) return fsSetPoint(point); }   // create a new point
+async function syncUpdatePoint(point)  { if (point && _needStore()) return fsSetPoint(point); }   // edit / activate / deactivate
 
 // ═══════════════════════════════════════════════════════════════
 // RETEST PHOTOS — evidence images attached to a retest (uploaded from
@@ -379,73 +132,13 @@ async function getPhotoUploadUrl() {
   return _photoUploadUrl;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MASTER POINTS — the full sampling catalog lives in SharePoint
-// ═══════════════════════════════════════════════════════════════
-
-// SharePoint MasterPoints item → app point
-function spToPoint(it) {
-  return {
-    plant:    _val(_pick(it, 'Departament', 'department', 'plant')) || '',
-    sample:   Number(_pick(it, 'sample', 'Sample')) || 0,
-    zone:     Number(_pick(it, 'zone', 'Zone')) || 0,
-    area:     _pick(it, 'Area', 'area') || '',
-    line:     _pick(it, 'Line', 'line') || 'N/A',
-    location: _pick(it, 'Location', 'location') || '',
-    active:   _pick(it, 'active', 'Active') !== false
-  };
-}
-
-// app point → SharePoint MasterPoints payload
-function pointToSP(p, isCreate) {
-  const o = {
-    department: p.plant || p.planta, sample: p.sample, zone: p.zone,
-    area: p.area || '', line: p.line || '', location: p.location || '',
-    active: p.active !== false
-  };
-  if (isCreate) {
-    o.enteredByEmail = (CU && CU.email) || '';
-    o.enteredByName  = (CU && CU.displayName) || '';
-    o.enteredAt = new Date().toISOString();
-  }
-  return o;
-}
-
-// Pull the whole catalog → local cache (cap_masterpoints).
-async function syncPullMasterPoints() {
-  if (FS_PRIMARY()) return storeWhenReady(['masterPoints']);
-  if (!SYNC_ENABLED) return false;
-  if (!(await flushOutbox())) { console.warn('[sync] pull MasterPoints skipped — pending local writes'); return false; }
-  const data = await _spPost('masterPointsRead', {});
-  const rows = Array.isArray(data) ? data : (data && data.value) || [];
-  const pts = rows.map(spToPoint).filter(p => p.sample);
-  localStorage.setItem('cap_masterpoints', JSON.stringify(pts));
-  return true;
-}
-
-const getMasterPoints = () => JSON.parse(localStorage.getItem('cap_masterpoints') || '[]');
-
-function syncPushPoint(point) {      // create a new point
-  if (FS_PRIMARY()) return fsSetPoint(point);
-  if (!SYNC_ENABLED || !point) return Promise.resolve();
-  outboxAdd('masterPointsWrite', { list: 'MasterPoints', action: 'create', items: [pointToSP(point, true)] });
-  return flushOutbox();
-}
-
-function syncUpdatePoint(point) {    // update by department + sample (edit / activate / deactivate)
-  if (FS_PRIMARY()) return fsSetPoint(point);
-  if (!SYNC_ENABLED || !point) return Promise.resolve();
-  outboxAdd('masterPointsUpdate', { list: 'MasterPoints', action: 'update', items: [pointToSP(point, false)] });
-  return flushOutbox();
-}
-
 // Fire-and-forget wrapper: never let a sync failure break the local flow.
 function syncSafe(promiseFactory, label) {
   Promise.resolve()
     .then(promiseFactory)
     .catch(err => {
       console.warn('[sync] ' + (label || '') + ' failed:', err);
-      toast(FS_PRIMARY() ? (err && err.code === 'permission-denied' ? 'Your account cannot change this record' : 'Saved on this device — will sync when online')
-                         : 'Saved locally — SharePoint sync failed', 'error');
+      toast(err && err.code === 'permission-denied' ? 'Your account cannot change this record'
+        : err && err.message === 'offline-store' ? 'Not connected to the database — sign in again' : 'Saved on this device — will sync when online', 'error');
     });
 }

@@ -6,16 +6,23 @@ rules_version = '2';
 //
 // Access requires an account PROVISIONED by an admin (role claim Inspector /
 // Manager / Administrator) — a self-registered Firebase account has no role
-// and gets nothing, same as the SharePoint proxy. Every create/update must be
+// and gets nothing, same as the SharePoint proxy. Administrators also need
+// two-step verification. Every create/update must be
 // stamped with the writer's email (_by).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function provisioned() {
-      return signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator'];
+    // Two-step verification: an Administrator counts only when the session was
+    // opened with the authenticator-app code (the token then names the factor).
+    function secondFactor() {
+      return request.auth.token.get('firebase', {}).get('sign_in_second_factor', null) != null;
     }
-    function isAdmin() { return signedIn() && request.auth.token.get('role', '') == 'Administrator'; }
+    function mfaOk() { return request.auth.token.get('role', '') != 'Administrator' || secondFactor(); }
+    function provisioned() {
+      return signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator'] && mfaOk();
+    }
+    function isAdmin() { return provisioned() && request.auth.token.get('role', '') == 'Administrator'; }
     function stamped() { return request.resource.data._by == request.auth.token.email; }
     function role() { return request.auth.token.get('role', ''); }
 
@@ -100,10 +107,10 @@ service cloud.firestore {
       allow create, update: if provisioned() && stamped() && noClientDefer();
       allow delete: if false;
     }
+    // Lab-form log: written by the spProxy function (server) before the flow runs.
     match /submissions/{id} {
       allow read: if provisioned();
-      allow create: if provisioned() && stamped();
-      allow update, delete: if false;
+      allow write: if false;
     }
     match /masterPoints/{id} {
       allow read: if provisioned();

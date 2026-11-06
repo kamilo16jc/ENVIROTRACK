@@ -22,7 +22,7 @@ async function generateTests() {
   // anti-repetition sees every user's data — not just this device's cache.
   if(SYNC_ENABLED) {
     try {
-      toast('Syncing with SharePoint…','info');
+      toast('Syncing…','info');
       // Records is required (anti-repetition). The catalog rarely changes and
       // is already pulled at login, so only refetch it if the cache is empty.
       const jobs = [syncPullRecords()];
@@ -30,7 +30,7 @@ async function generateTests() {
       await Promise.all(jobs);
     } catch(e) {
       console.warn('[sync] pull before generate failed:', e);
-      toast('Could not reach SharePoint — using local data','error');
+      toast('Could not reach the database — using local data','error');
     }
   }
 
