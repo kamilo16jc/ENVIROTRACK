@@ -40,6 +40,46 @@ service cloud.firestore {
         && d.get('prodStart', '') is string && d.get('prodStart', '').matches('^([0-2][0-9]:[0-5][0-9])?$')
         && d.get('collTime', '') is string && d.get('collTime', '').matches('^([0-2][0-9]:[0-5][0-9])?$');
     }
+    // ── Size limits ──────────────────────────────────────────────
+    // Real documents are small (≤ 1 KB, ≤ 31 fields, measured 2026-11-05). These
+    // generous caps keep anyone from filling the database or slowing everyone's
+    // screens with huge entries. Text is counted in characters, lists in items.
+    function fitsN(d, f, n) {
+      return !(f in d) || !(d[f] is string || d[f] is list || d[f] is map) || d[f].size() <= n;
+    }
+    function recordSize() {
+      let d = request.resource.data;
+      return d.keys().size() <= 60
+        && fitsN(d, 'labNotes', 4000) && fitsN(d, 'labResults', 4000) && fitsN(d, 'labResultsImport', 4000)
+        && fitsN(d, 'voidReason', 1000) && fitsN(d, 'location', 300) && fitsN(d, 'area', 300)
+        && fitsN(d, 'line', 200) && fitsN(d, 'importSource', 300) && fitsN(d, 'failedPathogens', 300)
+        && fitsN(d, 'failedPathogensLabel', 300) && fitsN(d, 'enteredByName', 200) && fitsN(d, 'by', 200)
+        && fitsN(d, 'voidedBy', 200) && fitsN(d, 'originalId', 100) && fitsN(d, 'id', 100);
+    }
+    function resolvedSize() {
+      let d = request.resource.data;
+      return d.keys().size() <= 40
+        && fitsN(d, 'notes', 4000) && fitsN(d, 'location', 300) && fitsN(d, 'area', 300)
+        && fitsN(d, 'importSource', 300) && fitsN(d, 'enteredByName', 200) && fitsN(d, 'originalId', 100);
+    }
+    function capaSize() {
+      let d = request.resource.data;
+      return d.keys().size() <= 50
+        && fitsN(d, 'correction', 8000) && fitsN(d, 'preventive', 8000) && fitsN(d, 'corrNote', 4000)
+        && fitsN(d, 'actions', 8000) && fitsN(d, 'roots', 8000) && fitsN(d, 'disposition', 4000)
+        && fitsN(d, 'rootCause', 4000) && fitsN(d, 'rootNote', 4000) && fitsN(d, 'updatedBy', 200)
+        && fitsN(d, 'verifiedBy', 200) && fitsN(d, 'approvedBy', 200);
+    }
+    function labStatusSize() {
+      let d = request.resource.data;
+      return d.keys().size() <= 20 && fitsN(d, 'status', 50) && fitsN(d, 'recId', 100);
+    }
+    function changeSize() {
+      let d = request.resource.data;
+      return d.keys().size() <= 30 && fitsN(d, 'changes', 30000) && fitsN(d, 'reason', 2000)
+        && fitsN(d, 'byName', 200) && fitsN(d, 'samples', 500);
+    }
+
     // Same value before and after the write (a missing field and null count as the default).
     function sameVal(f, dflt) {
       let a = request.resource.data.get(f, dflt);
@@ -100,13 +140,13 @@ service cloud.firestore {
     // ── Core data (was SharePoint-only) ─────────────────────────
     match /records/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped() && validRecord() && noClientDefer()
+      allow create, update: if provisioned() && stamped() && validRecord() && recordSize() && noClientDefer()
         && resultEditable() && dateEditable() && (isAdmin() || voidUnchanged());
       allow delete: if false;
     }
     match /resolved/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped() && noClientDefer();
+      allow create, update: if provisioned() && stamped() && resolvedSize() && noClientDefer();
       allow delete: if false;
     }
     // Lab-form log: written by the spProxy function (server) before the flow runs.
@@ -123,13 +163,13 @@ service cloud.firestore {
     // ── Program records ─────────────────────────────────────────
     match /capa/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped() && (approvalUnchanged() || canApprove())
+      allow create, update: if provisioned() && stamped() && capaSize() && (approvalUnchanged() || canApprove())
         && (isAdmin() || capaOpen());
       allow delete: if isAdmin();
     }
     match /labStatus/{id} {
       allow read: if provisioned();
-      allow create, update: if provisioned() && stamped();
+      allow create, update: if provisioned() && stamped() && labStatusSize();
       allow delete: if isAdmin();
     }
     match /programCapas/{id} {
@@ -161,7 +201,7 @@ service cloud.firestore {
     match /recordChanges/{id} {
       allow read: if provisioned();
       // Entries with source 'server' are written only by the auditRecords function.
-      allow create: if provisioned() && stamped() && request.resource.data.get('byEmail', '') == request.auth.token.email
+      allow create: if provisioned() && stamped() && changeSize() && request.resource.data.get('byEmail', '') == request.auth.token.email
         && request.resource.data.get('source', '') != 'server';
       allow update, delete: if false;
     }
