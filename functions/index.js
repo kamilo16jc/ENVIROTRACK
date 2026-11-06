@@ -735,3 +735,5 @@ exports.photoUpload = onRequest({ region: REGION, cors: true }, async (req, res)
 Object.assign(exports, require("./spmirror"));
 // Server-side audit trail of test records (see audit.js)
 Object.assign(exports, require("./audit"));
+// User manuals (PDF, English / Spanish), kept on the server only (see manuals.js)
+Object.assign(exports, require("./manuals")({ assertMfaCaller, assertMfa, assertAdmin, rateLimit, LIMITS, str }));
