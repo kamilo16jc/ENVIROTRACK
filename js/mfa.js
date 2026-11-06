@@ -37,7 +37,14 @@ function mfaError(e) {
   if (/UNVERIFIED_EMAIL/i.test(m)) return 'This account could not be prepared. Ask an administrator.';
   if (/NETWORK|network|functions\/(unavailable|internal|not-found)/i.test(m)) return 'No connection to the server. Try again.';
   if (/TOO_MANY|too-many/i.test(m)) return 'Too many attempts. Wait a moment.';
+  if (/NOT_SAVED/.test(m)) return 'Firebase did not save the two-step verification.';
   return 'Could not verify the code.';
+}
+// The same message plus Firebase's own reason, so a failure can be traced.
+function mfaErrorFull(e) {
+  const raw = String((e && (e.idtk || e.code || e.message)) || '').slice(0, 120);
+  try { console.warn('[two-step]', raw, e); } catch (x) {}
+  return mfaError(e) + (raw ? ' (' + raw + ')' : '');
 }
 
 // The SDK calls _process(auth, session): session.type is 'enroll' (credential =
@@ -92,7 +99,7 @@ function mfaAskSignInCode(resolver) {
         done(); resolve(cred);
       } catch (e) {
         const msg = mfaError(e);
-        err.textContent = msg; input.select();
+        err.textContent = mfaErrorFull(e); input.select();
         if (/expired/i.test(msg)) { setTimeout(() => { done(); reject({ cancelled: true, msg }); }, 1600); }
       } finally { btn.disabled = false; }
     };
@@ -118,7 +125,7 @@ function mfaOpenSetup(opts) {
   return new Promise(resolve => {
     _mfaSetup = { resolve, info: null };
     _mfaStart().catch(e => {
-      err.style.color = 'var(--red)'; err.textContent = mfaError(e);
+      err.style.color = 'var(--red)'; err.textContent = mfaErrorFull(e);
       if (opts.required) document.getElementById('mfaLater').style.display = '';   // cannot be set up now: let them in
     });
   });
@@ -151,10 +158,14 @@ async function mfaVerifySetup() {
   err.style.color = 'var(--gray-500)'; err.textContent = 'Verifying…';
   try {
     await fbAuth.currentUser.multiFactor.enroll(_totpAssertion(code, { sessionInfo: s.info.sessionInfo }), 'Authenticator app');
+    // Ask Firebase itself whether the factor is on the account before saying it is done.
+    const look = await _idtk('/v1/accounts:lookup', { idToken: await fbAuth.currentUser.getIdToken(true) });
+    const acct = (look.users || [])[0] || {};
+    if (!(acct.mfaInfo || []).length) { const x = new Error('NOT_SAVED'); x.idtk = 'NOT_SAVED: ' + JSON.stringify((acct.mfaInfo || []).map(f => Object.keys(f))); throw x; }
     document.getElementById('mfaModal').classList.remove('open');
     _mfaSetup = null; s.resolve(true);
   } catch (e) {
-    err.style.color = 'var(--red)'; err.textContent = mfaError(e);
+    err.style.color = 'var(--red)'; err.textContent = mfaErrorFull(e);
     btn.disabled = false;
   }
 }
