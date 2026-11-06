@@ -78,7 +78,10 @@ function mfaEnrolled(user) {
 // ── Sign-in: the code step on the login card ───────────────────
 // Resolves with the user credential, or rejects with { cancelled: true }.
 function mfaAskSignInCode(resolver) {
-  const hint = (resolver.hints || []).find(h => h.factorId === 'totp');
+  // Newest set-up first: an account set up more than once has several entries.
+  const hints = (resolver.hints || []).filter(h => h.factorId === 'totp')
+    .sort((x, y) => (Date.parse(y.enrollmentTime) || 0) - (Date.parse(x.enrollmentTime) || 0));
+  const hint = hints[0];
   const box = document.getElementById('loginCodeStep'), form = document.getElementById('lab-form');
   const input = document.getElementById('loginCode'), err = document.getElementById('loginCodeError');
   return new Promise((resolve, reject) => {
@@ -95,7 +98,12 @@ function mfaAskSignInCode(resolver) {
       err.textContent = 'Verifying…';
       const btn = document.getElementById('loginCodeBtn'); btn.disabled = true;
       try {
-        const cred = await resolver.resolveSignIn(_totpAssertion(code, { enrollmentId: hint.uid }));
+        let cred = null, last = null;
+        for (const h of hints) {
+          try { cred = await resolver.resolveSignIn(_totpAssertion(code, { enrollmentId: h.uid })); break; }
+          catch (e) { last = e; if (!/ENROLLMENT_ID|ENROLLMENT_NOT_FOUND|info-not-found/i.test(String(e.idtk || e.code || e.message))) break; }
+        }
+        if (!cred) { if (last) last.idtk = String(last.idtk || last.code || last.message) + ' · ' + hints.length + ' set-up(s), id ' + (hints.every(h => h.uid) ? 'ok' : 'missing'); throw last; }
         done(); resolve(cred);
       } catch (e) {
         const msg = mfaError(e);
