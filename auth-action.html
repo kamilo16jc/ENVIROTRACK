@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- Links in the account e-mails Firebase sends (undo two-step verification,
+     reset password, verify e-mail) open here instead of Firebase's own page.
+     Nothing happens until a person presses the button: company mail scanners
+     open every link in an e-mail, and Firebase's page acts as soon as it
+     loads — that is how the scanner kept undoing two-step verification. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://identitytoolkit.googleapis.com; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>EnviroTrack — Account</title>
+<style>
+  :root { --green: #2f5d46; --ink: #1b2a22; --gray: #5d6b63; --line: #dfe5e1; --red: #b3261e; --bg: #f3f6f2; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+         background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .card { width: 100%; max-width: 440px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .brand { font-weight: 700; color: var(--green); letter-spacing: .2px; margin-bottom: 18px; }
+  p { margin: 0 0 14px; color: var(--gray); }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+  input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+  button { width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 10px; background: var(--green); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.danger { background: var(--red); }
+  button:disabled { opacity: .6; cursor: default; }
+  #msg { margin-top: 14px; min-height: 1.5em; }
+  #msg.err { color: var(--red); }
+  #msg.ok { color: var(--green); font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">EnviroTrack</div>
+  <h1 id="title">Account</h1>
+  <p id="text"></p>
+  <div id="fields"></div>
+  <button id="go" type="button" hidden></button>
+  <div id="msg" role="status"></div>
+</main>
+<script>
+(function () {
+  var KEY = 'AIzaSyCUMxDD5LHVNAIP5Nx1Mrkt2L9G4pQGEFY';
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode') || '', code = q.get('oobCode') || '';
+  var $ = function (id) { return document.getElementById(id); };
+  var msg = function (t, cls) { $('msg').textContent = t; $('msg').className = cls || ''; };
+
+  function idtk(path, body) {
+    return fetch('https://identitytoolkit.googleapis.com/v1/' + path + '?key=' + KEY, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function why(e) {
+    var m = String(e && e.message || e);
+    if (/EXPIRED_OOB_CODE|INVALID_OOB_CODE/.test(m)) return 'This link has expired or was already used.';
+    if (/WEAK_PASSWORD/.test(m)) return 'Choose a longer password (at least 8 characters).';
+    if (/TOO_MANY/.test(m)) return 'Too many attempts. Wait a moment.';
+    return 'It did not work (' + m + '). Ask an administrator.';
+  }
+  function setup(title, text, button, danger) {
+    $('title').textContent = title; $('text').textContent = text;
+    var b = $('go'); b.textContent = button; b.hidden = false; b.className = danger ? 'danger' : '';
+    return b;
+  }
+
+  if (!code) { $('title').textContent = 'Link not valid'; $('text').textContent = 'Open the link from the e-mail again.'; return; }
+
+  var b;
+  if (mode === 'revertSecondFactorAddition') {
+    b = setup('Two-step verification was added',
+      'If you just set up the authenticator app in EnviroTrack, close this page: nothing else is needed. ' +
+      'Only if you did NOT do it, press the button to remove it, then ask an administrator to change your password.',
+      'I did not do it — remove two-step verification', true);
+    b.onclick = function () {
+      b.disabled = true; msg('Working…');
+      idtk('accounts:update', { oobCode: code })
+        .then(function () { b.hidden = true; msg('Two-step verification was removed. Tell an administrator now.', 'ok'); })
+        .catch(function (e) { b.disabled = false; msg(why(e), 'err'); });
+    };
+  } else if (mode === 'resetPassword') {
+    $('fields').innerHTML = '<label for="pw">New password</label><input id="pw" type="password" autocomplete="new-password" minlength="8">' +
+      '<label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password" minlength="8">';
+    b = setup('Choose a new password', 'Type your new EnviroTrack password.', 'Save the new password');
+    b.onclick = function () {
+      var p = $('pw').value, p2 = $('pw2').value;
+      if (p.length < 8) { msg('Use at least 8 characters.', 'err'); return; }
+      if (p !== p2) { msg('The two passwords are not the same.', 'err'); return; }
+      b.disabled = true; msg('Working…');
+      idtk('accounts:resetPassword', { oobCode: code, newPassword: p })
+        .then(function () { b.hidden = true; $('fields').innerHTML = ''; msg('Password saved. You can sign in to EnviroTrack.', 'ok'); })
+        .catch(function (e) { b.disabled = false; msg(why(e), 'err'); });
+    };
+  } else if (mode === 'verifyEmail' || mode === 'recoverEmail' || mode === 'verifyAndChangeEmail') {
+    var labels = { verifyEmail: ['Confirm your e-mail', 'Press the button to confirm this e-mail address.', 'Confirm'],
+                   recoverEmail: ['Undo the e-mail change', 'Press the button to go back to your previous sign-in e-mail.', 'Undo the change'],
+                   verifyAndChangeEmail: ['Confirm the new e-mail', 'Press the button to change your sign-in e-mail.', 'Confirm'] }[mode];
+    b = setup(labels[0], labels[1], labels[2]);
+    b.onclick = function () {
+      b.disabled = true; msg('Working…');
+      idtk('accounts:update', { oobCode: code })
+        .then(function () { b.hidden = true; msg('Done.', 'ok'); })
+        .catch(function (e) { b.disabled = false; msg(why(e), 'err'); });
+    };
+  } else {
+    $('title').textContent = 'Link not valid'; $('text').textContent = 'This link is not one EnviroTrack knows.';
+  }
+})();
+</script>
+</body>
+</html>
