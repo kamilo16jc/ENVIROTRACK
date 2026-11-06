@@ -235,6 +235,64 @@ function codeError(why) {
   throw new HttpsError("invalid-argument", "mfa-wrong-code: That code is not right.");
 }
 
+// ── New accounts: invite e-mail with a link to create the password ────────
+// Only administrators create accounts, and only for the company domains
+// (ALLOWED_EMAIL_DOMAINS, default caputocheese.com). The account starts with
+// no password; the person gets a one-time link (72 h) to create it. The link
+// opens auth-action.html, which does nothing until the person presses the
+// button (company mail scanners open every link they see).
+// The e-mail goes out from SMTP_USER (the EnviroTrack support Gmail) with an
+// app password in SMTP_PASS; without them the admin gets the link to send.
+const ALLOWED_EMAIL_DOMAINS = String(process.env.ALLOWED_EMAIL_DOMAINS || "caputocheese.com")
+  .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+const APP_URL = String(process.env.APP_URL || "https://kamilo16jc.github.io/ENVIROTRACK/").replace(/\/?$/, "/");
+const INVITE_MS = 72 * 3600 * 1000;
+function assertCompanyEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  const m = /^[^\s@]+@([a-z0-9.-]+)$/.exec(e);
+  if (!m || !ALLOWED_EMAIL_DOMAINS.includes(m[1])) {
+    throw new HttpsError("invalid-argument", "Only " + ALLOWED_EMAIL_DOMAINS.map(d => "@" + d).join(" / ") + " e-mails can have an account.");
+  }
+  return e;
+}
+// An invited account has no password until the person creates it.
+const hasPassword = (u) => !!(u && (u.providerData || []).some(p => p.providerId === "password"));
+const inviteId = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
+// A new link for this account (older links of the same account stop working).
+async function newInvite(uid, email, by) {
+  const old = await db().collection("invites").where("uid", "==", uid).get();
+  await Promise.all(old.docs.map(d => d.ref.delete()));
+  const code = crypto.randomBytes(24).toString("base64url");
+  const expiresAt = Date.now() + INVITE_MS;
+  await db().collection("invites").doc(inviteId(code)).set({ uid, email, expiresAt, by: by || "", createdAt: FieldValue.serverTimestamp() });
+  return { link: APP_URL + "auth-action.html?mode=invite&code=" + code, expiresAt };
+}
+// Sends the invite (design in invite-mail.js); false when the mail account is
+// not set up or the send fails — the admin then gets the link to send.
+async function mailInvite(email, name, role, link, expiresAt) {
+  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS;
+  if (!user || !pass) return false;
+  const until = new Date(expiresAt).toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" });
+  try {
+    const { inviteMail, LOGO_FILES } = require("./invite-mail");
+    const m = inviteMail({ name, email, role, link, until, logos: { envirotrack: "cid:envirotrack-logo", caputo: "cid:caputo-logo" } });
+    const nodemailer = require("nodemailer");
+    const t = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
+    await t.sendMail({
+      from: { name: "EnviroTrack", address: user }, to: email,
+      subject: m.subject, text: m.text, html: m.html,
+      attachments: [
+        { filename: "envirotrack.png", path: LOGO_FILES.envirotrack, cid: "envirotrack-logo" },
+        { filename: "caputo.png", path: LOGO_FILES.caputo, cid: "caputo-logo" },
+      ],
+    });
+    return true;
+  } catch (e) {
+    console.error("invite mail failed:", e && e.message);
+    return false;
+  }
+}
+
 const REGION = "us-central1";
 const db = () => getFirestore();
 
@@ -252,24 +310,20 @@ exports.adminListUsers = onCall({ region: REGION, cors: true }, async (request) 
     mfa: withCode.has(u.uid) || !!(u.multiFactor && u.multiFactor.enrolledFactors && u.multiFactor.enrolledFactors.length),
     created: u.metadata.creationTime || "",
     lastSignIn: u.metadata.lastSignInTime || "",
+    invited: !hasPassword(u),
   }));
 });
 
-// Create a new login account. Does NOT sign out the admin.
+// Create a new login account (company e-mail only). It has no password yet:
+// the person gets the invite link to create it. Does NOT sign out the admin.
 exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request) => {
-  assertAdmin(request);
-  const { email, password, name, role } = request.data || {};
-  if (!email || !password) {
-    throw new HttpsError("invalid-argument", "Email and password are required.");
-  }
-  if (String(password).length < 6) {
-    throw new HttpsError("invalid-argument", "Password must be at least 6 characters.");
-  }
+  const by = assertAdmin(request);
+  const { name, role } = request.data || {};
+  const email = assertCompanyEmail((request.data || {}).email);
   let user;
   try {
-    // emailVerified: the administrator vouches for the work email; Firebase
-    // only lets verified accounts turn on two-step verification.
-    user = await getAuth().createUser({ email, password, displayName: name || "", emailVerified: true });
+    // emailVerified: the administrator vouches for the work e-mail.
+    user = await getAuth().createUser({ email, displayName: str(name, 80), emailVerified: true });
   } catch (e) {
     if (e.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "A user with that email already exists.");
@@ -280,7 +334,55 @@ exports.adminCreateUser = onCall({ region: REGION, cors: true }, async (request)
     throw new HttpsError("internal", e.message || "Could not create the user.");
   }
   await getAuth().setCustomUserClaims(user.uid, { role: VALID_ROLES.includes(role) ? role : "Inspector" });
-  return { uid: user.uid };
+  const inv = await newInvite(user.uid, email, by);
+  const emailed = await mailInvite(email, str(name, 80), VALID_ROLES.includes(role) ? role : "Inspector", inv.link, inv.expiresAt);
+  return { uid: user.uid, emailed, link: inv.link, expiresAt: inv.expiresAt };
+});
+
+// A new invite for an account that has no password yet (link lost or expired).
+exports.adminSendInvite = onCall({ region: REGION, cors: true }, async (request) => {
+  const by = assertAdmin(request);
+  const { uid } = request.data || {};
+  if (!uid) throw new HttpsError("invalid-argument", "Missing user id.");
+  const u = await getAuth().getUser(uid).catch(() => null);
+  if (!u || !u.email) throw new HttpsError("not-found", "User not found.");
+  if (hasPassword(u)) throw new HttpsError("failed-precondition", "This user already has a password. Use Edit to set a new one.");
+  const inv = await newInvite(uid, u.email, by);
+  const emailed = await mailInvite(u.email, u.displayName || "", (u.customClaims && u.customClaims.role) || "Inspector", inv.link, inv.expiresAt);
+  return { emailed, link: inv.link, expiresAt: inv.expiresAt };
+});
+
+// The invite page (auth-action.html). No sign-in: the link itself is the key.
+// inviteCheck only reads (a mail scanner opening the page changes nothing);
+// inviteAccept sets the password and uses the link up.
+async function inviteFor(code) {
+  if (!code || String(code).length < 20) return null;
+  const ref = db().collection("invites").doc(inviteId(code));
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const d = snap.data();
+  if (!d.expiresAt || d.expiresAt < Date.now()) { await ref.delete(); return null; }
+  return { ref, d };
+}
+const ipOf = (request) => String((request.rawRequest && request.rawRequest.ip) || "?");
+exports.inviteCheck = onCall({ region: REGION, cors: true }, async (request) => {
+  rateLimit("invite:" + ipOf(request), LIMITS.admin);
+  const inv = await inviteFor((request.data || {}).code);
+  if (!inv) throw new HttpsError("not-found", "invite-invalid: This link has expired or was already used.");
+  return { email: inv.d.email, expiresAt: inv.d.expiresAt };
+});
+exports.inviteAccept = onCall({ region: REGION, cors: true }, async (request) => {
+  rateLimit("invite:" + ipOf(request), LIMITS.admin);
+  const { code, password } = request.data || {};
+  const pw = String(password || "");
+  if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
+    throw new HttpsError("invalid-argument", "invite-weak: Use at least 8 characters with letters and numbers.");
+  }
+  const inv = await inviteFor(code);
+  if (!inv) throw new HttpsError("not-found", "invite-invalid: This link has expired or was already used.");
+  await getAuth().updateUser(inv.d.uid, { password: pw });
+  await inv.ref.delete();
+  return { email: inv.d.email };
 });
 
 // Enable / disable an account (disabled users cannot sign in).
@@ -406,6 +508,8 @@ exports.adminDeleteUser = onCall({ region: REGION, cors: true }, async (request)
   }
   await assertNotRoot(uid);
   await getAuth().deleteUser(uid);
+  const inv = await db().collection("invites").where("uid", "==", uid).get();
+  await Promise.all(inv.docs.map(d => d.ref.delete()));
   return { ok: true };
 });
 

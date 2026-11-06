@@ -425,6 +425,7 @@ function loadUsersTable() {
     const svgPause  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
     const svgPlay   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
     const svgPhone  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>';
+    const svgMail   = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
     const svgTrash  = '<svg class="ln" width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
     tbody.innerHTML = users.map(u => {
       const isMe = CU && u.uid === CU.uid;
@@ -433,13 +434,14 @@ function loadUsersTable() {
       <td style="font-weight:600">${esc(u.name || (u.email||'').split('@')[0])}${isMe?' <span style="font-size:10px;color:var(--gray-400);font-weight:500">(you)</span>':''}</td>
       <td style="font-size:13px;color:var(--gray-700)">${esc(u.email)}</td>
       <td><span class="badge ${u.role==='Administrator'?'badge-red':u.role==='Manager'?'badge-yellow':'badge-gray'}">${esc(u.role)}</span></td>
-      <td><span style="font-size:12px;font-weight:600;color:${u.active?'var(--green)':'var(--gray-400)'}">${u.active?'Active':'Inactive'}</span></td>
-      <td><span style="font-size:12px;font-weight:600;color:${u.mfa?'var(--green)':(u.role==='Administrator'?'var(--red)':'var(--gray-400)')}" title="${u.mfa?'Signs in with a code from an authenticator app':(u.role==='Administrator'?'Will set it up at the next sign-in':'Not turned on')}">${u.mfa?'On':'Off'}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:${!u.active?'var(--gray-400)':u.invited?'#b7791f':'var(--green)'}" title="${u.invited&&u.active?'Has not created a password yet':''}">${!u.active?'Inactive':u.invited?'Invited':'Active'}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:${u.mfa?'var(--green)':'var(--gray-400)'}" title="${u.mfa?'Signs in with a code from an authenticator app':'Sets it up at the next sign-in'}">${u.mfa?'On':'Off'}</span></td>
       <td style="font-size:12px;color:var(--gray-500)">${created}</td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-outline btn-sm" onclick="editUser('${u.uid}')" title="Edit role / reset password">${svgEdit}</button>
           <button class="btn btn-outline btn-sm" onclick="toggleUser('${u.uid}',${u.active})" style="color:${u.active?'var(--red)':'var(--green)'}" title="${u.active?'Deactivate':'Activate'}"${isMe&&u.active?' disabled':''}>${u.active?svgPause:svgPlay}</button>
+          ${u.invited&&u.active&&!isMe?`<button class="btn btn-outline btn-sm" onclick="resendInvite('${u.uid}','${esc(u.email)}')" title="Send the invite again (new link)">${svgMail}</button>`:''}
           ${u.mfa&&!isMe?`<button class="btn btn-outline btn-sm" onclick="resetUserMfa('${u.uid}','${esc(u.email)}')" title="Reset two-step verification (lost or new phone)">${svgPhone}</button>`:''}
           ${isMe?'':`<button class="btn btn-outline btn-sm" onclick="deleteUser('${u.uid}','${esc(u.email)}')" style="color:var(--red)" title="Delete">${svgTrash}</button>`}
         </div>
@@ -469,10 +471,17 @@ function openUserModal(uid) {
   document.getElementById('uName').disabled = editing;
   document.getElementById('uRole').value = u ? u.role : 'Inspector';
   document.getElementById('uPass').value = '';
-  document.getElementById('uPass').placeholder = editing ? 'Leave blank to keep current' : 'At least 6 characters';
+  document.getElementById('uPass').placeholder = 'Leave blank to keep current';
   const msg = document.getElementById('userMsg');
-  msg.textContent = editing ? 'Change the role, or set a new password below.' : 'Minimum 6 characters.';
+  msg.textContent = 'Change the role, or set a new password here.';
   msg.style.color = 'var(--gray-500)';
+  // New accounts get an invite e-mail to create their own password.
+  document.getElementById('uPassRow').style.display = editing ? '' : 'none';
+  document.getElementById('uInviteNote').style.display = editing ? 'none' : '';
+  document.getElementById('uInviteResult').style.display = 'none';
+  document.getElementById('btnSaveUser').style.display = '';
+  document.getElementById('btnCloseUser').textContent = 'Cancel';
+  document.getElementById('uRole').disabled = false;
   document.getElementById('userModal').classList.add('open');
   setTimeout(()=>document.getElementById(editing?'uRole':'uEmail').focus(),100);
 }
@@ -503,14 +512,47 @@ function saveUser() {
       .finally(()=>busy(false));
     return;
   }
-  // Create
+  // Create: the account starts without a password; the person gets an invite link.
   if(!email) { toast('Enter an email','error'); return; }
-  if(pass.length<6) { toast('Password must be at least 6 characters','error'); return; }
   busy(true);
-  userFn('adminCreateUser')({email, password:pass, name, role})
-    .then(()=>{ toast('User created','success'); closeUserModal(); loadUsersTable(); })
+  userFn('adminCreateUser')({email, name, role})
+    .then(r=>{ showInviteResult(email, r.data || {}); loadUsersTable(); })
     .catch(e=>toast(fnError(e),'error'))
     .finally(()=>busy(false));
+}
+
+// After creating (or re-sending): was the invite e-mailed, and the link to copy.
+function showInviteResult(email, r) {
+  document.getElementById('userModalTitle').textContent = 'Invite';
+  ['uEmail','uName','uRole'].forEach(id => document.getElementById(id).disabled = true);
+  document.getElementById('uPassRow').style.display = 'none';
+  document.getElementById('uInviteNote').style.display = 'none';
+  document.getElementById('btnSaveUser').style.display = 'none';
+  document.getElementById('btnCloseUser').textContent = 'Close';
+  const until = r.expiresAt ? new Date(r.expiresAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+  document.getElementById('uInviteText').innerHTML = r.emailed
+    ? 'Invite e-mailed to <b>' + esc(email) + '</b>. The link works until ' + esc(until) + '.'
+    : '<span style="color:var(--red);font-weight:600">The e-mail could not be sent.</span> Send <b>' + esc(email) + '</b> this link yourself (works until ' + esc(until) + '):';
+  document.getElementById('uInviteLink').value = r.link || '';
+  document.getElementById('uInviteResult').style.display = '';
+  document.getElementById('userModal').classList.add('open');
+}
+function copyInviteLink() {
+  const i = document.getElementById('uInviteLink'); i.select();
+  (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(
+    () => toast('Link copied', 'success'),
+    () => { try { document.execCommand('copy'); toast('Link copied', 'success'); } catch (e) {} });
+}
+// Lost or expired link (only while the account has no password).
+function resendInvite(uid, email) {
+  userFn('adminSendInvite')({ uid }).then(r => {
+    const u = USERS_CACHE.find(x => x.uid === uid) || {};
+    document.getElementById('editUserId').value = uid;
+    document.getElementById('uEmail').value = email;
+    document.getElementById('uName').value = u.name || '';
+    document.getElementById('uRole').value = u.role || 'Inspector';
+    showInviteResult(email, r.data || {});
+  }).catch(e => toast(fnError(e), 'error'));
 }
 
 function toggleUser(uid, currentlyActive) {

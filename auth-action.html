@@ -4,21 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<!-- Links in the account e-mails Firebase sends (undo two-step verification,
-     reset password, verify e-mail) open here instead of Firebase's own page.
+<!-- Account links open here: the invite to create a password (sent by
+     EnviroTrack when an administrator creates an account), and the links in
+     Firebase's account e-mails (reset password, verify e-mail, undo two-step).
      Nothing happens until a person presses the button: company mail scanners
      open every link in an e-mail, and Firebase's page acts as soon as it
      loads — that is how the scanner kept undoing two-step verification. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://identitytoolkit.googleapis.com; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://identitytoolkit.googleapis.com https://us-central1-envirotrack-5173f.cloudfunctions.net; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>EnviroTrack — Account</title>
 <style>
   :root { --green: #2f5d46; --ink: #1b2a22; --gray: #5d6b63; --line: #dfe5e1; --red: #b3261e; --bg: #f3f6f2; }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
          background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
-  .card { width: 100%; max-width: 440px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
-  h1 { font-size: 20px; margin: 0 0 6px; }
-  .brand { font-weight: 700; color: var(--green); letter-spacing: .2px; margin-bottom: 18px; }
+  .card { width: 100%; max-width: 460px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 8px 28px rgba(29,43,35,.08); }
+  .head { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; border-bottom: 4px solid var(--green); }
+  .head img { display: block; height: 36px; width: auto; }
+  .head img.caputo { height: 34px; }
+  .inner { padding: 26px 28px 28px; }
+  .kicker { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+  .foot { text-align: center; font-size: 12px; color: var(--gray); margin-top: 16px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
   p { margin: 0 0 14px; color: var(--gray); }
   label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
   input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
@@ -31,19 +37,33 @@
 </style>
 </head>
 <body>
+<div style="width:100%;max-width:460px">
 <main class="card">
-  <div class="brand">EnviroTrack</div>
-  <h1 id="title">Account</h1>
-  <p id="text"></p>
-  <div id="fields"></div>
-  <button id="go" type="button" hidden></button>
-  <div id="msg" role="status"></div>
+  <div class="head"><img src="img/logo.svg" alt="EnviroTrack"><img class="caputo" src="img/caputo-logo.svg" alt="Caputo Foods"></div>
+  <div class="inner">
+    <div class="kicker">Environmental Monitoring Program</div>
+    <h1 id="title">Account</h1>
+    <p id="text"></p>
+    <div id="fields"></div>
+    <button id="go" type="button" hidden></button>
+    <div id="msg" role="status"></div>
+  </div>
 </main>
+<div class="foot"><b>Caputo Foods</b> · Environmental Monitoring · EnviroTrack</div>
+</div>
 <script>
 (function () {
   var KEY = 'AIzaSyCUMxDD5LHVNAIP5Nx1Mrkt2L9G4pQGEFY';
   var q = new URLSearchParams(location.search);
-  var mode = q.get('mode') || '', code = q.get('oobCode') || '';
+  var mode = q.get('mode') || '', code = q.get('oobCode') || q.get('code') || '';
+  // Cloud Functions (the invite); ?emu on this computer = local emulators (tests).
+  var FN = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && q.has('emu'))
+    ? 'http://127.0.0.1:5001/envirotrack-5173f/us-central1/' : 'https://us-central1-envirotrack-5173f.cloudfunctions.net/';
+  function fn(name, data) {
+    return fetch(FN + name, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: data }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (j) { if (j.error) throw new Error(j.error.message || j.error.status || 'error'); return j.result; });
+  }
   var $ = function (id) { return document.getElementById(id); };
   var msg = function (t, cls) { $('msg').textContent = t; $('msg').className = cls || ''; };
 
@@ -60,7 +80,8 @@
   function why(e) {
     var m = String(e && e.message || e);
     if (/EXPIRED_OOB_CODE|INVALID_OOB_CODE/.test(m)) return 'This link has expired or was already used.';
-    if (/WEAK_PASSWORD/.test(m)) return 'Choose a longer password (at least 8 characters).';
+    if (/WEAK_PASSWORD|invite-weak/.test(m)) return 'Use at least 8 characters, with letters and numbers.';
+    if (/invite-invalid|not-found|NOT_FOUND/.test(m)) return 'This link has expired or was already used. Ask an administrator for a new one.';
     if (/TOO_MANY/.test(m)) return 'Too many attempts. Wait a moment.';
     return 'It did not work (' + m + '). Ask an administrator.';
   }
@@ -73,6 +94,32 @@
   if (!code) { $('title').textContent = 'Link not valid'; $('text').textContent = 'Open the link from the e-mail again.'; return; }
 
   var b;
+  if (mode === 'invite') {
+    $('title').textContent = 'Create your password';
+    $('text').textContent = 'Checking the link…';
+    // Only reads: opening the page (people or mail scanners) does not use the link up.
+    fn('inviteCheck', { code: code }).then(function (r) {
+      $('text').textContent = 'Your EnviroTrack account: ' + r.email + '. Choose a password (at least 8 characters, with letters and numbers).';
+      $('fields').innerHTML = '<input type="email" autocomplete="username" hidden value="">' +
+        '<label for="pw">New password</label><input id="pw" type="password" autocomplete="new-password" minlength="8">' +
+        '<label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password" minlength="8">';
+      $('fields').firstChild.value = r.email;
+      b = $('go'); b.textContent = 'Create my password'; b.hidden = false; b.className = '';
+      b.onclick = function () {
+        var p = $('pw').value, p2 = $('pw2').value;
+        if (p.length < 8 || !/[A-Za-z]/.test(p) || !/[0-9]/.test(p)) { msg('Use at least 8 characters, with letters and numbers.', 'err'); return; }
+        if (p !== p2) { msg('The two passwords are not the same.', 'err'); return; }
+        b.disabled = true; msg('Working…');
+        fn('inviteAccept', { code: code, password: p }).then(function () {
+          b.hidden = true; $('fields').innerHTML = '';
+          $('text').textContent = 'Done. Sign in to EnviroTrack with ' + r.email + ' and your new password. EnviroTrack will then ask you to set up two-step verification with an authenticator app on your phone.';
+          var a = document.createElement('a'); a.href = './'; a.textContent = 'Open EnviroTrack'; a.style.cssText = 'display:inline-block;margin-top:6px;color:#2f5d46;font-weight:600';
+          $('msg').textContent = ''; $('msg').appendChild(a); $('msg').className = '';
+        }).catch(function (e) { b.disabled = false; msg(why(e), 'err'); });
+      };
+    }).catch(function (e) { $('text').textContent = why(e); });
+    return;
+  }
   if (mode === 'revertSecondFactorAddition') {
     b = setup('Two-step verification was added',
       'If you just set up the authenticator app in EnviroTrack, close this page: nothing else is needed. ' +
