@@ -120,19 +120,119 @@ function roleOf(request) {
   return VALID_ROLES.includes(role) ? role : null;
 }
 
-// ── Two-step verification ──────────────────────────────────────────
-// Administrators must have signed in with their authenticator app (TOTP).
-// Their ID token then carries firebase.sign_in_second_factor. Safety valve:
-// ADMIN_MFA=off in functions/.env turns the check off (only for an emergency).
-const ADMIN_MFA = String(process.env.ADMIN_MFA || "on").toLowerCase() !== "off";
+// ── Two-step verification (everyone) ───────────────────────────────
+// EnviroTrack checks the authenticator-app code itself. Firebase's own
+// two-step verification mails an "undo" link that company mail scanners open
+// by themselves, which removed the second factor every time.
+//   · The secret of each person's authenticator app lives in mfaSecrets/{uid}
+//     (the database rules give pages no access), encrypted with MFA_SECRET_KEY.
+//   · A right code adds the session's sign-in time (token auth_time) to the
+//     user's claim "mfa_s" (the last 5 sessions). auth_time stays the same while
+//     a session lives and is new at every password sign-in, so a session that
+//     typed the code is recognised and a new one is not, until it types it too.
+//   · Accounts that still use Firebase's own factor also count
+//     (token firebase.sign_in_second_factor).
+// Safety valve: MFA=off in functions/.env turns the server checks off (the
+// database rules still require the code).
+const MFA_ON = String(process.env.MFA || process.env.ADMIN_MFA || "on").toLowerCase() !== "off";
+const MFA_SESSIONS = 5;
 function signedInWithMfa(request) {
-  const f = (request.auth && request.auth.token && request.auth.token.firebase) || {};
-  return !!f.sign_in_second_factor;
+  const t = (request.auth && request.auth.token) || {};
+  if (t.firebase && t.firebase.sign_in_second_factor) return true;
+  return Array.isArray(t.mfa_s) && t.mfa_s.includes(t.auth_time);
 }
-function assertAdminMfa(request) {
-  if (ADMIN_MFA && !signedInWithMfa(request)) {
-    throw new HttpsError("failed-precondition", "mfa-required: Administrators must sign in with two-step verification.");
+function assertMfa(request) {
+  if (MFA_ON && !signedInWithMfa(request)) {
+    throw new HttpsError("failed-precondition", "mfa-required: Sign in with your two-step verification code.");
   }
+}
+const assertAdminMfa = assertMfa;
+
+// RFC 6238 codes: 6 digits, 30-second steps, SHA-1 (what authenticator apps use).
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+function b32encode(buf) {
+  let bits = 0, val = 0, out = "";
+  for (const byte of buf) { val = (val << 8) | byte; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+  if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function b32decode(str) {
+  let bits = 0, val = 0; const out = [];
+  for (const ch of String(str).toUpperCase().replace(/[^A-Z2-7]/g, "")) { val = (val << 5) | B32.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+  return Buffer.from(out);
+}
+function totpAt(secret, step) {
+  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(step));
+  const h = crypto.createHmac("sha1", b32decode(secret)).update(msg).digest();
+  const o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1000000).padStart(6, "0");
+}
+// The step the code belongs to (now, or one step before/after for clock drift), or -1.
+function totpMatch(secret, code, lastStep) {
+  const now = Math.floor(Date.now() / 30000);
+  for (const d of [0, -1, 1]) {
+    const step = now + d;
+    if (step <= (lastStep || 0)) continue;                     // a code works once
+    const a = Buffer.from(totpAt(secret, step)), b = Buffer.from(code);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return step;
+  }
+  return -1;
+}
+function mfaKey() {
+  const k = process.env.MFA_SECRET_KEY;
+  if (!k) throw new HttpsError("failed-precondition", "Two-step verification is not configured on the server (MFA_SECRET_KEY).");
+  return crypto.createHash("sha256").update(k).digest();
+}
+function sealSecret(secret) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", mfaKey(), iv);
+  const enc = Buffer.concat([c.update(secret, "utf8"), c.final()]);
+  return [iv, c.getAuthTag(), enc].map(b => b.toString("base64")).join(".");
+}
+function openSecret(sealed) {
+  const [iv, tag, enc] = String(sealed).split(".").map(x => Buffer.from(x, "base64"));
+  const d = crypto.createDecipheriv("aes-256-gcm", mfaKey(), iv); d.setAuthTag(tag);
+  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
+}
+const MFA_MAX_FAILS = 5, MFA_LOCK_MS = 5 * 60 * 1000;
+const mfaDoc = (uid) => db().collection("mfaSecrets").doc(uid);
+// Only a provisioned account may set up or type a code.
+function assertMfaCaller(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must sign in.");
+  if (!roleOf(request)) throw new HttpsError("permission-denied", "This account is not provisioned.");
+  rateLimit("mfa:" + request.auth.uid, LIMITS.admin);
+}
+const codeOf = (request) => String((request.data && request.data.code) || "").replace(/\D/g, "");
+// Remember this session (its auth_time) as one that typed the code.
+async function markSession(request) {
+  const t = request.auth.token;
+  const u = await getAuth().getUser(request.auth.uid);
+  const claims = Object.assign({}, u.customClaims || {});
+  const list = (Array.isArray(claims.mfa_s) ? claims.mfa_s : []).filter(x => x !== t.auth_time);
+  claims.mfa_s = list.concat([t.auth_time]).slice(-MFA_SESSIONS);
+  await getAuth().setCustomUserClaims(request.auth.uid, claims);
+}
+// Check a code against a stored, encrypted secret (with the fail counter).
+async function checkCode(ref, field, code) {
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref); const d = snap.exists ? snap.data() : {};
+    if (!d[field]) return { ok: false, why: "not-set-up" };
+    if (d.lockedUntil && d.lockedUntil > Date.now()) return { ok: false, why: "locked" };
+    const step = totpMatch(openSecret(d[field]), code, d.lastStep);
+    if (step < 0) {
+      const fails = (d.fails || 0) + 1;
+      tx.set(ref, fails >= MFA_MAX_FAILS ? { fails: 0, lockedUntil: Date.now() + MFA_LOCK_MS } : { fails }, { merge: true });
+      return { ok: false, why: fails >= MFA_MAX_FAILS ? "locked" : "wrong" };
+    }
+    const upd = { lastStep: step, fails: 0, lockedUntil: 0, lastUsedAt: FieldValue.serverTimestamp() };
+    if (field === "pending") Object.assign(upd, { secret: d.pending, pending: FieldValue.delete(), confirmedAt: FieldValue.serverTimestamp() });
+    tx.set(ref, upd, { merge: true });
+    return { ok: true };
+  });
+}
+function codeError(why) {
+  if (why === "locked") throw new HttpsError("resource-exhausted", "mfa-locked: Too many wrong codes. Wait 5 minutes.");
+  if (why === "not-set-up") throw new HttpsError("failed-precondition", "mfa-not-set-up: Set up two-step verification first.");
+  throw new HttpsError("invalid-argument", "mfa-wrong-code: That code is not right.");
 }
 
 const REGION = "us-central1";
@@ -142,13 +242,14 @@ const db = () => getFirestore();
 exports.adminListUsers = onCall({ region: REGION, cors: true }, async (request) => {
   assertAdmin(request);
   const result = await getAuth().listUsers(1000);
+  const withCode = new Set((await db().collection("mfaSecrets").get()).docs.filter(d => d.get("secret")).map(d => d.id));
   return result.users.map((u) => ({
     uid: u.uid,
     email: u.email || "",
     name: u.displayName || "",
     role: (u.customClaims && u.customClaims.role) || "Inspector",
     active: !u.disabled,
-    mfa: !!(u.multiFactor && u.multiFactor.enrolledFactors && u.multiFactor.enrolledFactors.length),
+    mfa: withCode.has(u.uid) || !!(u.multiFactor && u.multiFactor.enrolledFactors && u.multiFactor.enrolledFactors.length),
     created: u.metadata.creationTime || "",
     lastSignIn: u.metadata.lastSignInTime || "",
   }));
@@ -204,7 +305,8 @@ exports.adminSetRole = onCall({ region: REGION, cors: true }, async (request) =>
     throw new HttpsError("invalid-argument", "Invalid user id or role.");
   }
   if (role !== "Administrator") await assertNotRoot(uid);
-  await getAuth().setCustomUserClaims(uid, { role });
+  const cur = await getAuth().getUser(uid);
+  await getAuth().setCustomUserClaims(uid, Object.assign({}, cur.customClaims || {}, { role }));
   return { ok: true };
 });
 
@@ -229,8 +331,57 @@ exports.adminResetMfa = onCall({ region: REGION, cors: true }, async (request) =
     throw new HttpsError("failed-precondition", "Another administrator must reset your own two-step verification.");
   }
   await assertNotRoot(uid);
-  await getAuth().updateUser(uid, { multiFactor: { enrolledFactors: null } });
+  await mfaDoc(uid).delete();
+  const u = await getAuth().getUser(uid);
+  const claims = Object.assign({}, u.customClaims || {}); delete claims.mfa_s;
+  await getAuth().setCustomUserClaims(uid, claims);
+  if (u.multiFactor && u.multiFactor.enrolledFactors && u.multiFactor.enrolledFactors.length) {
+    await getAuth().updateUser(uid, { multiFactor: { enrolledFactors: null } });
+  }
   await getAuth().revokeRefreshTokens(uid);
+  return { ok: true };
+});
+
+// ── Two-step verification: the steps the sign-in page calls ──────────────
+// Is it set up for me, and does this session already count?
+exports.mfaStatus = onCall({ region: REGION, cors: true }, async (request) => {
+  assertMfaCaller(request);
+  const d = (await mfaDoc(request.auth.uid).get()).data() || {};
+  return { enrolled: !!d.secret, session: signedInWithMfa(request) };
+});
+
+// First time: a new secret for the authenticator app (QR). Refused once one is set
+// up, so a stolen password cannot replace the owner's phone.
+exports.mfaSetupStart = onCall({ region: REGION, cors: true }, async (request) => {
+  assertMfaCaller(request);
+  const ref = mfaDoc(request.auth.uid);
+  const d = (await ref.get()).data() || {};
+  if (d.secret) throw new HttpsError("already-exists", "mfa-already-set-up: Two-step verification is already set up. Ask an administrator to reset it.");
+  const secret = b32encode(crypto.randomBytes(20));
+  await ref.set({ pending: sealSecret(secret), createdAt: FieldValue.serverTimestamp(), fails: 0 }, { merge: true });
+  const label = encodeURIComponent("EnviroTrack:" + (request.auth.token.email || request.auth.uid));
+  return { secret, uri: "otpauth://totp/" + label + "?secret=" + secret + "&issuer=EnviroTrack&algorithm=SHA1&digits=6&period=30" };
+});
+
+// First code from the app: saves the secret and lets this session in.
+exports.mfaSetupFinish = onCall({ region: REGION, cors: true }, async (request) => {
+  assertMfaCaller(request);
+  const code = codeOf(request);
+  if (code.length !== 6) throw new HttpsError("invalid-argument", "mfa-wrong-code: Type the 6-digit code.");
+  const r = await checkCode(mfaDoc(request.auth.uid), "pending", code);
+  if (!r.ok) codeError(r.why === "not-set-up" ? "wrong" : r.why);
+  await markSession(request);
+  return { ok: true };
+});
+
+// Every sign-in: the code from the app lets this session in.
+exports.mfaVerify = onCall({ region: REGION, cors: true }, async (request) => {
+  assertMfaCaller(request);
+  const code = codeOf(request);
+  if (code.length !== 6) throw new HttpsError("invalid-argument", "mfa-wrong-code: Type the 6-digit code.");
+  const r = await checkCode(mfaDoc(request.auth.uid), "secret", code);
+  if (!r.ok) codeError(r.why);
+  await markSession(request);
   return { ok: true };
 });
 
@@ -311,6 +462,7 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
     );
   }
   rateLimit("proxy:" + request.auth.uid, LIMITS.proxy);
+  assertMfa(request);
   const email = String(request.auth.token.email || "").toLowerCase();
   const { op } = request.data || {};
   const body = Object.assign({}, (request.data && request.data.body) || {});

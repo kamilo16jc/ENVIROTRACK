@@ -337,5 +337,11 @@ function _storeRerender() {
 
 // Follow the Firebase session
 if (typeof fbAuth !== 'undefined') {
-  fbAuth.onAuthStateChanged(u => { if (u) { storePreload(); storeStart(); } else storeStop(); });
+  // Only a session that typed the two-step code reaches the data (the login
+  // starts the store itself after the code; see bootSyncThenEnter).
+  fbAuth.onAuthStateChanged(async u => {
+    if (!u) { storeStop(); return; }
+    try { if (typeof mfaSignedIn !== 'function' || !mfaSignedIn(await u.getIdTokenResult())) return; } catch (e) { return; }
+    storePreload(); storeStart();
+  });
 }

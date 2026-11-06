@@ -24,6 +24,7 @@ const fbFunctions = firebase.app().functions("us-central1");
 const FB_EMU = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]emu\b/.test(location.search);
 const fbDb = firebase.firestore ? firebase.firestore() : null;
 if (FB_EMU && fbDb) { fbDb.useEmulator('127.0.0.1', 8080); fbAuth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true }); }
+if (FB_EMU) fbFunctions.useEmulator('127.0.0.1', 5001);
 if (fbDb) fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
 // NON-persistent session: closing the tab signs the user out.

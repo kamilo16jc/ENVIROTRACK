@@ -243,7 +243,7 @@ function fnError(e) {
   if (code === 'functions/unauthenticated')    return 'Please sign in again.';
   if (code === 'functions/resource-exhausted') return 'Too many requests right now. Wait a minute and try again.';
   if (code === 'functions/failed-precondition' && /mfa-required/.test((e && e.message) || ''))
-    return 'Administrators need two-step verification. Sign out and sign in again to set it up.';
+    return 'Sign out and sign in again with your two-step verification code.';
   if (code === 'functions/not-found' || code === 'functions/internal')
     return 'User management is unavailable. If you just set this up, deploy the Cloud Functions first.';
   if (code === 'functions/unavailable')        return 'Could not reach the server. Check your connection.';
@@ -270,10 +270,12 @@ function doLogin_dynamic() {
       let role = 'Inspector', tok = null;
       try { tok = await user.getIdTokenResult(); if (tok.claims && tok.claims.role) role = tok.claims.role; } catch(e){}
       if (isAdmin(user.email) && role === 'Inspector') role = 'Administrator';
-      // An administrator without two-step verification sets it up now, then signs in again with the code.
-      if (mfaRequiredFor(role) && !mfaSignedIn(tok)) {
+      // Two-step verification (everyone): the code from the authenticator app,
+      // or the set-up the first time (js/mfa.js). No code, no access.
+      if (!mfaSignedIn(tok)) {
         err.textContent = '';
-        if (await mfaSetupThenSignInAgain({ required: true })) return;
+        tok = await mfaSecondStep();
+        if (tok.claims && tok.claims.role) role = tok.claims.role;
       }
       const name = user.displayName || user.email.split('@')[0];
       CU = { id:user.uid, uid:user.uid, name, displayName:name,

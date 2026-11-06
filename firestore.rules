@@ -6,19 +6,21 @@ rules_version = '2';
 //
 // Access requires an account PROVISIONED by an admin (role claim Inspector /
 // Manager / Administrator) — a self-registered Firebase account has no role
-// and gets nothing, same as the SharePoint proxy. Administrators also need
+// and gets nothing, same as the SharePoint proxy. Everyone also needs
 // two-step verification. Every create/update must be
 // stamped with the writer's email (_by).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    // Two-step verification: an Administrator counts only when the session was
-    // opened with the authenticator-app code (the token then names the factor).
+    // Two-step verification, required for every role: the session typed the
+    // authenticator-app code. The server adds the session's sign-in time to the
+    // "mfa_s" claim (functions/index.js); accounts on Firebase's own factor also count.
     function secondFactor() {
-      return request.auth.token.get('firebase', {}).get('sign_in_second_factor', null) != null;
+      return request.auth.token.get('firebase', {}).get('sign_in_second_factor', null) != null
+        || request.auth.token.get('auth_time', -1) in request.auth.token.get('mfa_s', []);
     }
-    function mfaOk() { return request.auth.token.get('role', '') != 'Administrator' || secondFactor(); }
+    function mfaOk() { return secondFactor(); }
     function provisioned() {
       return signedIn() && request.auth.token.get('role', '') in ['Inspector', 'Manager', 'Administrator'] && mfaOk();
     }
