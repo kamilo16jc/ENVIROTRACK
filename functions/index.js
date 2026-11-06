@@ -270,7 +270,8 @@ async function newInvite(uid, email, by) {
 // Sends the invite (design in invite-mail.js); false when the mail account is
 // not set up or the send fails — the admin then gets the link to send.
 async function mailInvite(email, name, role, link, expiresAt) {
-  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS;
+  // Gmail shows app passwords in groups of 4: the spaces are not part of it.
+  const user = String(process.env.SMTP_USER || "").trim(), pass = String(process.env.SMTP_PASS || "").replace(/\s+/g, "");
   if (!user || !pass) return false;
   const until = new Date(expiresAt).toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" });
   try {
