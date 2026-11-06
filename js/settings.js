@@ -241,6 +241,7 @@ function fnError(e) {
   const code = (e && e.code) || '';
   if (code === 'functions/permission-denied')  return 'Only administrators can manage users.';
   if (code === 'functions/unauthenticated')    return 'Please sign in again.';
+  if (code === 'functions/resource-exhausted') return 'Too many requests right now. Wait a minute and try again.';
   if (code === 'functions/not-found' || code === 'functions/internal')
     return 'User management is unavailable. If you just set this up, deploy the Cloud Functions first.';
   if (code === 'functions/unavailable')        return 'Could not reach the server. Check your connection.';

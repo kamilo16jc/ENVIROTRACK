@@ -288,7 +288,15 @@ exports.spImportScheduled = onSchedule({ schedule: "every 30 minutes", region: R
 });
 
 // Manual run (migration): POST with header x-import-key = IMPORT_KEY (functions/.env).
+// Calls per address within a minute (see index.js): the manual import is heavy.
+const _importHits = new Map();
+function _overLimit(key, max) {
+  const now = Date.now(), recent = (_importHits.get(key) || []).filter(t => now - t < 60000);
+  if (recent.length >= max) return true;
+  recent.push(now); _importHits.set(key, recent); return false;
+}
 exports.spImportNow = onRequest({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (req, res) => {
+  if (_overLimit("import:" + (req.ip || "?"), 5)) { res.status(429).json({ ok: false }); return; }
   const key = process.env.IMPORT_KEY || "", got = String(req.get("x-import-key") || "");
   const same = key.length > 0 && got.length === key.length && require("crypto").timingSafeEqual(Buffer.from(got), Buffer.from(key));
   if (req.method !== "POST" || !same) { res.status(403).json({ ok: false }); return; }

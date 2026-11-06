@@ -7,12 +7,33 @@
 // ═══════════════════════════════════════════════════════════════
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const crypto = require("crypto");
 
 initializeApp();
+
+// ── Cost caps ──────────────────────────────────────────────────────
+// 1) At most a few servers per function: a flood of calls waits or is refused
+//    instead of starting dozens of billed instances. Normal use needs one.
+setGlobalOptions({ maxInstances: 5 });
+// 2) Calls per person (or per address, for the public endpoints) within a minute.
+//    Counted in memory on each server, so it costs nothing extra; with the cap
+//    above, the real ceiling is at most 5 times these numbers.
+const LIMITS = { proxy: 120, admin: 30, upload: 30 };   // the manual import: 5 a minute, in spmirror.js
+const _hits = new Map();
+function overLimit(key, max) {
+  const now = Date.now(), recent = (_hits.get(key) || []).filter(t => now - t < 60000);
+  if (recent.length >= max) { _hits.set(key, recent); return true; }
+  recent.push(now); _hits.set(key, recent);
+  if (_hits.size > 5000) for (const [k, v] of _hits) if (!v.length || now - v[v.length - 1] > 60000) _hits.delete(k);
+  return false;
+}
+function rateLimit(key, max) {
+  if (overLimit(key, max)) throw new HttpsError("resource-exhausted", "Too many requests. Wait a minute and try again.");
+}
 
 // ── Photo upload tokens ────────────────────────────────────────────
 // The phone (capture.html) has no Firebase auth, so the upload endpoint is
@@ -58,6 +79,7 @@ function assertAdmin(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must sign in.");
   }
+  rateLimit("admin:" + request.auth.uid, LIMITS.admin);
   const email = (request.auth.token.email || "").toLowerCase();
   const isAdmin =
     request.auth.token.role === "Administrator" || ROOT_ADMINS.includes(email);
@@ -229,6 +251,7 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
       "This account is not provisioned for data access."
     );
   }
+  rateLimit("proxy:" + request.auth.uid, LIMITS.proxy);
   const { op, body } = request.data || {};
   // photoToken: mint a short-lived, retest-scoped upload token for the QR. Only
   // a signed-in, provisioned user (checked above) can get one.
@@ -314,6 +337,7 @@ exports.spProxy = onCall({ region: REGION, cors: true }, async (request) => {
 // to the flow (flow URL stays hidden).
 exports.photoUpload = onRequest({ region: REGION, cors: true }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).json({ ok: false, error: "POST only" }); return; }
+  if (overLimit("upload:" + (req.ip || "?"), LIMITS.upload)) { res.status(429).json({ ok: false, error: "too many requests" }); return; }
   const b = req.body || {};
   const retestId = String(b.retestId || "");
   // 1) Token: valid signature + not expired + scoped to THIS retest.
