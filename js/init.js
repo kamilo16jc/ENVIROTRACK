@@ -40,7 +40,8 @@ function showSessionWarning() {
 }
 
 function hideSessionWarning() {
-  document.getElementById('sessionWarning').style.display = 'none';
+  const w = document.getElementById('sessionWarning');
+  if (w.style.display !== 'none') w.style.display = 'none';
   clearInterval(countdownTimer);
 }
 
@@ -64,9 +65,18 @@ function forceLogout() {
 }
 
 // Track all user activity
+// Activity resets the timers at most once a second (mousemove fires hundreds of times a second);
+// while the warning is up, any activity closes it at once.
 const ACTIVITY_EVENTS = ['mousemove','mousedown','keydown','touchstart','click','scroll'];
+let _lastActivityReset = 0;
 ACTIVITY_EVENTS.forEach(evt =>
-  document.addEventListener(evt, () => { if(CU) resetSessionTimer(); }, {passive:true})
+  document.addEventListener(evt, () => {
+    if(!CU) return;
+    const now = Date.now();
+    if(now - _lastActivityReset < 1000 && document.getElementById('sessionWarning').style.display !== 'flex') return;
+    _lastActivityReset = now;
+    resetSessionTimer();
+  }, {passive:true})
 );
 
 // ═══════════════════════════════════════════════

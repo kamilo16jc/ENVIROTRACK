@@ -24,7 +24,9 @@
   --radius:12px;--radius-sm:8px;--radius-lg:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-attachment:fixed;color:var(--gray-900);min-height:100vh;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+/* The sage wash sits on its own fixed layer: a 'background-attachment:fixed' page repaints the whole screen on every scroll step */
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--bg-tint),var(--bg);pointer-events:none}
+body{font-family:var(--font);background:var(--bg);color:var(--gray-900);min-height:100vh;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 .screen{display:none;}.screen.active{display:flex;}
 
 /* ── LOGIN ─────────────────────────────────────────────────── */
@@ -87,8 +89,9 @@ body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-atta
   -webkit-backdrop-filter:blur(22px) saturate(1.7);
   border-radius:14px;border:1px solid rgba(255,255,255,.55);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(16,24,40,.06),0 12px 34px rgba(16,24,40,.20),0 3px 10px rgba(16,24,40,.10);
-  min-width:184px;padding:8px;padding-top:14px;margin-top:-8px;opacity:0;pointer-events:none;transform:translateY(-4px) scale(.98);transition:all .18s cubic-bezier(.4,0,.2,1);z-index:999;}
-.nav-group:hover .dropdown{opacity:1;pointer-events:all;transform:translateY(0) scale(1);}
+  min-width:184px;padding:8px;padding-top:14px;margin-top:-8px;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px) scale(.98);transition:opacity .18s cubic-bezier(.4,0,.2,1),transform .18s cubic-bezier(.4,0,.2,1),visibility 0s linear .18s;z-index:999;}
+/* hidden menus are not drawn at all (their glass blur costs the GPU even when transparent) */
+.nav-group:hover .dropdown{opacity:1;visibility:visible;pointer-events:all;transform:translateY(0) scale(1);transition-delay:0s;}
 .dd-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .12s,box-shadow .12s;}
 .dd-item:hover{background:rgba(255,255,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(16,24,40,.10);}
 /* Minimalist: no colored chip, just the line icon + name (description hidden) */
@@ -118,7 +121,8 @@ body{font-family:var(--font);background:var(--bg-tint),var(--bg);background-atta
 .page-header > div:first-child{display:none;}
 .page-header h1{font-size:20px;font-weight:700;letter-spacing:-.4px;}
 .page-header p{font-size:13px;color:var(--gray-500);margin-top:2px;}
-.page-body{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg-tint),var(--bg);background-attachment:fixed;}
+/* attachment 'scroll' on the scroller looks the same as 'fixed' here and lets the browser scroll without repainting */
+.page-body{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg-tint),var(--bg);background-attachment:scroll;}
 
 /* ── CARDS ─────────────────────────────────────────────────── */
 /* Soft lavender-tinted surface (not flat white) + 3D bevel like the stat cards */
@@ -196,7 +200,7 @@ tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 @keyframes covGrow{to{width:var(--w);}}
 .cov-fill::after{content:"";position:absolute;top:0;left:0;height:100%;width:100%;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
-  transform:translateX(-100%);animation:covShine 2.6s ease-in-out 1s infinite;}
+  transform:translateX(-100%);animation:covShine 2.6s ease-in-out 1s 2;}
 @keyframes covShine{0%{transform:translateX(-100%)}55%,100%{transform:translateX(220%)}}
 .cov-1945,.cov-1935,.cov-1931E,.cov-1931W{background:linear-gradient(90deg,#3f7357,#345d46);}
 @media (prefers-reduced-motion:reduce){
@@ -255,11 +259,14 @@ tbody td{padding:11px 14px;color:var(--gray-700);vertical-align:middle;}
 .au-txt strong{font-size:13.5px;font-weight:700;white-space:nowrap}
 .au-txt span{font-size:12px;opacity:.8}
 .au-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;background:#fff;color:var(--green-dark);
-  font:700 13px var(--font);padding:9px 16px;cursor:pointer;animation:auPulse 2s ease-in-out infinite}
+  font:700 13px var(--font);padding:9px 16px;cursor:pointer;position:relative}
+/* The pulse runs only while the banner is shown, and only with transform/opacity (no repaint every frame). */
+.app-update.show .au-btn:not(:disabled)::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 2px rgba(255,255,255,.6);pointer-events:none;animation:auPulse 2s ease-out infinite}
 .au-btn:hover{background:var(--green-light)}
-.au-btn:disabled{cursor:default;animation:none;opacity:.85}
+.au-btn:disabled{cursor:default;opacity:.85}
 .au-btn.busy svg{animation:auSpin .8s linear infinite}
-@keyframes auPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 6px rgba(255,255,255,0)}}
+@keyframes auPulse{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.12,1.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){.app-update.show .au-btn::after{animation:none;display:none}}
 @keyframes auSpin{to{transform:rotate(360deg)}}
 @media (max-width:520px){.au-txt span{display:none}.app-update{top:10px}}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:var(--white);padding:14px 18px;border-radius:12px;font-size:14px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;transform:translateY(100px);opacity:0;transition:all .3s;max-width:380px;display:flex;align-items:center;gap:10px;}
