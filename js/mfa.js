@@ -14,6 +14,70 @@
 
 const _mfaFn = name => fbFunctions.httpsCallable(name);
 
+// ── The sign-in card: steps, busy button, leaving ───────────────────────
+const _labReduced = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const _labEase = 'cubic-bezier(.2,.8,.2,1)';
+// The button shows a spinner and a short label while the server answers.
+function labBusy(btn, on, label) {
+  if (!btn) return;
+  const s = btn.querySelector('span');
+  if (!btn.dataset.label) btn.dataset.label = s.textContent;
+  btn.classList.remove('is-busy', 'is-done');
+  if (on) { btn.classList.add('is-busy'); s.textContent = label || 'Verifying…'; btn.disabled = true; }
+  else { s.textContent = btn.dataset.label; btn.disabled = false; }
+}
+function labDone(btn, label) {
+  if (!btn) return;
+  btn.classList.remove('is-busy'); btn.classList.add('is-done'); btn.disabled = true;
+  btn.querySelector('span').textContent = label || 'Verified';
+}
+function labCodeVisible() { const c = document.getElementById('loginCodeStep'); return !!(c && c.style.display !== 'none'); }
+// Password <-> code: the card keeps its size and the new step slides in.
+function labShowStep(which) {
+  const side = document.querySelector('#enviro-login-single-logo .lab-formside');
+  const form = document.getElementById('lab-form'), code = document.getElementById('loginCodeStep'), head = document.getElementById('labFormHeading');
+  const toCode = which === 'code', show = toCode ? code : form, hide = toCode ? form : code;
+  if (hide.style.display === 'none' && show.style.display !== 'none') return;
+  const h0 = side.offsetHeight;
+  side.style.minHeight = toCode ? h0 + 'px' : '';
+  hide.style.display = 'none'; show.style.display = '';
+  if (head) head.textContent = toCode ? 'Two-step verification' : 'Sign in';
+  if (_labReduced()) return;
+  const h1 = side.offsetHeight;
+  if (Math.abs(h1 - h0) > 2) side.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: 300, easing: _labEase });
+  show.animate([{ opacity: 0, transform: 'translateX(' + (toCode ? 18 : -18) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 340, easing: _labEase });
+  if (head) head.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 340, easing: _labEase });
+}
+// After the last step: the card fades away into the loading screen.
+function labLeave() {
+  const p = document.querySelector('#enviro-login-single-logo .lab-panel');
+  if (!p || _labReduced()) return Promise.resolve();
+  p.classList.add('lab-leaving');
+  return new Promise(r => setTimeout(r, 260));
+}
+// Back to a clean password step (sign-out, cancel).
+function labReset() {
+  const p = document.querySelector('#enviro-login-single-logo .lab-panel'); if (p) p.classList.remove('lab-leaving');
+  labBusy(document.querySelector('#lab-form .lab-enter'), false);
+  labBusy(document.getElementById('loginCodeBtn'), false);
+  const code = document.getElementById('loginCodeStep'), form = document.getElementById('lab-form');
+  if (code) code.style.display = 'none'; if (form) form.style.display = '';
+  const side = document.querySelector('#enviro-login-single-logo .lab-formside'); if (side) side.style.minHeight = '';
+  const head = document.getElementById('labFormHeading'); if (head) head.textContent = 'Sign in';
+}
+// The code field: digits only; the sixth digit sends it.
+function _labCodeInput(input, form) {
+  input.classList.remove('is-wrong');
+  input.oninput = () => {
+    input.classList.remove('is-wrong');
+    const d = input.value.replace(/\D/g, '').slice(0, 6);
+    if (input.value !== d) input.value = d;
+    if (d.length === 6 && !document.getElementById('loginCodeBtn').disabled) form.requestSubmit();
+  };
+}
+// A wrong code: the field shakes, empties and waits for the next one.
+function _labWrong(input) { input.classList.remove('is-wrong'); void input.offsetWidth; input.classList.add('is-wrong'); setTimeout(() => { input.value = ''; input.focus(); }, 380); }
+
 // What the server's answers mean for the person typing.
 function mfaError(e) {
   const m = String((e && (e.idtk || e.message || e.code)) || '');
@@ -64,25 +128,30 @@ function _mfaCancel(reject) {
 
 // The code step on the login card.
 function _mfaAskCode() {
-  const box = document.getElementById('loginCodeStep'), form = document.getElementById('lab-form');
+  const box = document.getElementById('loginCodeStep');
   const input = document.getElementById('loginCode'), err = document.getElementById('loginCodeError');
+  const btn = document.getElementById('loginCodeBtn');
   return new Promise((resolve, reject) => {
-    form.style.display = 'none'; box.style.display = '';
-    input.value = ''; err.textContent = '';
-    setTimeout(() => input.focus(), 50);
-    const done = () => { box.style.display = 'none'; form.style.display = ''; box.onsubmit = null; document.getElementById('loginCodeCancel').onclick = null; };
-    document.getElementById('loginCodeCancel').onclick = () => { done(); _mfaCancel(reject); };
+    const who = document.getElementById('loginCodeWho'); if (who) who.textContent = (fbAuth.currentUser && fbAuth.currentUser.email) || 'your account';
+    input.value = ''; input.readOnly = false; err.textContent = ''; labBusy(btn, false);
+    labBusy(document.querySelector('#lab-form .lab-enter'), false);
+    labShowStep('code');
+    _labCodeInput(input, box);
+    setTimeout(() => input.focus(), 120);
+    const release = () => { box.onsubmit = null; input.oninput = null; document.getElementById('loginCodeCancel').onclick = null; };
+    document.getElementById('loginCodeCancel').onclick = () => { release(); labShowStep('password'); _labBackToPassword(); _mfaCancel(reject); };
     box.onsubmit = async ev => {
       ev.preventDefault();
       const code = input.value.replace(/\D/g, '');
-      if (code.length !== 6) { err.textContent = 'Type the 6-digit code.'; return; }
-      err.textContent = 'Verifying…';
-      const btn = document.getElementById('loginCodeBtn'); btn.disabled = true;
-      try { await _mfaFn('mfaVerify')({ code }); done(); resolve(); }
-      catch (e) { err.textContent = mfaErrorFull(e); input.select(); }
-      finally { btn.disabled = false; }
+      if (code.length !== 6) { err.textContent = 'Type the 6-digit code.'; _labWrong(input); return; }
+      err.textContent = ''; labBusy(btn, true, 'Verifying…'); input.readOnly = true; input.classList.remove('is-wrong');
+      try { await _mfaFn('mfaVerify')({ code }); release(); labDone(btn, 'Verified'); resolve(); }
+      catch (e) { labBusy(btn, false); input.readOnly = false; err.textContent = mfaErrorFull(e); _labWrong(input); }
     };
   });
+}
+function _labBackToPassword() {
+  const pw = document.getElementById('loginPassword'); if (pw) { pw.value = ''; setTimeout(() => pw.focus(), 120); }
 }
 
 // First sign-in: QR + first code.
@@ -95,6 +164,7 @@ function _mfaSetup() {
   document.getElementById('mfaCode').value = '';
   const err = document.getElementById('mfaErr'); err.style.color = 'var(--gray-500)'; err.textContent = 'Preparing…';
   document.getElementById('mfaVerify').disabled = true;
+  labBusy(document.querySelector('#lab-form .lab-enter'), false);
   m.classList.add('open');
   return new Promise((resolve, reject) => {
     _mfaSetupState = { resolve, reject };
@@ -165,17 +235,20 @@ function mfaAskSignInCode(resolver) {
   const input = document.getElementById('loginCode'), err = document.getElementById('loginCodeError');
   return new Promise((resolve, reject) => {
     if (!hints.length) { reject(Object.assign(new Error('This account uses a kind of verification this app does not support.'), { mfaMsg: true })); return; }
-    form.style.display = 'none'; box.style.display = '';
-    input.value = ''; err.textContent = '';
-    setTimeout(() => input.focus(), 50);
-    const done = () => { box.style.display = 'none'; form.style.display = ''; box.onsubmit = null; document.getElementById('loginCodeCancel').onclick = null; };
-    document.getElementById('loginCodeCancel').onclick = () => { done(); reject({ cancelled: true }); };
+    const who = document.getElementById('loginCodeWho'); if (who) who.textContent = document.getElementById('loginEmail').value.trim() || 'your account';
+    input.value = ''; input.readOnly = false; err.textContent = '';
+    const btn = document.getElementById('loginCodeBtn'); labBusy(btn, false);
+    labBusy(document.querySelector('#lab-form .lab-enter'), false);
+    labShowStep('code');
+    _labCodeInput(input, box);
+    setTimeout(() => input.focus(), 120);
+    const done = () => { box.onsubmit = null; input.oninput = null; document.getElementById('loginCodeCancel').onclick = null; };
+    document.getElementById('loginCodeCancel').onclick = () => { done(); labShowStep('password'); _labBackToPassword(); reject({ cancelled: true }); };
     box.onsubmit = async ev => {
       ev.preventDefault();
       const code = input.value.replace(/\D/g, '');
-      if (code.length !== 6) { err.textContent = 'Type the 6-digit code.'; return; }
-      err.textContent = 'Verifying…';
-      const btn = document.getElementById('loginCodeBtn'); btn.disabled = true;
+      if (code.length !== 6) { err.textContent = 'Type the 6-digit code.'; _labWrong(input); return; }
+      err.textContent = ''; labBusy(btn, true, 'Verifying…'); input.readOnly = true; input.classList.remove('is-wrong');
       try {
         let cred = null, last = null;
         for (const h of hints) {
@@ -183,10 +256,10 @@ function mfaAskSignInCode(resolver) {
           catch (e) { last = e; if (!/ENROLLMENT_ID|ENROLLMENT_NOT_FOUND|info-not-found/i.test(String(e.idtk || e.code || e.message))) break; }
         }
         if (!cred) throw last;
-        done(); resolve(cred);
+        done(); labDone(btn, 'Verified'); resolve(cred);
       } catch (e) {
-        err.textContent = mfaErrorFull(e); input.select();
-      } finally { btn.disabled = false; }
+        labBusy(btn, false); input.readOnly = false; err.textContent = mfaErrorFull(e); _labWrong(input);
+      }
     };
   });
 }

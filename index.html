@@ -34,7 +34,10 @@
   #loadingSplash{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:28px;
     color-scheme:light;color:var(--navy);font-family:var(--font);background:#f4f7f1;isolation:isolate;overflow:hidden;
     --lab-sage:#d8e7cc;--lab-cream:#f3e8cd;--lab-cell:#adc49b;--lab-soft:#eef4e8}
-  #loadingSplash.show{display:flex}
+  #loadingSplash.show{display:flex;animation:lsFadeIn .38s ease both}
+  #loadingSplash.leaving{opacity:0;transition:opacity .36s ease}
+  @keyframes lsFadeIn{from{opacity:0}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){#loadingSplash.show{animation:none}#loadingSplash.leaving{transition:none}}
   /* Lab backdrop — same animated scene as the login */
   #loadingSplash .lab-backdrop{position:absolute;inset:0;pointer-events:none;z-index:-1;overflow:hidden;background:radial-gradient(ellipse at 8% 58%,var(--lab-sage),transparent 48%),radial-gradient(ellipse at 96% 22%,var(--lab-cream),transparent 45%)}
   #loadingSplash .lab-haze{width:460px;height:460px;border-radius:50%;position:absolute;background:var(--lab-sage);opacity:.3;filter:blur(55px);right:-120px;bottom:-120px;animation:lab-haze-drift 32s ease-in-out infinite alternate}
@@ -106,7 +109,7 @@
             <h2 id="lab-title">Welcome back</h2>
           </div>
           <div class="lab-formside">
-            <h3 class="lab-formheading">Sign in</h3>
+            <h3 class="lab-formheading" id="labFormHeading">Sign in</h3>
             <form id="lab-form" onsubmit="event.preventDefault();doLogin();">
               <div class="lab-field">
                 <label for="loginEmail">Work email</label>
@@ -125,13 +128,14 @@
               <p class="lab-status" id="loginError" role="status" aria-live="polite"></p>
             </form>
             <form id="loginCodeStep" style="display:none" autocomplete="off">
+              <p class="lab-hint">Open your authenticator app and type the 6-digit code for <b id="loginCodeWho"></b>.</p>
               <div class="lab-field">
-                <label for="loginCode">Code from your authenticator app</label>
-                <input id="loginCode" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="6-digit code" autocomplete="one-time-code" style="letter-spacing:.3em;font-size:20px;text-align:center">
+                <label for="loginCode">Verification code</label>
+                <input id="loginCode" class="lab-code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="6-digit code" autocomplete="one-time-code">
               </div>
               <button type="submit" class="lab-enter" id="loginCodeBtn"><span>Verify</span></button>
               <p class="lab-status" id="loginCodeError" role="status" aria-live="polite"></p>
-              <p style="text-align:center;margin-top:8px"><button type="button" id="loginCodeCancel" style="background:none;border:none;color:inherit;opacity:.7;text-decoration:underline;cursor:pointer;font:inherit;font-size:13px">Use another account</button></p>
+              <button type="button" id="loginCodeCancel" class="lab-link"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Use another account</button>
             </form>
             <p class="lab-note">For authorized personnel</p>
           </div>

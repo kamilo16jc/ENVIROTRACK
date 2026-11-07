@@ -14,6 +14,7 @@ function doLogout() {
   try { document.getElementById('loginEmail').value = ''; } catch(e){}
   try { document.getElementById('loginPassword').value  = ''; } catch(e){}
   try { document.getElementById('loginError').textContent = ''; } catch(e){}
+  try { if (typeof labReset === 'function') labReset(); } catch(e){}
   const app=document.getElementById('appScreen');
   const login=document.getElementById('loginScreen');
   if(app)   app.classList.remove('active');

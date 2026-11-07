@@ -365,6 +365,25 @@ html body #loginScreen #enviro-login-single-logo .lab-page{min-height:100vh;min-
 #enviro-login-single-logo .lab-note{font-size:11px;color:var(--lab-muted);text-align:center;margin:22px 0 0;}
 #enviro-login-single-logo .lab-status{color:#c0392b;font-size:12px;font-weight:500;line-height:1.6;margin:13px 0 0;text-align:center;min-height:16px;}
 #enviro-login-single-logo .lab-status:empty{display:none;}
+/* Sign-in steps: password -> code. Busy and done states on the button, neutral hint, back link. */
+#enviro-login-single-logo #loginCodeStep{display:flex;flex-direction:column;}
+#enviro-login-single-logo .lab-hint{font-size:12.5px;line-height:1.55;color:var(--lab-muted);margin:-10px 0 18px;}
+#enviro-login-single-logo .lab-hint b{color:var(--lab-text);font-weight:600;white-space:nowrap;}
+#enviro-login-single-logo #loginCodeError:empty{display:block;}   /* keeps its line: an error does not move the card */
+#enviro-login-single-logo .lab-formside input.lab-code{height:54px;font:600 24px/1 'Segoe UI',Arial,sans-serif;letter-spacing:.42em;text-indent:.42em;text-align:center;font-variant-numeric:tabular-nums;transition:border-color .2s,box-shadow .2s;}
+#enviro-login-single-logo .lab-formside input.lab-code::placeholder{font-size:14px;font-weight:400;letter-spacing:.03em;text-indent:0;}
+#enviro-login-single-logo .lab-formside input.lab-code.is-wrong{border-color:#c0392b;box-shadow:0 0 0 3px color-mix(in srgb,#c0392b 14%,transparent);animation:labShake .38s ease;}
+#enviro-login-single-logo .lab-link{align-self:center;display:inline-flex;align-items:center;gap:5px;margin:14px 0 0;padding:5px 8px;border:0;border-radius:7px;background:none;color:var(--lab-muted);font:500 12px 'Segoe UI',Arial,sans-serif;cursor:pointer;transition:color .2s,background .2s;}
+#enviro-login-single-logo .lab-link:hover,#enviro-login-single-logo .lab-link:focus-visible{color:var(--lab-text);background:color-mix(in srgb,var(--lab-btn) 7%,transparent);}
+#enviro-login-single-logo .lab-enter.is-busy,#enviro-login-single-logo .lab-enter.is-done{pointer-events:none;transform:none;filter:none;box-shadow:none;}
+#enviro-login-single-logo .lab-enter.is-busy span::before{content:'';display:inline-block;width:13px;height:13px;margin-right:9px;vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:labSpin .7s linear infinite;}
+#enviro-login-single-logo .lab-enter.is-done span::before{content:'';display:inline-block;width:5px;height:10px;margin-right:10px;vertical-align:1px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg);}
+#enviro-login-single-logo .lab-enter:disabled{cursor:default;}
+#enviro-login-single-logo .lab-panel{transition:opacity .26s ease,transform .26s ease;}
+#enviro-login-single-logo .lab-panel.lab-leaving{opacity:0;transform:translateY(-6px) scale(.985);}
+@keyframes labSpin{to{transform:rotate(360deg);}}
+@keyframes labShake{20%{transform:translateX(-6px);}40%{transform:translateX(5px);}60%{transform:translateX(-3px);}80%{transform:translateX(2px);}}
+@media(prefers-reduced-motion:reduce){#enviro-login-single-logo .lab-formside input.lab-code.is-wrong{animation:none;}#enviro-login-single-logo .lab-panel{transition:none;}}
 #enviro-login-single-logo .lab-footer{position:relative;display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:11px;color:var(--lab-muted);}
 #enviro-login-single-logo .lab-motion{display:flex;align-items:center;gap:7px;color:var(--lab-muted);border:0;background:transparent;padding:8px 0;font:400 11px 'Segoe UI',Arial,sans-serif;cursor:pointer;}
 #enviro-login-single-logo .lab-motion svg{width:13px;height:13px;}

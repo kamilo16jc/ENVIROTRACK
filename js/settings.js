@@ -257,7 +257,8 @@ function doLogin_dynamic() {
   if(!email) { err.textContent='Enter your email.'; return; }
   if(!pw)    { err.textContent='Enter your password.'; return; }
 
-  err.textContent = 'Verifying…';
+  const enterBtn = document.querySelector('#lab-form .lab-enter');
+  err.textContent = ''; labBusy(enterBtn, true, 'Signing in…');
   fbAuth.signInWithEmailAndPassword(email, pw)
     // Two-step verification on: the 6-digit code from the authenticator app (js/mfa.js).
     .catch(e => {
@@ -307,12 +308,18 @@ function doLogin_dynamic() {
       // Don't reveal the app yet — show the loading splash and wait until ALL
       // the SharePoint data has synced, so the user never lands on stale/empty
       // views. Login screen stays hidden underneath.
-      document.getElementById('loginScreen').classList.remove('active');
+      // The card fades away and the loading screen fades in over the login, which leaves once it is covered.
+      if (!labCodeVisible()) labDone(enterBtn, 'Signed in');
+      await labLeave();
       bootSyncThenEnter();
+      setTimeout(() => { if (CU) document.getElementById('loginScreen').classList.remove('active'); }, 420);
     })
     .catch(e => {
+      labBusy(enterBtn, false);
       if (e && e.cancelled) { err.textContent = e.msg || ''; return; }
-      err.textContent = (e && e.mfaMsg) ? e.message : fbAuthError(e);
+      const msg = (e && e.mfaMsg) ? e.message : fbAuthError(e);
+      if (labCodeVisible()) { labBusy(document.getElementById('loginCodeBtn'), false); document.getElementById('loginCodeError').textContent = msg; }
+      else err.textContent = msg;
     });
 }
 
@@ -405,8 +412,13 @@ function finishBootEnter() {
         if (typeof updateNotifBadge === 'function') updateNotifBadge(); } catch (e) {}
   if (typeof startLiveSync === 'function') startLiveSync();
   resetSessionTimer();
-  if (splash) splash.classList.remove('show');
+  // The app goes in under the loading screen, which then fades away.
+  document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
+  if (splash && splash.classList.contains('show')) {
+    splash.classList.add('leaving');
+    setTimeout(() => splash.classList.remove('show', 'leaving'), 380);
+  }
 }
 function retryBoot()   { bootSyncThenEnter(); }
 function enterAnyway() { finishBootEnter(); }
